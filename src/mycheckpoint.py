@@ -471,7 +471,7 @@ def create_status_variables_hour_diff_view():
 
 
 
-def create_variables_change_view():
+def create_status_variables_parameter_change_view():
     global_variables, diff_columns = get_variables_and_status_columns()
 
     global_variables_select_listing = ["""
@@ -512,11 +512,46 @@ def create_variables_change_view():
     act_query(query)
 
 
+def create_custom_views(view_base_name, view_columns):
+    global_variables, status_variables = get_variables_and_status_columns()
+
+    columns_list = [column_name.strip() for column_name in view_columns.split(",")]
+    global_variables_columns_listing = ",\n".join([column_name for column_name in columns_list if column_name in global_variables])
+    status_variables_columns_listing = ",\n".join([column_name for column_name in columns_list if column_name in status_variables])
+    status_variables_psec_columns_listing = ",\n".join(["%s_psec" % (column_name,) for column_name in columns_list if column_name in status_variables])
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = MERGE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW %s.sv_%s${view_name_extension} AS
+          SELECT
+            id,
+            ts,
+            %s,
+            %s,
+            %s
+          FROM
+            ${status_variables_table_name}${view_name_extension}
+    """ % (database_name, view_base_name,
+           global_variables_columns_listing, status_variables_columns_listing, status_variables_psec_columns_listing)
+    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+
+    psec_diff_query = query.replace("${status_variables_table_name}", "_psec_diff")
+    act_query(psec_diff_query)
+
+    hour_diff_query = query.replace("${status_variables_table_name}", "_hour_diff")
+    act_query(hour_diff_query)
+
+
 def create_status_variables_views():
     create_status_variables_diff_view()
     create_status_variables_psec_diff_view()
     create_status_variables_hour_diff_view()
-    create_variables_change_view()
+    create_status_variables_parameter_change_view()
+    create_custom_views("tmp_tables", "tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables")
     pass
 
 
