@@ -289,6 +289,7 @@ def get_global_variables():
     return global_variables
 
 
+
 def fetch_status_variables():
     """
     Fill in the status_dict. We make point of filling in all variables, even those not existing,
@@ -307,6 +308,8 @@ def fetch_status_variables():
 
     # Listing of interesting global variables:
     global_variables = get_global_variables()
+    for variable_name in global_variables:
+        status_dict[variable_name.lower()] = None
     query = "SHOW GLOBAL VARIABLES"
     rows = get_rows(query);
     for row in rows:
@@ -350,8 +353,32 @@ def get_variables_and_status_columns():
     return variables_columns, status_columns
 
 
+def get_column_sign_indicator(column_name):
+    known_signed_diff_status_variables = [
+        "threads_cached",
+        "threads_connected",
+        "threads_running",
+        "open_table_definitions",
+        "open_tables",
+        "slave_open_temp_tables",
+        "qcache_free_blocks",
+        "qcache_free_memory",
+        "qcache_queries_in_cache",
+        "qcache_total_blocks",
+        "innodb_page_size",
+        "innodb_buffer_pool_pages_total",
+        "innodb_buffer_pool_pages_free",
+        "key_blocks_unused",
+        "key_cache_block_size",
+        ]
+    if column_name in known_signed_diff_status_variables:
+        return "SIGNED"
+    else:
+        return "UNSIGNED"
+
+
 def create_status_variables_table():
-    columns_listing = ",\n".join(["%s BIGINT UNSIGNED" % column_name for column_name in get_status_variables_columns()])
+    columns_listing = ",\n".join(["%s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in get_status_variables_columns()])
     query = """CREATE TABLE %s.%s (
             id INT AUTO_INCREMENT PRIMARY KEY,
             ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -372,7 +399,7 @@ def upgrade_status_variables_table():
     new_columns = [column_name for column_name in get_status_variables_columns() if column_name not in existing_columns]
 
     if new_columns:
-        columns_listing = ",\n".join(["ADD COLUMN %s BIGINT UNSIGNED" % column_name for column_name in new_columns])
+        columns_listing = ",\n".join(["ADD COLUMN %s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in new_columns])
         query = """ALTER TABLE %s.%s
                 %s
         """ % (database_name, table_name, columns_listing)
@@ -380,12 +407,13 @@ def upgrade_status_variables_table():
 
 
 def create_status_variables_diff_view():
-    global_variables, diff_columns = get_variables_and_status_columns()
-
+    global_variables, status_columns = get_variables_and_status_columns()
     # Global variables are used as-is
     global_variables_columns_listing = ",\n".join([" ${status_variables_table_alias}2.%s AS %s" % (column_name, column_name,) for column_name in global_variables])
+    # status variables as they were:
+    status_columns_listing = ",\n".join([" ${status_variables_table_alias}2.%s AS %s" % (column_name, column_name,) for column_name in status_columns])
     # Status variables are diffed. This does not make sense for all of them, but we do it for all nonetheless.
-    diff_columns_listing = ",\n".join([" ${status_variables_table_alias}2.%s -  ${status_variables_table_alias}1.%s AS %s" % (column_name, column_name, column_name,) for column_name in diff_columns])
+    diff_columns_listing = ",\n".join([" ${status_variables_table_alias}2.%s - ${status_variables_table_alias}1.%s AS %s_diff" % (column_name, column_name, column_name,) for column_name in status_columns])
 
     query = """
         CREATE
@@ -399,26 +427,26 @@ def create_status_variables_diff_view():
             ${status_variables_table_name}2.ts,
             TIMESTAMPDIFF(SECOND, ${status_variables_table_name}1.ts, ${status_variables_table_name}2.ts) AS ts_diff_seconds,
             %s,
+            %s,
             %s
           FROM
             ${status_variables_table_name} AS ${status_variables_table_alias}1
             INNER JOIN ${status_variables_table_name} AS ${status_variables_table_alias}2
             ON (${status_variables_table_alias}1.id = ${status_variables_table_alias}2.id-GREATEST(1, IFNULL(${status_variables_table_alias}2.auto_increment_increment, 1)))
-    """ % (diff_columns_listing, global_variables_columns_listing)
+    """ % (status_columns_listing, diff_columns_listing, global_variables_columns_listing)
     query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
     query = query.replace("${status_variables_table_alias}", table_name)
     act_query(query)
 
 
 def create_status_variables_psec_diff_view():
-    global_variables, diff_columns = get_variables_and_status_columns()
+    global_variables, status_columns = get_variables_and_status_columns()
 
-    # Global variables are used as-is
     global_variables_columns_listing = ",\n".join(["%s" % (column_name,) for column_name in global_variables])
+    status_columns_listing = ",\n".join([" %s" % (column_name,) for column_name in status_columns])
+    diff_columns_listing = ",\n".join([" %s_diff" % (column_name,) for column_name in status_columns])
+    change_psec_columns_listing = ",\n".join([" ROUND(%s_diff/ts_diff_seconds, 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
 
-    # Status variables are diffed. This does not make sense for all of them, but we do it for all nonetheless.
-    diff_columns_listing = ",\n".join([" %s" % (column_name,) for column_name in diff_columns])
-    change_psec_columns_listing = ",\n".join([" ROUND(%s/ts_diff_seconds, 2) AS %s_psec" % (column_name, column_name,) for column_name in diff_columns])
     query = """
         CREATE
         OR REPLACE
@@ -432,22 +460,22 @@ def create_status_variables_psec_diff_view():
             ts_diff_seconds,
             %s,
             %s,
+            %s,
             %s
           FROM
             ${status_variables_table_name}_diff
-    """ % (diff_columns_listing, change_psec_columns_listing, global_variables_columns_listing)
+    """ % (status_columns_listing, diff_columns_listing, change_psec_columns_listing, global_variables_columns_listing)
     query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
     act_query(query)
 
 
 def create_status_variables_hour_diff_view():
-    global_variables, diff_columns = get_variables_and_status_columns()
+    global_variables, status_columns = get_variables_and_status_columns()
 
-    # Global variables are used as-is
     global_variables_columns_listing = ",\n".join([" MIN(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
-    # Status variables are diffed. This does not make sense for all of them, but we do it for all nonetheless.
-    sum_diff_columns_listing = ",\n".join([" SUM(%s) AS %s" % (column_name, column_name,) for column_name in diff_columns])
-    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in diff_columns])
+    status_columns_listing = ",\n".join([" %s" % (column_name,) for column_name in status_columns])
+    sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
+    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
     query = """
         CREATE
         OR REPLACE
@@ -461,11 +489,12 @@ def create_status_variables_hour_diff_view():
             DATE(ts) + INTERVAL (HOUR(ts) + 1) HOUR AS end_ts,
             %s,
             %s,
+            %s,
             %s
           FROM
             ${status_variables_table_name}_psec_diff
           GROUP BY DATE(ts), HOUR(ts)
-    """ % (sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
     query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
     act_query(query)
 
@@ -512,13 +541,18 @@ def create_status_variables_parameter_change_view():
     act_query(query)
 
 
-def create_custom_views(view_base_name, view_columns):
+def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     global_variables, status_variables = get_variables_and_status_columns()
 
-    columns_list = [column_name.strip() for column_name in view_columns.split(",")]
-    global_variables_columns_listing = ",\n".join([column_name for column_name in columns_list if column_name in global_variables])
-    status_variables_columns_listing = ",\n".join([column_name for column_name in columns_list if column_name in status_variables])
-    status_variables_psec_columns_listing = ",\n".join(["%s_psec" % (column_name,) for column_name in columns_list if column_name in status_variables])
+    view_columns_list = [column_name.strip() for column_name in view_columns.lower().split(",")]
+    all_columns_listing = []
+    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in global_variables])
+    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in status_variables])
+    all_columns_listing.extend([" %s_diff" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
+    all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
+    columns_listing = ",\n".join(all_columns_listing)
+    if custom_columns:
+        columns_listing = columns_listing + ", " + custom_columns.lower()
 
     query = """
         CREATE
@@ -530,19 +564,17 @@ def create_custom_views(view_base_name, view_columns):
           SELECT
             id,
             ts,
-            %s,
-            %s,
             %s
           FROM
             ${status_variables_table_name}${view_name_extension}
     """ % (database_name, view_base_name,
-           global_variables_columns_listing, status_variables_columns_listing, status_variables_psec_columns_listing)
+           columns_listing)
     query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
 
-    psec_diff_query = query.replace("${status_variables_table_name}", "_psec_diff")
+    psec_diff_query = query.replace("${view_name_extension}", "_psec_diff")
     act_query(psec_diff_query)
 
-    hour_diff_query = query.replace("${status_variables_table_name}", "_hour_diff")
+    hour_diff_query = query.replace("${view_name_extension}", "_hour_diff")
     act_query(hour_diff_query)
 
 
@@ -551,8 +583,83 @@ def create_status_variables_views():
     create_status_variables_psec_diff_view()
     create_status_variables_hour_diff_view()
     create_status_variables_parameter_change_view()
-    create_custom_views("tmp_tables", "tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables")
-    pass
+    create_custom_views("tmp_tables", """
+            tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
+        """)
+    create_custom_views("threads", """
+            max_delayed_threads, max_insert_delayed_threads, thread_cache_size, thread_stack,
+            delayed_insert_threads, slow_launch_threads, threads_cached, threads_connected, threads_created, threads_running
+        """)
+    create_custom_views("dml", """
+            concurrent_insert,
+            com_select, com_insert, com_update, com_delete, com_replace,
+            com_commit,
+            questions, slow_queries
+        """,
+        """
+            ROUND(100*com_select_diff/questions_diff, 2) AS com_select_percent,
+            ROUND(100*com_insert_diff/questions_diff, 2) AS com_insert_percent,
+            ROUND(100*com_update_diff/questions_diff, 2) AS com_update_percent,
+            ROUND(100*com_delete_diff/questions_diff, 2) AS com_delete_percent,
+            ROUND(100*com_replace_diff/questions_diff, 2) AS com_replace_percent,
+            ROUND(100*com_commit_diff/questions_diff, 2) AS com_commit_percent,
+            ROUND(100*slow_queries_diff/questions_diff, 2) AS slow_queries_percent
+        """)
+    create_custom_views("select", """
+            com_select,
+            select_scan, sort_merge_passes, sort_range, sort_rows, sort_scan
+        """,
+        """
+            ROUND(100*select_scan_diff/com_select_diff, 2) AS select_scan_percent,
+            ROUND(100*select_full_join_diff/com_select_diff, 2) AS select_full_join_percent,
+            ROUND(100*select_range_diff/com_select_diff, 2) AS select_range_percent
+        """)
+    create_custom_views("innodb_io", """
+            innodb_buffer_pool_size, innodb_page_size,
+            innodb_buffer_pool_write_requests, innodb_buffer_pool_pages_flushed,
+            innodb_buffer_pool_read_requests, innodb_buffer_pool_reads,
+            innodb_log_write_requests, innodb_log_writes,
+            innodb_os_log_written,
+            innodb_rows_read
+        """,
+        """
+            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
+            ROUND(100 - (100*innodb_buffer_pool_reads/innodb_buffer_pool_read_requests), 2) AS innodb_read_hit_percent,
+            innodb_buffer_pool_pages_total * innodb_page_size AS innodb_buffer_pool_total_bytes,
+            (innodb_buffer_pool_pages_total - innodb_buffer_pool_pages_free) * innodb_page_size AS innodb_buffer_pool_used_bytes,
+            ROUND(100 - 100*innodb_buffer_pool_pages_free/innodb_buffer_pool_pages_total, 2) AS innodb_buffer_pool_used_percent
+        """)
+    create_custom_views("innodb_io_summary", """
+            innodb_buffer_pool_size
+        """,
+        """
+            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
+            ROUND(100 - (100*innodb_buffer_pool_reads_diff/innodb_buffer_pool_read_requests_diff), 2) AS innodb_read_hit_percent,
+            ROUND(100 - 100*innodb_buffer_pool_pages_free/innodb_buffer_pool_pages_total, 2) AS innodb_buffer_pool_used_percent,
+            innodb_buffer_pool_reads_psec,
+            innodb_buffer_pool_pages_flushed_psec
+        """)
+    create_custom_views("myisam_io", """
+            key_buffer_size,
+            key_buffer_used,
+            key_read_requests, key_reads,
+            key_write_requests, key_writes,
+        """,
+        """
+            key_buffer_size - (key_blocks_unused * key_cache_block_size) AS key_buffer_usage,
+            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/key_buffer_size, 2) AS key_buffer_usage_percent,
+            ROUND(100 - 100*key_reads_diff/key_read_requests_diff, 2) AS key_read_hit_percent,
+            ROUND(100 - 100*key_writes_diff/key_write_requests_diff, 2) AS key_write_hit_percent
+        """)
+    create_custom_views("locks", """
+            innodb_lock_wait_timeout,
+            table_locks_waited, table_locks_immediate
+        """,
+        """
+            ROUND(100*table_locks_waited_diff/(table_locks_waited_diff + table_locks_immediate_diff), 2) AS table_lock_waited_percent,
+            innodb_row_lock_waits_psec, innodb_row_lock_current_waits
+        """)
+    # table cache, connections,
 
 
 def collect_status_variables():
