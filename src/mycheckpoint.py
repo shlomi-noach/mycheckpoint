@@ -630,7 +630,8 @@ def create_status_variables_views():
             ROUND(100 - 100*innodb_buffer_pool_pages_free/innodb_buffer_pool_pages_total, 2) AS innodb_buffer_pool_used_percent
         """)
     create_custom_views("innodb_io_summary", """
-            innodb_buffer_pool_size
+            innodb_buffer_pool_size,
+            innodb_flush_log_at_trx_commit
         """,
         """
             ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
