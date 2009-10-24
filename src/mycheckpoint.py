@@ -20,6 +20,7 @@
 import getpass
 import MySQLdb
 import traceback
+import sys
 from optparse import OptionParser
 
 def parse_options():
@@ -33,6 +34,9 @@ def parse_options():
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", default="openark", help="Database name (required unless query uses fully qualified table names)")
+    parser.add_option("", "--purge-days", dest="purge_days", type="int", default=62, help="Purge data older than specified amount of days (default: 62)")
+    parser.add_option("", "--skip-disable-bin-log", dest="skip_disable_bin_log", action="store_true", default=False, help="Skip disabling the binary logging (binary loggind disabled by default)")
+    parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     return parser.parse_args()
 
@@ -113,6 +117,16 @@ def table_exists(check_database_name, check_table_name):
 
     return count
 
+
+def prompt_instructions():
+    print "-- Creating mycheckpoint tables & views. Database name is `%s`" % database_name
+    print "-- Make sure the user has ALL PRIVILEGES on the `%s` schema" % database_name
+    print "-- e.g. GRANT ALL ON `%s`.* TO 'my_user'@'my_host' IDENTIFIED BY 'my_password'" % database_name
+    print "-- The user will have to have the SUPER privilege in order to disable binary logging"
+    print "-- + Otherwise, use --skip-disable-bin-log (but then be aware that slaves replicate this server's status)"
+    print "-- In order to read master and slave status, the user must also be granted with REPLICATION CLIENT or SUPER privileges"
+    print "-- + Otherwise, use --skip-check-replication"
+    
 
 def is_neglectable_variable(variable_name):
     if variable_name.startswith("ssl_"):
@@ -271,6 +285,7 @@ def get_global_variables():
         "sql_warnings",
         "sync_binlog",
         "sync_frm",
+        "table_cache",
         "table_definition_cache",
         "table_lock_wait_timeout",
         "table_open_cache",
@@ -318,22 +333,36 @@ def fetch_status_variables():
         if variable_name in global_variables:
             status_dict[variable_name] = normalize_variable_value(variable_value)
 
-    # Master status
-    status_dict["master_position"] = None
-    query = "SHOW MASTER STATUS"
-    master_status = get_row(query)
-    if master_status:
-        status_dict["master_position"] = master_status["Position"]
-
-    # Slave status
-    slave_status_variables = ["Read_Master_Log_Pos", "Relay_Log_Pos", "Exec_Master_Log_Pos", "Relay_Log_Space", "Seconds_Behind_Master"]
+    # Master & slave status
+    status_dict["master_status_position"] = None
+    status_dict["master_status_file_number"] = None
+    slave_status_variables = [
+        "Read_Master_Log_Pos",
+        "Relay_Log_Pos",
+        "Exec_Master_Log_Pos",
+        "Relay_Log_Space",
+        "Seconds_Behind_Master",
+        ]
     for variable_name in slave_status_variables:
         status_dict[variable_name.lower()] = None
-    query = "SHOW SLAVE STATUS"
-    slave_status = get_row(query)
-    if slave_status:
-        for variable_name in slave_status_variables:
-            status_dict[variable_name.lower()] = slave_status[variable_name]
+    if not options.skip_check_replication:
+        try:
+            query = "SHOW MASTER STATUS"
+            master_status = get_row(query)
+            if master_status:
+                status_dict["master_status_position"] = master_status["Position"]
+                log_file_name = master_status["File"]
+                log_file_number = int(log_file_name.rsplit(".")[-1])
+                status_dict["master_status_file_number"] = log_file_number
+            query = "SHOW SLAVE STATUS"
+            slave_status = get_row(query)
+            if slave_status:
+                for variable_name in slave_status_variables:
+                    status_dict[variable_name.lower()] = slave_status[variable_name]
+        except:
+            # An exception can be thrown if the user does not have enough privileges:
+            verbose("Cannot show master & slave status. Skipping")
+            pass
 
     return status_dict
 
@@ -370,6 +399,12 @@ def get_column_sign_indicator(column_name):
         "innodb_buffer_pool_pages_free",
         "key_blocks_unused",
         "key_cache_block_size",
+        "master_status_position",
+        "Read_Master_Log_Pos",
+        "Relay_Log_Pos",
+        "Exec_Master_Log_Pos",
+        "Relay_Log_Space",
+        "Seconds_Behind_Master",
         ]
     if column_name in known_signed_diff_status_variables:
         return "SIGNED"
@@ -420,7 +455,7 @@ def create_status_variables_diff_view():
         OR REPLACE
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
+        SQL SECURITY DEFINER
         VIEW ${status_variables_table_name}_diff AS
           SELECT
             ${status_variables_table_name}2.id,
@@ -452,7 +487,7 @@ def create_status_variables_psec_diff_view():
         OR REPLACE
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
+        SQL SECURITY DEFINER
         VIEW ${status_variables_table_name}_psec_diff AS
           SELECT
             id,
@@ -481,7 +516,7 @@ def create_status_variables_hour_diff_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
+        SQL SECURITY DEFINER
         VIEW ${status_variables_table_name}_hour_diff AS
           SELECT
             MIN(id) AS id,
@@ -494,6 +529,37 @@ def create_status_variables_hour_diff_view():
           FROM
             ${status_variables_table_name}_psec_diff
           GROUP BY DATE(ts), HOUR(ts)
+    """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    act_query(query)
+
+
+
+def create_status_variables_day_diff_view():
+    global_variables, status_columns = get_variables_and_status_columns()
+
+    global_variables_columns_listing = ",\n".join([" MIN(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
+    status_columns_listing = ",\n".join([" %s" % (column_name,) for column_name in status_columns])
+    sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
+    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${status_variables_table_name}_day_diff AS
+          SELECT
+            MIN(id) AS id,
+            DATE(ts) AS ts,
+            DATE(ts) + INTERVAL 1 DAY AS end_ts,
+            %s,
+            %s,
+            %s,
+            %s
+          FROM
+            ${status_variables_table_name}_psec_diff
+          GROUP BY DATE(ts)
     """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
     query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
     act_query(query)
@@ -519,7 +585,7 @@ def create_status_variables_parameter_change_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
+        SQL SECURITY DEFINER
         VIEW ${status_variables_table_name}_parameter_change_union AS
           %s
     """ % (global_variables_select_union)
@@ -532,7 +598,7 @@ def create_status_variables_parameter_change_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
+        SQL SECURITY DEFINER
         VIEW ${status_variables_table_name}_parameter_change AS
           SELECT * FROM ${status_variables_table_name}_parameter_change_union
           ORDER BY ts, variable_name
@@ -559,7 +625,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         OR REPLACE
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
+        SQL SECURITY DEFINER
         VIEW %s.sv_%s${view_name_extension} AS
           SELECT
             id,
@@ -577,11 +643,15 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     hour_diff_query = query.replace("${view_name_extension}", "_hour_diff")
     act_query(hour_diff_query)
 
+    day_diff_query = query.replace("${view_name_extension}", "_day_diff")
+    act_query(day_diff_query)
+
 
 def create_status_variables_views():
     create_status_variables_diff_view()
     create_status_variables_psec_diff_view()
     create_status_variables_hour_diff_view()
+    create_status_variables_day_diff_view()
     create_status_variables_parameter_change_view()
     create_custom_views("tmp_tables", """
             tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
@@ -597,22 +667,22 @@ def create_status_variables_views():
             questions, slow_queries
         """,
         """
-            ROUND(100*com_select_diff/questions_diff, 2) AS com_select_percent,
-            ROUND(100*com_insert_diff/questions_diff, 2) AS com_insert_percent,
-            ROUND(100*com_update_diff/questions_diff, 2) AS com_update_percent,
-            ROUND(100*com_delete_diff/questions_diff, 2) AS com_delete_percent,
-            ROUND(100*com_replace_diff/questions_diff, 2) AS com_replace_percent,
-            ROUND(100*com_commit_diff/questions_diff, 2) AS com_commit_percent,
-            ROUND(100*slow_queries_diff/questions_diff, 2) AS slow_queries_percent
+            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 2) AS com_select_percent,
+            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 2) AS com_insert_percent,
+            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 2) AS com_update_percent,
+            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 2) AS com_delete_percent,
+            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 2) AS com_replace_percent,
+            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
+            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent
         """)
     create_custom_views("select", """
             com_select,
             select_scan, sort_merge_passes, sort_range, sort_rows, sort_scan
         """,
         """
-            ROUND(100*select_scan_diff/com_select_diff, 2) AS select_scan_percent,
-            ROUND(100*select_full_join_diff/com_select_diff, 2) AS select_full_join_percent,
-            ROUND(100*select_range_diff/com_select_diff, 2) AS select_range_percent
+            ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
+            ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
+            ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent
         """)
     create_custom_views("innodb_io", """
             innodb_buffer_pool_size, innodb_page_size,
@@ -624,10 +694,10 @@ def create_status_variables_views():
         """,
         """
             ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-            ROUND(100 - (100*innodb_buffer_pool_reads/innodb_buffer_pool_read_requests), 2) AS innodb_read_hit_percent,
+            ROUND(100 - (100*innodb_buffer_pool_reads/NULLIF(innodb_buffer_pool_read_requests, 0)), 2) AS innodb_read_hit_percent,
             innodb_buffer_pool_pages_total * innodb_page_size AS innodb_buffer_pool_total_bytes,
             (innodb_buffer_pool_pages_total - innodb_buffer_pool_pages_free) * innodb_page_size AS innodb_buffer_pool_used_bytes,
-            ROUND(100 - 100*innodb_buffer_pool_pages_free/innodb_buffer_pool_pages_total, 2) AS innodb_buffer_pool_used_percent
+            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent
         """)
     create_custom_views("innodb_io_summary", """
             innodb_buffer_pool_size,
@@ -635,8 +705,8 @@ def create_status_variables_views():
         """,
         """
             ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-            ROUND(100 - (100*innodb_buffer_pool_reads_diff/innodb_buffer_pool_read_requests_diff), 2) AS innodb_read_hit_percent,
-            ROUND(100 - 100*innodb_buffer_pool_pages_free/innodb_buffer_pool_pages_total, 2) AS innodb_buffer_pool_used_percent,
+            ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
+            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent,
             innodb_buffer_pool_reads_psec,
             innodb_buffer_pool_pages_flushed_psec
         """)
@@ -648,24 +718,53 @@ def create_status_variables_views():
         """,
         """
             key_buffer_size - (key_blocks_unused * key_cache_block_size) AS key_buffer_usage,
-            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/key_buffer_size, 2) AS key_buffer_usage_percent,
-            ROUND(100 - 100*key_reads_diff/key_read_requests_diff, 2) AS key_read_hit_percent,
-            ROUND(100 - 100*key_writes_diff/key_write_requests_diff, 2) AS key_write_hit_percent
+            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2) AS key_buffer_usage_percent,
+            ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2) AS key_read_hit_percent,
+            ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2) AS key_write_hit_percent
         """)
     create_custom_views("locks", """
             innodb_lock_wait_timeout,
             table_locks_waited, table_locks_immediate
         """,
         """
-            ROUND(100*table_locks_waited_diff/(table_locks_waited_diff + table_locks_immediate_diff), 2) AS table_lock_waited_percent,
+            ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
             innodb_row_lock_waits_psec, innodb_row_lock_current_waits
         """)
-    # table cache, connections,
+    create_custom_views("connections", """
+            max_connections,
+            connections, aborted_connects
+        """,
+        """
+            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent
+        """)
+    create_custom_views("table_cache", """
+            table_cache, table_open_cache, table_definition_cache,
+            open_tables, opened_tables
+        """,
+        """
+            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
+            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent
+        """)
+    create_custom_views("replication", """
+            max_binlog_size, sync_binlog,
+            max_relay_log_size, relay_log_space_limit,
+            master_status_position,  master_status_file_number,
+            Read_Master_Log_Pos, Relay_Log_Pos, Exec_Master_Log_Pos, Relay_Log_Space, Seconds_Behind_Master,
+        """)
+
+
+def disable_bin_log():
+    if options.skip_disable_bin_log:
+        return
+    try:
+        query = "SET SESSION SQL_LOG_BIN=0"
+        act_query(query)
+    except:
+        exit_with_error("Failed to disable binary logging. Either grant the SUPER privilege or use --skip-disable-bin-log")
 
 
 def collect_status_variables():
-    query = "SET SESSION SQL_LOG_BIN=0"
-    act_query(query)
+    disable_bin_log()
 
     status_dict = fetch_status_variables()
 
@@ -682,7 +781,18 @@ def collect_status_variables():
     """ % (database_name, table_name,
         column_names,
         variable_values)
-    act_query(query)
+    num_affected_rows = act_query(query)
+    if num_affected_rows:
+        verbose("New entry added")
+
+
+def purge_status_variables():
+    disable_bin_log()
+
+    query = """DELETE FROM %s.%s WHERE ts < NOW() - INTERVAL %d DAY""" % (database_name, table_name, options.purge_days)
+    num_affected_rows = act_query(query)
+    if num_affected_rows:
+        verbose("Old entries purged")
 
 
 def exit_with_error(error_message):
@@ -690,7 +800,7 @@ def exit_with_error(error_message):
     Notify and exit.
     """
     print_error(error_message)
-    exit(1)
+    sys.exit(1)
 
 
 try:
@@ -705,9 +815,12 @@ try:
 
         if not database_name:
             exit_with_error("No database specified. Specify with -d or --database")
+        if options.purge_days < 1:
+            exit_with_error("purge-days must be at least 1")
 
         conn = open_connection()
         if "create" in args:
+            prompt_instructions()
             create_status_variables_table()
             create_status_variables_views()
             verbose("Table and views created")
@@ -717,10 +830,12 @@ try:
             verbose("Table and views upgraded")
         else:
             collect_status_variables()
+            purge_status_variables()
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        traceback.print_exc()
+        #traceback.print_exc()
+
 finally:
     if conn:
         conn.close()
