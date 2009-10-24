@@ -650,6 +650,44 @@ def create_status_variables_long_format_view():
     act_query(query)
 
 
+def create_com_status_long_format_view():
+    global_variables, status_columns = get_variables_and_status_columns()
+    com_commands = [column_name for column_name in status_columns if column_name.startswith("com_")]
+
+    global_variables_select_listing = ["""
+        SELECT ts, '%s' AS variable_name, %s AS variable_value
+        FROM
+          ${database_name}.sv_hour
+        """ % (column_name, column_name,) for column_name in com_commands]
+    global_variables_select_union = " UNION ALL \n".join(global_variables_select_listing)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_com_status_union AS
+          %s
+    """ % (global_variables_select_union,)
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_com_status_long AS
+          SELECT * 
+          FROM ${database_name}.sv_com_status_union
+          ORDER BY ts, variable_name
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
 def create_status_variables_aggregated_view():
     query = """
         CREATE
@@ -679,7 +717,9 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
     columns_listing = ",\n".join(all_columns_listing)
     if custom_columns:
-        columns_listing = columns_listing + ", " + custom_columns.lower()
+        if view_columns:
+            columns_listing = columns_listing + ",\n "
+        columns_listing = columns_listing + custom_columns.lower()
 
     query = """
         CREATE
@@ -709,6 +749,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
 
 
 def create_status_variables_views():
+    global_variables, status_columns = get_variables_and_status_columns()
     create_status_variables_diff_view()
     create_status_variables_psec_diff_view()
     create_status_variables_hour_diff_view()
@@ -718,6 +759,9 @@ def create_status_variables_views():
     #create_status_variables_aggregated_view()
     create_custom_views("tmp_tables", """
             tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
+        """,
+        """
+            ROUND(100*created_tmp_disk_tables/NULLIF(created_tmp_tables, 0), 2) AS created_disk_tmp_tables_percent
         """)
     create_custom_views("threads", """
             max_delayed_threads, max_insert_delayed_threads, thread_cache_size, thread_stack,
@@ -738,6 +782,13 @@ def create_status_variables_views():
             ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
             ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent
         """)
+    com_commands = [column_name for column_name in status_columns if column_name.startswith("com_")]
+    print ",".join(com_commands)
+    create_custom_views("com", ",\n ".join(com_commands),
+            ",\n ".join(
+                ["ROUND(100*(%s)/NULLIF(questions_diff, 0), 2) AS %s_percent" % (column_name, column_name,) for column_name in com_commands])
+            )
+
     create_custom_views("select", """
             com_select,
             select_scan, sort_merge_passes, sort_range, sort_rows, sort_scan
@@ -813,6 +864,47 @@ def create_status_variables_views():
             max_relay_log_size, relay_log_space_limit,
             master_status_position,  master_status_file_number,
             Read_Master_Log_Pos, Relay_Log_Pos, Exec_Master_Log_Pos, Relay_Log_Space, Seconds_Behind_Master,
+        """)
+    create_custom_views("report", "", """
+            key_buffer_size,
+            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2) AS key_buffer_usage_percent,
+            ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2) AS key_read_hit_percent,
+            ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2) AS key_write_hit_percent,
+            
+            innodb_buffer_pool_size,
+            innodb_flush_log_at_trx_commit,
+            ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
+            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent,
+            innodb_buffer_pool_reads_psec,
+            innodb_buffer_pool_pages_flushed_psec,
+            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
+            
+            ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
+            innodb_row_lock_waits_psec, 
+            innodb_row_lock_current_waits,
+            
+            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
+            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent,
+            
+            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 2) AS com_select_percent,
+            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 2) AS com_insert_percent,
+            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 2) AS com_update_percent,
+            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 2) AS com_delete_percent,
+            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 2) AS com_replace_percent,
+            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
+            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent,
+            
+            ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
+            ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
+            ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent,
+
+            connections_psec, 
+            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent,
+            threads_created_psec,
+
+            created_tmp_tables_psec, 
+            created_tmp_disk_tables_psec, 
+            ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 2) AS created_disk_tmp_tables_percent
         """)
 
 
