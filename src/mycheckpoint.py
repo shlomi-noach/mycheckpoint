@@ -456,7 +456,7 @@ def create_status_variables_diff_view():
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${status_variables_table_name}_diff AS
+        VIEW ${database_name}.sv_diff AS
           SELECT
             ${status_variables_table_name}2.id,
             ${status_variables_table_name}2.ts,
@@ -465,11 +465,12 @@ def create_status_variables_diff_view():
             %s,
             %s
           FROM
-            ${status_variables_table_name} AS ${status_variables_table_alias}1
-            INNER JOIN ${status_variables_table_name} AS ${status_variables_table_alias}2
+            ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}1
+            INNER JOIN ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}2
             ON (${status_variables_table_alias}1.id = ${status_variables_table_alias}2.id-GREATEST(1, IFNULL(${status_variables_table_alias}2.auto_increment_increment, 1)))
     """ % (status_columns_listing, diff_columns_listing, global_variables_columns_listing)
-    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${status_variables_table_name}", table_name)
     query = query.replace("${status_variables_table_alias}", table_name)
     act_query(query)
 
@@ -488,7 +489,7 @@ def create_status_variables_psec_diff_view():
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${status_variables_table_name}_psec_diff AS
+        VIEW ${database_name}.sv_sample AS
           SELECT
             id,
             ts,
@@ -498,9 +499,9 @@ def create_status_variables_psec_diff_view():
             %s,
             %s
           FROM
-            ${status_variables_table_name}_diff
+            ${database_name}.sv_diff
     """ % (status_columns_listing, diff_columns_listing, change_psec_columns_listing, global_variables_columns_listing)
-    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    query = query.replace("${database_name}", database_name)
     act_query(query)
 
 
@@ -517,7 +518,7 @@ def create_status_variables_hour_diff_view():
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${status_variables_table_name}_hour_diff AS
+        VIEW ${database_name}.sv_hour AS
           SELECT
             MIN(id) AS id,
             DATE(ts) + INTERVAL HOUR(ts) HOUR AS ts,
@@ -527,10 +528,10 @@ def create_status_variables_hour_diff_view():
             %s,
             %s
           FROM
-            ${status_variables_table_name}_psec_diff
+            ${database_name}.sv_sample
           GROUP BY DATE(ts), HOUR(ts)
     """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
-    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    query = query.replace("${database_name}", database_name)
     act_query(query)
 
 
@@ -548,7 +549,7 @@ def create_status_variables_day_diff_view():
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${status_variables_table_name}_day_diff AS
+        VIEW ${database_name}.sv_day AS
           SELECT
             MIN(id) AS id,
             DATE(ts) AS ts,
@@ -558,10 +559,10 @@ def create_status_variables_day_diff_view():
             %s,
             %s
           FROM
-            ${status_variables_table_name}_psec_diff
+            ${database_name}.sv_sample
           GROUP BY DATE(ts)
     """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
-    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    query = query.replace("${database_name}", database_name)
     act_query(query)
 
 
@@ -572,8 +573,8 @@ def create_status_variables_parameter_change_view():
     global_variables_select_listing = ["""
         SELECT ${status_variables_table_alias}2.ts AS ts, '%s' AS variable_name, ${status_variables_table_alias}1.%s AS old_value, ${status_variables_table_alias}2.%s AS new_value
         FROM
-          ${status_variables_table_name} AS ${status_variables_table_alias}1
-          INNER JOIN ${status_variables_table_name} AS ${status_variables_table_alias}2
+          ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}1
+          INNER JOIN ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}2
           ON (${status_variables_table_alias}1.id = ${status_variables_table_alias}2.id-GREATEST(1, IFNULL(${status_variables_table_alias}2.auto_increment_increment, 1)))
         WHERE ${status_variables_table_alias}2.%s != ${status_variables_table_alias}1.%s
         """ % (column_name, column_name, column_name,
@@ -586,10 +587,11 @@ def create_status_variables_parameter_change_view():
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${status_variables_table_name}_parameter_change_union AS
+        VIEW ${database_name}.sv_parameter_change_union AS
           %s
-    """ % (global_variables_select_union)
-    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    """ % (global_variables_select_union,)
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${status_variables_table_name}", table_name)
     query = query.replace("${status_variables_table_alias}", table_name)
     act_query(query)
 
@@ -599,11 +601,70 @@ def create_status_variables_parameter_change_view():
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${status_variables_table_name}_parameter_change AS
-          SELECT * FROM ${status_variables_table_name}_parameter_change_union
+        VIEW ${database_name}.sv_param_change AS
+          SELECT * 
+          FROM ${database_name}.sv_parameter_change_union
+          ORDER BY ts, variable_name
+    """ 
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+def create_status_variables_long_format_view():
+    global_variables, diff_columns = get_variables_and_status_columns()
+    all_columns = []
+    all_columns.extend(global_variables)
+    all_columns.extend(diff_columns)
+
+    global_variables_select_listing = ["""
+        SELECT ts, '%s' AS variable_name, %s AS variable_value
+        FROM
+          ${database_name}.sv_hour
+        """ % (column_name, column_name,) for column_name in all_columns]
+    global_variables_select_union = " UNION ALL \n".join(global_variables_select_listing)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_long_union AS
+          %s
+    """ % (global_variables_select_union,)
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_long AS
+          SELECT * 
+          FROM ${database_name}.sv_long_union
           ORDER BY ts, variable_name
     """
-    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+def create_status_variables_aggregated_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_aggregated AS
+          SELECT 
+            variable_name,
+            GROUP_CONCAT(variable_value ORDER BY ts ASC SEPARATOR ',')
+          FROM ${database_name}.sv_long
+          GROUP BY variable_name
+    """
+    query = query.replace("${database_name}", database_name)
     act_query(query)
 
 
@@ -626,24 +687,24 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW %s.sv_%s${view_name_extension} AS
+        VIEW ${database_name}.sv_%s_${view_name_extension} AS
           SELECT
             id,
             ts,
             %s
           FROM
-            ${status_variables_table_name}${view_name_extension}
-    """ % (database_name, view_base_name,
+            ${database_name}.sv_${view_name_extension}
+    """ % (view_base_name,
            columns_listing)
-    query = query.replace("${status_variables_table_name}", "%s.%s" % (database_name, table_name,))
+    query = query.replace("${database_name}", database_name)
 
-    psec_diff_query = query.replace("${view_name_extension}", "_psec_diff")
+    psec_diff_query = query.replace("${view_name_extension}", "sample")
     act_query(psec_diff_query)
 
-    hour_diff_query = query.replace("${view_name_extension}", "_hour_diff")
+    hour_diff_query = query.replace("${view_name_extension}", "hour")
     act_query(hour_diff_query)
 
-    day_diff_query = query.replace("${view_name_extension}", "_day_diff")
+    day_diff_query = query.replace("${view_name_extension}", "day")
     act_query(day_diff_query)
 
 
@@ -653,6 +714,8 @@ def create_status_variables_views():
     create_status_variables_hour_diff_view()
     create_status_variables_day_diff_view()
     create_status_variables_parameter_change_view()
+    #create_status_variables_long_format_view()
+    #create_status_variables_aggregated_view()
     create_custom_views("tmp_tables", """
             tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
         """)
@@ -834,7 +897,7 @@ try:
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        #traceback.print_exc()
+        traceback.print_exc()
 
 finally:
     if conn:
