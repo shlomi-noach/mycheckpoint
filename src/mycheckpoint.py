@@ -23,6 +23,7 @@ import traceback
 import sys
 from optparse import OptionParser
 
+
 def parse_options():
     usage = "usage: mycheckpoint [options] [create/upgrade]"
     parser = OptionParser(usage=usage)
@@ -311,7 +312,8 @@ def fetch_status_variables():
     for havign the dictionary hold the keys. Based on these keys, tables and views are created.
     So it is important that we have the dictionary include all possible keys.
     """
-    status_dict = {}
+    if status_dict:
+        return status_dict
 
     query = "SHOW GLOBAL STATUS"
     rows = get_rows(query);
@@ -610,7 +612,6 @@ def create_status_variables_parameter_change_view():
     act_query(query)
 
 
-
 def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     global_variables, status_variables = get_variables_and_status_columns()
 
@@ -662,16 +663,6 @@ def create_status_variables_views():
     create_status_variables_parameter_change_view()
     #create_status_variables_long_format_view()
     #create_status_variables_aggregated_view()
-    create_custom_views("tmp_tables", """
-            tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
-        """,
-        """
-            ROUND(100*created_tmp_disk_tables/NULLIF(created_tmp_tables, 0), 2) AS created_disk_tmp_tables_percent
-        """)
-    create_custom_views("threads", """
-            max_delayed_threads, max_insert_delayed_threads, thread_cache_size, thread_stack,
-            delayed_insert_threads, slow_launch_threads, threads_cached, threads_connected, threads_created, threads_running
-        """)
     create_custom_views("dml", """
             concurrent_insert,
             com_select, com_insert, com_update, com_delete, com_replace,
@@ -688,7 +679,6 @@ def create_status_variables_views():
             ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent
         """)
     com_commands = [column_name for column_name in status_columns if column_name.startswith("com_")]
-    print ",".join(com_commands)
     create_custom_views("com", ",\n ".join(com_commands),
             ",\n ".join(
                 ["ROUND(100*(%s)/NULLIF(questions_diff, 0), 2) AS %s_percent" % (column_name, column_name,) for column_name in com_commands])
@@ -702,6 +692,31 @@ def create_status_variables_views():
             ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
             ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
             ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent
+        """)
+    create_custom_views("tmp_tables", """
+            tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
+        """,
+        """
+            ROUND(100*created_tmp_disk_tables/NULLIF(created_tmp_tables, 0), 2) AS created_disk_tmp_tables_percent
+        """)
+    create_custom_views("threads", """
+            max_delayed_threads, max_insert_delayed_threads, thread_cache_size, thread_stack,
+            delayed_insert_threads, slow_launch_threads, threads_cached, threads_connected, threads_created, threads_running
+        """)
+    create_custom_views("connections", """
+            max_connections,
+            connections, aborted_connects
+        """,
+        """
+            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent
+        """)
+    create_custom_views("table_cache", """
+            table_cache, table_open_cache, table_definition_cache,
+            open_tables, opened_tables
+        """,
+        """
+            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
+            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent
         """)
     create_custom_views("innodb_io", """
             innodb_buffer_pool_size, innodb_page_size,
@@ -748,21 +763,6 @@ def create_status_variables_views():
         """
             ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
             innodb_row_lock_waits_psec, innodb_row_lock_current_waits
-        """)
-    create_custom_views("connections", """
-            max_connections,
-            connections, aborted_connects
-        """,
-        """
-            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent
-        """)
-    create_custom_views("table_cache", """
-            table_cache, table_open_cache, table_definition_cache,
-            open_tables, opened_tables
-        """,
-        """
-            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
-            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent
         """)
     create_custom_views("replication", """
             max_binlog_size, sync_binlog,
@@ -871,7 +871,7 @@ try:
 
         database_name = options.database
         table_name = "status_variables"
-        status_dict = None
+        status_dict = {}
 
         if not database_name:
             exit_with_error("No database specified. Specify with -d or --database")
