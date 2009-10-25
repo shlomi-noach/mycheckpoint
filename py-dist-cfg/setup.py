@@ -11,6 +11,6 @@ setup(
     packages=[""],
     package_dir={"": "scripts"},
     scripts=[
-        "mycheckpoint",
+        "scripts/mycheckpoint",
         ]
 )
