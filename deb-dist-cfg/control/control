@@ -1,0 +1,14 @@
+Package: mycheckpoint
+Version: 10-1
+Section: python
+Priority: optional
+Architecture: all
+Essential: no
+Depends: python-mysqldb
+Installed-Size: 10
+Maintainer: Shlomi Noach [shlomi@code.openark.org]
+Description: Monitoring for MySQL
+ A monitoring script & analysis schema for MySQL
+ Requires MySQL 5.0 or greater.
+ See http://code.openark.org/forge/mycheckpoint
+ Released under the BSD license
