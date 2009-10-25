@@ -127,7 +127,7 @@ def prompt_instructions():
     print "-- + Otherwise, use --skip-disable-bin-log (but then be aware that slaves replicate this server's status)"
     print "-- In order to read master and slave status, the user must also be granted with REPLICATION CLIENT or SUPER privileges"
     print "-- + Otherwise, use --skip-check-replication"
-    
+
 
 def is_neglectable_variable(variable_name):
     if variable_name.startswith("ssl_"):
@@ -509,7 +509,7 @@ def create_status_variables_psec_diff_view():
 def create_status_variables_hour_diff_view():
     global_variables, status_columns = get_variables_and_status_columns()
 
-    global_variables_columns_listing = ",\n".join([" MIN(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
+    global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
     status_columns_listing = ",\n".join([" %s" % (column_name,) for column_name in status_columns])
     sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
     avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
@@ -524,6 +524,7 @@ def create_status_variables_hour_diff_view():
             MIN(id) AS id,
             DATE(ts) + INTERVAL HOUR(ts) HOUR AS ts,
             DATE(ts) + INTERVAL (HOUR(ts) + 1) HOUR AS end_ts,
+            SUM(ts_diff_seconds) AS ts_diff_seconds,
             %s,
             %s,
             %s,
@@ -555,6 +556,7 @@ def create_status_variables_day_diff_view():
             MIN(id) AS id,
             DATE(ts) AS ts,
             DATE(ts) + INTERVAL 1 DAY AS end_ts,
+            SUM(ts_diff_seconds) AS ts_diff_seconds,
             %s,
             %s,
             %s,
@@ -603,10 +605,10 @@ def create_status_variables_parameter_change_view():
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
         VIEW ${database_name}.sv_param_change AS
-          SELECT * 
+          SELECT *
           FROM ${database_name}.sv_parameter_change_union
           ORDER BY ts, variable_name
-    """ 
+    """
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
@@ -624,7 +626,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     if custom_columns:
         if view_columns:
             columns_listing = columns_listing + ",\n "
-        columns_listing = columns_listing + custom_columns.lower()
+        columns_listing = columns_listing + custom_columns
 
     query = """
         CREATE
@@ -774,7 +776,7 @@ def create_status_variables_views():
             ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2) AS key_buffer_usage_percent,
             ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2) AS key_read_hit_percent,
             ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2) AS key_write_hit_percent,
-            
+
             innodb_buffer_pool_size,
             innodb_flush_log_at_trx_commit,
             ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
@@ -782,14 +784,14 @@ def create_status_variables_views():
             innodb_buffer_pool_reads_psec,
             innodb_buffer_pool_pages_flushed_psec,
             ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-            
+
             ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
-            innodb_row_lock_waits_psec, 
+            innodb_row_lock_waits_psec,
             innodb_row_lock_current_waits,
-            
+
             ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
             ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent,
-            
+
             ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 2) AS com_select_percent,
             ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 2) AS com_insert_percent,
             ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 2) AS com_update_percent,
@@ -797,18 +799,41 @@ def create_status_variables_views():
             ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 2) AS com_replace_percent,
             ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
             ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent,
-            
+
             ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
             ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
             ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent,
 
-            connections_psec, 
+            connections_psec,
             ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent,
             threads_created_psec,
 
-            created_tmp_tables_psec, 
-            created_tmp_disk_tables_psec, 
-            ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 2) AS created_disk_tmp_tables_percent
+            created_tmp_tables_psec,
+            created_tmp_disk_tables_psec,
+            ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 2) AS created_disk_tmp_tables_percent,
+
+            ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 2) AS uptime_percent
+        """)
+    create_custom_views("report_human", "", """CONCAT('
+    Report starting ', ts, ' for the duration of ', round(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
+    Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 2),
+        '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
+
+    MyISAM key cache:
+        key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 2), 'MB). Used: ',
+            IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2), 'N/A'), '%
+        Read hit: ',
+            IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2), 'N/A'), '%  Write hit: ',
+            IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2), 'N/A'), '%
+
+    InnoDB:
+        innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 2), 'MB). Used: ',
+            IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2), 'N/A'), '%
+        I/O: ', innodb_buffer_pool_reads_psec, ' reads/sec  ', innodb_buffer_pool_pages_flushed_psec, ' flushes/sec
+        Read hit: ', IFNULL(ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2), 'N/A'), '%
+        Estimated log written per hour: ', IFNULL(ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1), 'N/A'), 'MB
+        Locks: ', innodb_row_lock_waits_psec, '/sec  current: ', innodb_row_lock_current_waits, '
+    ') AS report
         """)
 
 
