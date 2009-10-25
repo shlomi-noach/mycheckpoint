@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 #
-# Collect GLOBAL STATUS, GLOBAL VARIABLES master & slave status.
+# Collect GLOBAL STATUS, GLOBAL VARIABLES, master & slave status, store in database, generate supporting views
 #
 # Released under the BSD license
 #
@@ -303,7 +303,6 @@ def get_global_variables():
         "warning_count",
         ]
     return global_variables
-
 
 
 def fetch_status_variables():
@@ -894,7 +893,7 @@ try:
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        traceback.print_exc()
+        #traceback.print_exc()
 
 finally:
     if conn:
