@@ -819,13 +819,6 @@ def create_status_variables_views():
     Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
         '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
 
-    MyISAM key cache:
-        key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 1), 'MB). Used: ',
-            IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1), 'N/A'), '%
-        Read hit: ',
-            IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1), 'N/A'), '%  Write hit: ',
-            IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
-
     InnoDB:
         innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
             IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1), 'N/A'), '%
@@ -834,12 +827,21 @@ def create_status_variables_views():
         Estimated log written per hour: ', IFNULL(ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1), 'N/A'), 'MB
         Locks: ', innodb_row_lock_waits_psec, '/sec  current: ', innodb_row_lock_current_waits, '
 
+    MyISAM key cache:
+        key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 1), 'MB). Used: ',
+            IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1), 'N/A'), '%
+        Read hit: ',
+            IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1), 'N/A'), '%  Write hit: ',
+            IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
+
     DML:
         SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
         INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
         UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
         DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
         REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+        SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+        COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
         slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '% (slow time: ',
             long_query_time ,'sec)
 
@@ -863,6 +865,18 @@ def create_status_variables_views():
         Created:             ', created_tmp_tables_psec, '/sec
         Created disk tables: ', created_tmp_disk_tables_psec, '/sec  ',
             IFNULL(ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 1), 'N/A'), '%
+
+    Connections:
+        Max connections: ', max_connections, '. Max used: ', max_used_connections, '  ',
+            IFNULL(ROUND(100*max_used_connections/NULLIF(max_connections, 0), 1), 'N/A'), '%
+        Connections: ', connections_psec, '/sec
+        Aborted:     ', aborted_connects_psec, '/sec  ',
+            IFNULL(ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 1), 'N/A'), '%
+
+    Threads:
+        Cache size: ', thread_cache_size, '. Used: ',
+            IFNULL(ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1), 'N/A'), '%
+        Created: ', threads_created_psec, '/sec
 
     ') AS report
         """)
