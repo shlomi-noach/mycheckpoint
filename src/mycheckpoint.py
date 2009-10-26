@@ -815,24 +815,55 @@ def create_status_variables_views():
             ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 2) AS uptime_percent
         """)
     create_custom_views("report_human", "", """CONCAT('
-    Report starting ', ts, ' for the duration of ', round(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
-    Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 2),
+    Report starting ', TIMESTAMP(ts), ', for the duration of ', round(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
+    Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
         '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
 
     MyISAM key cache:
-        key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 2), 'MB). Used: ',
-            IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2), 'N/A'), '%
+        key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 1), 'MB). Used: ',
+            IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1), 'N/A'), '%
         Read hit: ',
-            IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2), 'N/A'), '%  Write hit: ',
-            IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2), 'N/A'), '%
+            IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1), 'N/A'), '%  Write hit: ',
+            IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
 
     InnoDB:
-        innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 2), 'MB). Used: ',
-            IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2), 'N/A'), '%
-        I/O: ', innodb_buffer_pool_reads_psec, ' reads/sec  ', innodb_buffer_pool_pages_flushed_psec, ' flushes/sec
-        Read hit: ', IFNULL(ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2), 'N/A'), '%
+        innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
+            IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1), 'N/A'), '%
+        Read hit: ', IFNULL(ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 1), 'N/A'), '%
+        Disk I/O: ', innodb_buffer_pool_reads_psec, ' reads/sec  ', innodb_buffer_pool_pages_flushed_psec, ' flushes/sec
         Estimated log written per hour: ', IFNULL(ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1), 'N/A'), 'MB
         Locks: ', innodb_row_lock_waits_psec, '/sec  current: ', innodb_row_lock_current_waits, '
+
+    DML:
+        SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+        INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+        UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+        DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+        REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+        slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '% (slow time: ',
+            long_query_time ,'sec)
+
+    Selects:
+        Full scan: ', select_scan_psec, '/sec  ', IFNULL(ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
+        Full join: ', select_full_join_psec, '/sec  ', IFNULL(ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
+        Range:     ', select_range_psec, '/sec  ', IFNULL(ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
+        Sort merge passes: ', sort_merge_passes_psec, '/sec
+
+    Locks:
+        Table locks waited:  ', table_locks_waited_psec, '/sec  ', IFNULL(ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1), 'N/A'), '%
+
+    Tables:
+        Table cache: ', (IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0)), '. Used: ',
+            IFNULL(ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1), 'N/A'), '%
+        Opened tables: ', opened_tables_psec, '/sec
+
+    Temp tables:
+        Max tmp table size:  ', tmp_table_size, ' bytes (', ROUND(tmp_table_size/(1024*1024), 1), 'MB)
+        Max heap table size: ', max_heap_table_size, ' bytes (', ROUND(max_heap_table_size/(1024*1024), 1), 'MB)
+        Created:             ', created_tmp_tables_psec, '/sec
+        Created disk tables: ', created_tmp_disk_tables_psec, '/sec  ',
+            IFNULL(ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 1), 'N/A'), '%
+
     ') AS report
         """)
 
