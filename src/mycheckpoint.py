@@ -421,7 +421,22 @@ def create_status_variables_table():
             %s,
             UNIQUE KEY ts (ts)
        )
-    """ % (database_name, table_name, columns_listing)
+        """ % (database_name, table_name, columns_listing)
+    act_query(query)
+
+
+def create_numbers_table():
+    query = """CREATE TABLE IF NOT EXISTS %s.numbers (
+                n SMALLINT UNSIGNED NOT NULL,
+                PRIMARY KEY (n)
+            )
+        """ % database_name
+    act_query(query)
+    numbers_values = ",".join(["(%d)" % n for n in range(0,4096)])
+    query = """
+        INSERT IGNORE INTO %s.numbers
+        VALUES %s
+        """ % (database_name, numbers_values)
     act_query(query)
 
 
@@ -476,7 +491,7 @@ def create_status_variables_diff_view():
     act_query(query)
 
 
-def create_status_variables_psec_diff_view():
+def create_status_variables_sample_view():
     global_variables, status_columns = get_variables_and_status_columns()
 
     global_variables_columns_listing = ",\n".join(["%s" % (column_name,) for column_name in global_variables])
@@ -501,12 +516,12 @@ def create_status_variables_psec_diff_view():
             %s
           FROM
             ${database_name}.sv_diff
-    """ % (status_columns_listing, diff_columns_listing, change_psec_columns_listing, global_variables_columns_listing)
+        """ % (status_columns_listing, diff_columns_listing, change_psec_columns_listing, global_variables_columns_listing)
     query = query.replace("${database_name}", database_name)
     act_query(query)
+    
 
-
-def create_status_variables_hour_diff_view():
+def create_status_variables_hour_view():
     global_variables, status_columns = get_variables_and_status_columns()
 
     global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
@@ -538,7 +553,7 @@ def create_status_variables_hour_diff_view():
 
 
 
-def create_status_variables_day_diff_view():
+def create_status_variables_day_view():
     global_variables, status_columns = get_variables_and_status_columns()
 
     global_variables_columns_listing = ",\n".join([" MIN(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
@@ -569,6 +584,29 @@ def create_status_variables_day_diff_view():
     act_query(query)
 
 
+def create_status_variables_recent_views():
+    """
+    Generate per-sample, per-hour and per-day 'recent' views, which only list the latest 256 rows from respective full views.
+    """
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_${view_name_extension}_recent AS
+          SELECT *
+          FROM
+            ${database_name}.sv_${view_name_extension}
+          ORDER BY id DESC
+          LIMIT 256
+        """ 
+    query = query.replace("${database_name}", database_name)
+
+    for view_name_extension in ["sample", "hour", "day"]:
+        custom_query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(custom_query)
+    
 
 def create_status_variables_parameter_change_view():
     global_variables, diff_columns = get_variables_and_status_columns()
@@ -613,6 +651,68 @@ def create_status_variables_parameter_change_view():
     act_query(query)
 
 
+def create_status_variables_long_format_view():
+    global_variables, status_variables = get_variables_and_status_columns()
+    all_columns_listing = []
+    all_columns_listing.extend(global_variables);
+    all_columns_listing.extend(status_variables);
+    all_columns_listing.extend(["%s_diff" % (column_name,) for column_name in status_variables])
+    all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in status_variables])
+    all_columns = ",".join(all_columns_listing)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_long_hour AS
+            SELECT
+                id, ts,
+                SUBSTRING_INDEX(SUBSTRING_INDEX('%s', ',', numbers.n), ',', -1) AS variable_name,
+                CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(CONCAT_WS(',', %s), ',', numbers.n), ',', -1) AS UNSIGNED) AS variable_value
+            FROM
+                ${database_name}.sv_hour,
+                ${database_name}.numbers
+            WHERE
+                numbers.n >= 1 AND numbers.n <= %d
+            ORDER BY
+                id ASC, variable_name ASC
+        """ % (all_columns, all_columns, len(all_columns_listing))
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+def create_status_variables_aggregated_view():
+    global_variables, status_variables = get_variables_and_status_columns()
+    all_columns_listing = []
+    all_columns_listing.extend(global_variables);
+    all_columns_listing.extend(status_variables);
+    all_columns = ",".join(all_columns_listing)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_agg_hour AS
+            SELECT
+                MIN(id) AS id, MIN(ts) AS min_ts, MAX(ts) AS max_ts,
+                SUBSTRING_INDEX(SUBSTRING_INDEX('%s', ',', numbers.n), ',', -1) AS variable_name,
+                GROUP_CONCAT(CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(CONCAT_WS(',', %s), ',', numbers.n), ',', -1) AS UNSIGNED) ORDER BY ts ASC) AS variable_values
+            FROM
+                ${database_name}.sv_hour,
+                ${database_name}.numbers
+            WHERE
+                numbers.n >= 1 AND numbers.n <= %d
+            GROUP BY
+                variable_name ASC
+        """ % (all_columns, all_columns, len(all_columns_listing))
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
 def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     global_variables, status_variables = get_variables_and_status_columns()
 
@@ -645,25 +745,21 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
            columns_listing)
     query = query.replace("${database_name}", database_name)
 
-    psec_diff_query = query.replace("${view_name_extension}", "sample")
-    act_query(psec_diff_query)
-
-    hour_diff_query = query.replace("${view_name_extension}", "hour")
-    act_query(hour_diff_query)
-
-    day_diff_query = query.replace("${view_name_extension}", "day")
-    act_query(day_diff_query)
+    for view_name_extension in ["sample", "hour", "day"]:
+        custom_query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(custom_query)
 
 
 def create_status_variables_views():
     global_variables, status_columns = get_variables_and_status_columns()
     create_status_variables_diff_view()
-    create_status_variables_psec_diff_view()
-    create_status_variables_hour_diff_view()
-    create_status_variables_day_diff_view()
+    create_status_variables_sample_view()
+    create_status_variables_hour_view()
+    create_status_variables_day_view()
+    create_status_variables_recent_views()
     create_status_variables_parameter_change_view()
-    #create_status_variables_long_format_view()
-    #create_status_variables_aggregated_view()
+    create_status_variables_long_format_view()
+    create_status_variables_aggregated_view()
     create_custom_views("dml", """
             concurrent_insert,
             com_select, com_insert, com_update, com_delete, com_replace,
@@ -815,7 +911,7 @@ def create_status_variables_views():
             ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 2) AS uptime_percent
         """)
     create_custom_views("report_human", "", """CONCAT('
-    Report starting ', TIMESTAMP(ts), ', for the duration of ', round(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
+    Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_seconds/60) MINUTE, '. Period is ', ROUND(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
     Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
         '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
 
@@ -878,6 +974,11 @@ def create_status_variables_views():
             IFNULL(ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1), 'N/A'), '%
         Created: ', threads_created_psec, '/sec
 
+    Replication:
+        Master status file number: ', IFNULL(master_status_file_number, 'N/A'), ', position: ', IFNULL(master_status_position, 'N/A'), '
+        Relay log space limit: ', IFNULL(max_relay_log_size, 'N/A'), ', free: ', IFNULL(relay_log_space, 'N/A'), '  used: ',
+            IFNULL(ROUND(100 - 100*relay_log_space/NULLIF(max_relay_log_size, 0), 1), 'N/A'), '%
+        Seconds behind master: ', IFNULL(seconds_behind_master, 'N/A'), '
     ') AS report
         """)
 
@@ -950,6 +1051,7 @@ try:
         conn = open_connection()
         if "create" in args:
             prompt_instructions()
+            create_numbers_table()
             create_status_variables_table()
             create_status_variables_views()
             verbose("Table and views created")
