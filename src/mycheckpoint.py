@@ -584,7 +584,7 @@ def create_status_variables_day_view():
     act_query(query)
 
 
-def create_status_variables_recent_views():
+def create_report_recent_views():
     """
     Generate per-sample, per-hour and per-day 'recent' views, which only list the latest 256 rows from respective full views.
     """
@@ -594,13 +594,51 @@ def create_status_variables_recent_views():
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_${view_name_extension}_recent AS
+        VIEW ${database_name}.sv_report_${view_name_extension}_recent AS
           SELECT *
           FROM
-            ${database_name}.sv_${view_name_extension}
+            ${database_name}.sv_report_${view_name_extension}
           ORDER BY id DESC
           LIMIT 256
         """ 
+    query = query.replace("${database_name}", database_name)
+
+    for view_name_extension in ["sample", "hour", "day"]:
+        custom_query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(custom_query)
+
+
+def create_report_recent_minmax_views():
+    """
+    Generate min/max values view for the recent views.
+    """
+    global_variables, status_columns = get_variables_and_status_columns()
+
+    #all_columns = []
+    #all_columns.extend(["%s" % (column_name,) for column_name in status_columns])
+    #all_columns.extend(["%s_diff" % (column_name,) for column_name in status_columns])
+    #all_columns.extend(["%s_psec" % (column_name,) for column_name in status_columns])
+    
+    all_columns = custom_views_columns["report"]
+    
+    min_columns_listing = ",\n".join(["MIN(%s) AS %s_min" % (column_name, column_name,) for column_name in all_columns])
+    max_columns_listing = ",\n".join(["MAX(%s) AS %s_max" % (column_name, column_name,) for column_name in all_columns])
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_report_${view_name_extension}_recent_minmax AS
+          SELECT
+            %s,
+            %s
+          FROM
+            ${database_name}.sv_report_${view_name_extension}_recent
+          ORDER BY id DESC
+          LIMIT 256
+        """ % (min_columns_listing, max_columns_listing)
     query = query.replace("${database_name}", database_name)
 
     for view_name_extension in ["sample", "hour", "day"]:
@@ -727,6 +765,16 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         if view_columns:
             columns_listing = columns_listing + ",\n "
         columns_listing = columns_listing + custom_columns
+        
+    # This is currently an ugly patch (first one in this code...)
+    # We need to know which custom columns have been created in the "report" views, so that we can later build the
+    # sv_report_minmax_* views.
+    # So we parse the custom columns. We expect one column per line; we allow for aliasing (" as ")
+    # We then store the columns for later use.
+    custom_columns_names_list = [column_name for column_name in custom_columns.lower().split("\n")]
+    custom_columns_names_list = [column_name.split(" as ")[-1].replace(",","").strip() for column_name in custom_columns_names_list]
+    custom_columns_names_list = [column_name for column_name in custom_columns_names_list if column_name]
+    custom_views_columns[view_base_name] = custom_columns_names_list
 
     query = """
         CREATE
@@ -750,16 +798,89 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         act_query(custom_query)
 
 
+def generate_google_chart_query(chart_columns, alias, zero_based_chart):
+    chart_columns_list = [column_name.strip() for column_name in chart_columns.lower().split(",")]
+
+    chart_column_min_listing = ",".join(["%s_min" % column_name for column_name in chart_columns_list])
+    chart_column_max_listing = ",".join(["%s_max" % column_name for column_name in chart_columns_list])
+    if len(chart_columns_list) == 1:
+        # To solve a problem: the LEAST() & GREATEST() functions expect at least 2 arguments.
+        chart_column_min_listing = chart_column_min_listing + "," + chart_column_min_listing
+        chart_column_max_listing = chart_column_max_listing + "," + chart_column_max_listing
+    if zero_based_chart:
+        chart_column_min_listing = "0," + chart_column_min_listing 
+    piped_chart_column_listing = "|".join(chart_columns_list)
+    
+    chart_colors = ["ff8c00", "4682b4", "9acd32",][0:len(chart_columns_list)]
+    
+    column_values = [ """
+            GROUP_CONCAT(SUBSTRING(
+              'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+              ROUND(
+                61 *
+                (%s - LEAST(%s))/(GREATEST(%s) - LEAST(%s))
+              ), 1) 
+              ORDER BY ts ASC
+              SEPARATOR ''
+            ),
+            """ % (column_name, chart_column_min_listing, chart_column_max_listing, chart_column_min_listing) for column_name in chart_columns_list
+        ]
+    concatenated_column_values = "',',".join(column_values)
+    query = """
+          REPLACE(
+          CONCAT(
+            'http://chart.apis.google.com/chart?cht=lc&chs=400x200&chts=303030,12&chtt=', 
+            DATE_FORMAT(MIN(ts), '%Y-%m-%d %H:%i'), '  -  ', DATE_FORMAT(MAX(ts), '%Y-%m-%d %H:%i'), 
+              ' (', TIMESTAMPDIFF(DAY, MIN(ts), MAX(ts)), ' days, ',
+              TIMESTAMPDIFF(HOUR, MIN(ts), MAX(ts)) % 24, ' hours)',
+            '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:', 
+            ${concatenated_column_values} 
+            '&chxt=y&chxr=0,',least(${chart_column_min_listing}),',', greatest(${chart_column_max_listing})
+          ), ' ', '+') AS ${alias}
+        """
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${piped_chart_column_listing}", piped_chart_column_listing)
+    query = query.replace("${chart_colors}", ",".join(chart_colors))
+    query = query.replace("${concatenated_column_values}", concatenated_column_values)
+    query = query.replace("${chart_column_min_listing}", chart_column_min_listing)
+    query = query.replace("${chart_column_max_listing}", chart_column_max_listing)
+    query = query.replace("${alias}", alias)
+
+    return query
+
+
+def create_report_google_chart_view(charts_list):
+    charts_queries = [generate_google_chart_query(chart_columns, alias, zero_based_chart) for (chart_columns, alias, zero_based_chart) in charts_list]
+    charts_query = ",".join(charts_queries)
+    
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_report_chart_${view_name_extension} AS
+          SELECT
+            %s
+          FROM 
+            ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax
+        """ % charts_query
+    query = query.replace("${database_name}", database_name)
+
+    for view_name_extension in ["sample", "hour", "day"]:
+        custom_query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(custom_query)
+
+
 def create_status_variables_views():
     global_variables, status_columns = get_variables_and_status_columns()
     create_status_variables_diff_view()
     create_status_variables_sample_view()
     create_status_variables_hour_view()
     create_status_variables_day_view()
-    create_status_variables_recent_views()
     create_status_variables_parameter_change_view()
-    create_status_variables_long_format_view()
-    create_status_variables_aggregated_view()
+    #create_status_variables_long_format_view()
+    #create_status_variables_aggregated_view()
     create_custom_views("dml", """
             concurrent_insert,
             com_select, com_insert, com_update, com_delete, com_replace,
@@ -868,48 +989,79 @@ def create_status_variables_views():
             Read_Master_Log_Pos, Relay_Log_Pos, Exec_Master_Log_Pos, Relay_Log_Space, Seconds_Behind_Master,
         """)
     create_custom_views("report", "", """
-            key_buffer_size,
-            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2) AS key_buffer_usage_percent,
-            ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2) AS key_read_hit_percent,
-            ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2) AS key_write_hit_percent,
+            ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1) AS uptime_percent,
 
             innodb_buffer_pool_size,
             innodb_flush_log_at_trx_commit,
+            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1) AS innodb_buffer_pool_used_percent,
             ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
-            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent,
             innodb_buffer_pool_reads_psec,
             innodb_buffer_pool_pages_flushed_psec,
+            innodb_os_log_written_psec,
             ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-
-            ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
             innodb_row_lock_waits_psec,
             innodb_row_lock_current_waits,
 
-            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
-            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent,
+            key_buffer_size,
+            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1) AS key_buffer_used_percent,
+            ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1) AS key_read_hit_percent,
+            ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1) AS key_write_hit_percent,
 
-            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 2) AS com_select_percent,
-            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 2) AS com_insert_percent,
-            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 2) AS com_update_percent,
-            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 2) AS com_delete_percent,
-            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 2) AS com_replace_percent,
-            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
-            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent,
+            com_select_psec, 
+            com_insert_psec, 
+            com_update_psec, 
+            com_delete_psec, 
+            com_replace_psec, 
+            com_set_option_psec, 
+            com_commit_psec, 
+            slow_queries_psec, 
+            questions_psec, 
+            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1) AS com_select_percent,
+            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1) AS com_insert_percent,
+            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1) AS com_update_percent,
+            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 1) AS com_delete_percent,
+            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 1) AS com_replace_percent,
+            ROUND(100*com_set_option_diff/NULLIF(questions_diff, 0), 1) AS com_set_option_percent,
+            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 1) AS com_commit_percent,
+            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 1) AS slow_queries_percent,
 
-            ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
-            ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
-            ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent,
+            select_scan_psec,
+            select_full_join_psec,
+            select_range_psec,
+            ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 1) AS select_scan_percent,
+            ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 1) AS select_full_join_percent,
+            ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 1) AS select_range_percent,
 
-            connections_psec,
-            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent,
-            threads_created_psec,
+            table_locks_waited_psec,
+            ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1) AS table_lock_waited_percent,
+
+            IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0) AS table_cache_size,
+            ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1) AS table_cache_use_percent,
+            opened_tables_psec,
 
             created_tmp_tables_psec,
             created_tmp_disk_tables_psec,
-            ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 2) AS created_disk_tmp_tables_percent,
+            ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 1) AS created_disk_tmp_tables_percent,
 
-            ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 2) AS uptime_percent
+            max_connections,
+            ROUND(100*max_used_connections/NULLIF(max_connections, 0), 1) AS max_connections_used_percent,
+            connections_psec,
+            aborted_connects_psec,
+            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 1) AS aborted_connections_percent,
+            
+            thread_cache_size,
+            ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1) AS thread_cache_used_percent,
+            threads_created_psec,
+
+            master_status_file_number,
+            master_status_position,
+            max_relay_log_size,
+            relay_log_space,
+            ROUND(100 - 100*relay_log_space/NULLIF(max_relay_log_size, 0), 1) AS relay_log_space_used_percent,
+            seconds_behind_master
         """)
+    create_report_recent_views()
+    create_report_recent_minmax_views()
     create_custom_views("report_human", "", """CONCAT('
     Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_seconds/60) MINUTE, '. Period is ', ROUND(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
     Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
@@ -982,6 +1134,19 @@ def create_status_variables_views():
     ') AS report
         """)
 
+    create_report_google_chart_view([
+        ("com_select_psec, com_insert_psec, com_delete_psec", "DML", True),
+        ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True),
+        ("innodb_os_log_written_psec", "innodb_os_log_written_psec", False),
+        ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", False),
+        ("innodb_read_hit_percent", "innodb_read_hit_percent", False),
+        ])
+#    generate_google_chart_url(["com_select_psec", "com_insert_psec", "com_delete_psec"], True)
+#    generate_google_chart_url(["com_select_psec"], True)
+#    generate_google_chart_url(["created_tmp_tables_psec", "created_tmp_disk_tables_psec"], True)
+#    generate_google_chart_url(["innodb_os_log_written_psec"], False)
+#    generate_google_chart_url(["innodb_estimated_log_mb_written_per_hour"], False)
+#    generate_google_chart_url(["innodb_read_hit_percent"], False)
 
 def disable_bin_log():
     if options.skip_disable_bin_log:
@@ -1042,6 +1207,7 @@ try:
         database_name = options.database
         table_name = "status_variables"
         status_dict = {}
+        custom_views_columns = {}
 
         if not database_name:
             exit_with_error("No database specified. Specify with -d or --database")
@@ -1065,7 +1231,7 @@ try:
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        #traceback.print_exc()
+        traceback.print_exc()
 
 finally:
     if conn:
