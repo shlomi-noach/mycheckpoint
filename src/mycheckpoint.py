@@ -35,10 +35,12 @@ def parse_options():
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", default="openark", help="Database name (required unless query uses fully qualified table names)")
-    parser.add_option("", "--purge-days", dest="purge_days", type="int", default=62, help="Purge data older than specified amount of days (default: 62)")
+    parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
     parser.add_option("", "--skip-disable-bin-log", dest="skip_disable_bin_log", action="store_true", default=False, help="Skip disabling the binary logging (binary loggind disabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
+    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400)")
+    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Google chart image height (default: 200)")
     return parser.parse_args()
 
 
@@ -455,6 +457,7 @@ def upgrade_status_variables_table():
                 %s
         """ % (database_name, table_name, columns_listing)
         act_query(query)
+    verbose("status_variables table upgraded")
 
 
 def create_status_variables_diff_view():
@@ -490,6 +493,8 @@ def create_status_variables_diff_view():
     query = query.replace("${status_variables_table_alias}", table_name)
     act_query(query)
 
+    verbose("sv_diff view created")
+
 
 def create_status_variables_sample_view():
     global_variables, status_columns = get_variables_and_status_columns()
@@ -519,6 +524,8 @@ def create_status_variables_sample_view():
         """ % (status_columns_listing, diff_columns_listing, change_psec_columns_listing, global_variables_columns_listing)
     query = query.replace("${database_name}", database_name)
     act_query(query)
+
+    verbose("sv_sample view created")
     
 
 def create_status_variables_hour_view():
@@ -551,6 +558,7 @@ def create_status_variables_hour_view():
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
+    verbose("sv_hour view created")
 
 
 def create_status_variables_day_view():
@@ -583,6 +591,8 @@ def create_status_variables_day_view():
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
+    verbose("sv_day view created")
+
 
 def create_report_recent_views():
     """
@@ -606,6 +616,8 @@ def create_report_recent_views():
     for view_name_extension in ["sample", "hour", "day"]:
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
+
+    verbose("recent reports views created")
 
 
 def create_report_recent_minmax_views():
@@ -645,6 +657,8 @@ def create_report_recent_minmax_views():
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
     
+    verbose("recent reports minmax views created")
+
 
 def create_status_variables_parameter_change_view():
     global_variables, diff_columns = get_variables_and_status_columns()
@@ -687,6 +701,8 @@ def create_status_variables_parameter_change_view():
     """
     query = query.replace("${database_name}", database_name)
     act_query(query)
+
+    verbose("sv_param_change view created")
 
 
 def create_status_variables_long_format_view():
@@ -797,6 +813,8 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
 
+    verbose("%s custom view created" % view_base_name)
+
 
 def generate_google_chart_query(chart_columns, alias, zero_based_chart):
     chart_columns_list = [column_name.strip() for column_name in chart_columns.lower().split(",")]
@@ -811,7 +829,7 @@ def generate_google_chart_query(chart_columns, alias, zero_based_chart):
         chart_column_min_listing = "0," + chart_column_min_listing 
     piped_chart_column_listing = "|".join(chart_columns_list)
     
-    chart_colors = ["ff8c00", "4682b4", "9acd32",][0:len(chart_columns_list)]
+    chart_colors = ["ff8c00", "4682b4", "9acd32", "dc143c", "9932cc", "ffd700", "191970", "7fffd4", "808080", "dda0dd"][0:len(chart_columns_list)]
     
     column_values = [ """
             GROUP_CONCAT(SUBSTRING(
@@ -829,7 +847,7 @@ def generate_google_chart_query(chart_columns, alias, zero_based_chart):
     query = """
           REPLACE(
           CONCAT(
-            'http://chart.apis.google.com/chart?cht=lc&chs=400x200&chts=303030,12&chtt=', 
+            'http://chart.apis.google.com/chart?cht=lc&chs=${chart_width}x${chart_height}&chts=303030,12&chtt=', 
             DATE_FORMAT(MIN(ts), '%Y-%m-%d %H:%i'), '  -  ', DATE_FORMAT(MAX(ts), '%Y-%m-%d %H:%i'), 
               ' (', TIMESTAMPDIFF(DAY, MIN(ts), MAX(ts)), ' days, ',
               TIMESTAMPDIFF(HOUR, MIN(ts), MAX(ts)) % 24, ' hours)',
@@ -839,6 +857,8 @@ def generate_google_chart_query(chart_columns, alias, zero_based_chart):
           ), ' ', '+') AS ${alias}
         """
     query = query.replace("${database_name}", database_name)
+    query = query.replace("${chart_width}", str(options.chart_width))
+    query = query.replace("${chart_height}", str(options.chart_height))
     query = query.replace("${piped_chart_column_listing}", piped_chart_column_listing)
     query = query.replace("${chart_colors}", ",".join(chart_colors))
     query = query.replace("${concatenated_column_values}", concatenated_column_values)
@@ -870,6 +890,105 @@ def create_report_google_chart_view(charts_list):
     for view_name_extension in ["sample", "hour", "day"]:
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
+
+    verbose("report charts views created")
+
+
+def create_report_html_view(charts_aliases):
+    charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
+    
+    all_img_tags_queries = []
+    for chart_alias in charts_aliases_list:
+        alias_img_tags_query = """
+            '<div class="row">
+                <a name="${chart_alias}"></a>
+                <h2>${chart_alias}</h2>',
+                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_sample.${chart_alias}, '"/>'), 'N/A'), '</div>',
+                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_hour.${chart_alias}, '"/>'), 'N/A'), '</div>',
+                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_day.${chart_alias}, '"/>'), 'N/A'), '</div>',
+                '<div class="clear"></div>',
+            '</div>
+                ',
+            """
+        alias_img_tags_query = alias_img_tags_query.replace("${chart_width}", str(options.chart_width))
+        alias_img_tags_query = alias_img_tags_query.replace("${chart_height}", str(options.chart_height))
+        alias_img_tags_query = alias_img_tags_query.replace("${chart_alias}", chart_alias)
+        all_img_tags_queries.append(alias_img_tags_query)
+    all_img_tags_query = "".join(all_img_tags_queries)
+
+    chart_aliases_map = " | ".join(["""<a href="#%s">%s</a>""" % (chart_alias, chart_alias,) for chart_alias in charts_aliases_list])
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_report_html AS
+          SELECT CONCAT('
+    <html>
+        <head>
+        <title>mycheckpoint report</title>
+        <style type="text/css">
+            body {
+                background:#FFFFFF none repeat scroll 0% 0%;
+                color:#505050;
+                font-family:Verdana,Arial,Helvetica,sans-serif;
+                font-size:9pt;
+                line-height:1.5;
+            }
+            a {
+                color:#f26522;
+                text-decoration:none;
+            }
+            h2 {
+                font-weight:normal;
+                margin-top:20px;
+            }
+            .nobr {
+                white-space: nowrap;
+            }
+            div.row {
+                width: ${global_width};
+            }
+            div.chart {
+                float: left;
+                white-space: nowrap;
+                margin-right: 10px;
+                width: ${chart_width};
+                height: ${chart_height};
+            }
+            div.chart img {
+                border:0px none;
+                width: ${chart_width};
+                height: ${chart_height};
+            }
+            .clear {
+                clear:both;
+                height:1px;
+            }
+        </style>
+        </head>
+        <body>
+            Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a>
+            <br/><br/>
+            Navigate: ${chart_aliases_map}
+            <br/>
+            ',
+            %s '
+        </body>        
+    </html>
+          ') AS html
+          FROM 
+            ${database_name}.sv_report_chart_sample, ${database_name}.sv_report_chart_hour, ${database_name}.sv_report_chart_day
+        """ % all_img_tags_query
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${chart_aliases_map}", chart_aliases_map)
+    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
+    query = query.replace("${chart_width}", str(options.chart_width))
+    query = query.replace("${chart_height}", str(options.chart_height))
+    act_query(query)
+
+    verbose("report html view created")
 
 
 def create_status_variables_views():
@@ -1052,6 +1171,8 @@ def create_status_variables_views():
             thread_cache_size,
             ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1) AS thread_cache_used_percent,
             threads_created_psec,
+            threads_connected,
+            ROUND(100*threads_connected/NULLIF(max_connections, 0), 1) AS threads_connected_used_percent,
 
             master_status_file_number,
             master_status_position,
@@ -1135,18 +1256,46 @@ def create_status_variables_views():
         """)
 
     create_report_google_chart_view([
-        ("com_select_psec, com_insert_psec, com_delete_psec", "DML", True),
-        ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True),
-        ("innodb_os_log_written_psec", "innodb_os_log_written_psec", False),
-        ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", False),
+        ("uptime_percent", "uptime_percent", True),
+        
         ("innodb_read_hit_percent", "innodb_read_hit_percent", False),
+        ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True),
+        ("innodb_buffer_pool_used_percent", "innodb_buffer_pool_used_percent", True),
+        ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True),
+        ("innodb_row_lock_waits_psec", "innodb_row_lock_waits_psec", True),        
+
+        ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True),        
+        ("key_read_hit_percent, key_read_hit_percent", "myisam_key_hit_ratio", True),        
+        
+        ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True),
+        ("questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True),
+        
+        ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True),
+
+        ("table_locks_waited_psec", "table_locks_waited_psec", True),
+
+        ("table_cache_use_percent", "table_cache_use_percent", True),
+        ("opened_tables_psec", "opened_tables_psec", True),
+        
+        ("connections_psec, aborted_connects_psec", "connections_psec", True),
+        ("max_connections, threads_connected", "threads_connected_used", True),
+
+        ("thread_cache_used_percent", "thread_cache_used_percent", True),
+        ("threads_created_psec", "threads_created_psec", True),
         ])
-#    generate_google_chart_url(["com_select_psec", "com_insert_psec", "com_delete_psec"], True)
-#    generate_google_chart_url(["com_select_psec"], True)
-#    generate_google_chart_url(["created_tmp_tables_psec", "created_tmp_disk_tables_psec"], True)
-#    generate_google_chart_url(["innodb_os_log_written_psec"], False)
-#    generate_google_chart_url(["innodb_estimated_log_mb_written_per_hour"], False)
-#    generate_google_chart_url(["innodb_read_hit_percent"], False)
+    
+    create_report_html_view("""
+        innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_used_percent, 
+        myisam_key_buffer_used_percent, myisam_key_hit_ratio,
+        DML, questions, 
+        tmp_tables,
+        table_locks_waited_psec, 
+        table_cache_use_percent, opened_tables_psec,
+        connections_psec, threads_connected_used, 
+        thread_cache_used_percent, threads_created_psec,
+        uptime_percent
+        """)
+    
 
 def disable_bin_log():
     if options.skip_disable_bin_log:
@@ -1232,6 +1381,7 @@ try:
     except Exception, err:
         print err
         traceback.print_exc()
+        sys.exit(1)
 
 finally:
     if conn:
