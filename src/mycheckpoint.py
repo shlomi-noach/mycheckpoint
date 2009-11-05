@@ -526,7 +526,7 @@ def create_status_variables_sample_view():
     act_query(query)
 
     verbose("sv_sample view created")
-    
+
 
 def create_status_variables_hour_view():
     global_variables, status_columns = get_variables_and_status_columns()
@@ -610,7 +610,7 @@ def create_report_recent_views():
             ${database_name}.sv_report_${view_name_extension}
           ORDER BY id DESC
           LIMIT 256
-        """ 
+        """
     query = query.replace("${database_name}", database_name)
 
     for view_name_extension in ["sample", "hour", "day"]:
@@ -630,9 +630,9 @@ def create_report_recent_minmax_views():
     #all_columns.extend(["%s" % (column_name,) for column_name in status_columns])
     #all_columns.extend(["%s_diff" % (column_name,) for column_name in status_columns])
     #all_columns.extend(["%s_psec" % (column_name,) for column_name in status_columns])
-    
+
     all_columns = custom_views_columns["report"]
-    
+
     min_columns_listing = ",\n".join(["MIN(%s) AS %s_min" % (column_name, column_name,) for column_name in all_columns])
     max_columns_listing = ",\n".join(["MAX(%s) AS %s_max" % (column_name, column_name,) for column_name in all_columns])
 
@@ -644,6 +644,11 @@ def create_report_recent_minmax_views():
         SQL SECURITY DEFINER
         VIEW ${database_name}.sv_report_${view_name_extension}_recent_minmax AS
           SELECT
+            COUNT(*) AS count_rows,
+            MIN(TS) AS ts_min,
+            MAX(ts) AS ts_max,
+            TIMESTAMPDIFF(SECOND, MIN(TS), MAX(ts)) AS ts_diff_seconds,
+
             %s,
             %s
           FROM
@@ -656,7 +661,7 @@ def create_report_recent_minmax_views():
     for view_name_extension in ["sample", "hour", "day"]:
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
-    
+
     verbose("recent reports minmax views created")
 
 
@@ -781,7 +786,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         if view_columns:
             columns_listing = columns_listing + ",\n "
         columns_listing = columns_listing + custom_columns
-        
+
     # This is currently an ugly patch (first one in this code...)
     # We need to know which custom columns have been created in the "report" views, so that we can later build the
     # sv_report_minmax_* views.
@@ -816,44 +821,60 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     verbose("%s custom view created" % view_base_name)
 
 
-def generate_google_chart_query(chart_columns, alias, zero_based_chart):
+def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=False, scale_to_100=False):
     chart_columns_list = [column_name.strip() for column_name in chart_columns.lower().split(",")]
 
     chart_column_min_listing = ",".join(["%s_min" % column_name for column_name in chart_columns_list])
     chart_column_max_listing = ",".join(["%s_max" % column_name for column_name in chart_columns_list])
-    if len(chart_columns_list) == 1:
-        # To solve a problem: the LEAST() & GREATEST() functions expect at least 2 arguments.
-        chart_column_min_listing = chart_column_min_listing + "," + chart_column_min_listing
-        chart_column_max_listing = chart_column_max_listing + "," + chart_column_max_listing
-    if zero_based_chart:
-        chart_column_min_listing = "0," + chart_column_min_listing 
+
+    if scale_from_0:
+        least_value_clause = "LEAST(0,%s)" % chart_column_min_listing
+    elif len(chart_columns_list) > 1:
+        least_value_clause = "LEAST(%s)" % chart_column_min_listing
+    else:
+        # Sadly, LEAST doesn;t work for 1 argument only... So we need a special case here
+        least_value_clause = chart_column_min_listing
+
+    if scale_to_100:
+        greatest_value_clause = "GREATEST(100,%s)" % chart_column_max_listing
+    elif len(chart_columns_list) > 1:
+        greatest_value_clause = "GREATEST(%s)" % chart_column_max_listing
+    else:
+        # Sadly, LEAST doesn;t work for 1 argument only... So we need a special case here
+        greatest_value_clause = chart_column_max_listing
+
+
     piped_chart_column_listing = "|".join(chart_columns_list)
-    
+
     chart_colors = ["ff8c00", "4682b4", "9acd32", "dc143c", "9932cc", "ffd700", "191970", "7fffd4", "808080", "dda0dd"][0:len(chart_columns_list)]
-    
+
     column_values = [ """
             GROUP_CONCAT(SUBSTRING(
               'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
               ROUND(
                 61 *
-                (%s - LEAST(%s))/(GREATEST(%s) - LEAST(%s))
-              ), 1) 
+                (%s - ${least_value_clause})/(${greatest_value_clause} - ${least_value_clause})
+              ), 1)
               ORDER BY ts ASC
               SEPARATOR ''
             ),
-            """ % (column_name, chart_column_min_listing, chart_column_max_listing, chart_column_min_listing) for column_name in chart_columns_list
+            """ % (column_name) for column_name in chart_columns_list
         ]
     concatenated_column_values = "',',".join(column_values)
+
+    num_x_values = 5
+    x_values = ",".join(["""'|', DATE_FORMAT(ts_min + INTERVAL (ts_diff_seconds*%d/%d) SECOND, '${ts_format}')""" % (i, num_x_values) for i in range(1,num_x_values)])
+
     query = """
           REPLACE(
           CONCAT(
-            'http://chart.apis.google.com/chart?cht=lc&chs=${chart_width}x${chart_height}&chts=303030,12&chtt=', 
-            DATE_FORMAT(MIN(ts), '%Y-%m-%d %H:%i'), '  -  ', DATE_FORMAT(MAX(ts), '%Y-%m-%d %H:%i'), 
+            'http://chart.apis.google.com/chart?cht=lc&chs=${chart_width}x${chart_height}&chts=303030,12&chtt=',
+            DATE_FORMAT(ts_min, '${ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${ts_format}'),
               ' (', TIMESTAMPDIFF(DAY, MIN(ts), MAX(ts)), ' days, ',
-              TIMESTAMPDIFF(HOUR, MIN(ts), MAX(ts)) % 24, ' hours)',
-            '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:', 
-            ${concatenated_column_values} 
-            '&chxt=y&chxr=0,',least(${chart_column_min_listing}),',', greatest(${chart_column_max_listing})
+              TIMESTAMPDIFF(HOUR, ts_min, ts_max) % 24, ' hours)',
+            '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:',
+            ${concatenated_column_values}
+            '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', ${x_values}, '|&chxs=0,505050,10'
           ), ' ', '+') AS ${alias}
         """
     query = query.replace("${database_name}", database_name)
@@ -862,41 +883,49 @@ def generate_google_chart_query(chart_columns, alias, zero_based_chart):
     query = query.replace("${piped_chart_column_listing}", piped_chart_column_listing)
     query = query.replace("${chart_colors}", ",".join(chart_colors))
     query = query.replace("${concatenated_column_values}", concatenated_column_values)
-    query = query.replace("${chart_column_min_listing}", chart_column_min_listing)
-    query = query.replace("${chart_column_max_listing}", chart_column_max_listing)
+    query = query.replace("${least_value_clause}", least_value_clause)
+    query = query.replace("${greatest_value_clause}", greatest_value_clause)
     query = query.replace("${alias}", alias)
+    query = query.replace("${x_values}", x_values)
+    query = query.replace("${ts_format}", ts_format)
 
     return query
 
 
 def create_report_google_chart_view(charts_list):
-    charts_queries = [generate_google_chart_query(chart_columns, alias, zero_based_chart) for (chart_columns, alias, zero_based_chart) in charts_list]
-    charts_query = ",".join(charts_queries)
-    
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_report_chart_${view_name_extension} AS
-          SELECT
-            %s
-          FROM 
-            ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax
-        """ % charts_query
-    query = query.replace("${database_name}", database_name)
+
+    ts_formats_map = {
+        "sample": "%b %e, %H:%i",
+        "hour": "%b %e, %H:00",
+        "day": "%b %e, %y",
+        }
 
     for view_name_extension in ["sample", "hour", "day"]:
-        custom_query = query.replace("${view_name_extension}", view_name_extension)
-        act_query(custom_query)
+        ts_format = ts_formats_map[view_name_extension]
+        charts_queries = [generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0, scale_to_100) for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list]
+        charts_query = ",".join(charts_queries)
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = TEMPTABLE
+            DEFINER = CURRENT_USER
+            SQL SECURITY DEFINER
+            VIEW ${database_name}.sv_report_chart_${view_name_extension} AS
+              SELECT
+                %s
+              FROM
+                ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax
+            """ % charts_query
+        query = query.replace("${database_name}", database_name)
+        query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(query)
 
     verbose("report charts views created")
 
 
 def create_report_html_view(charts_aliases):
     charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
-    
+
     all_img_tags_queries = []
     for chart_alias in charts_aliases_list:
         alias_img_tags_query = """
@@ -969,16 +998,16 @@ def create_report_html_view(charts_aliases):
         </style>
         </head>
         <body>
-            Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a>
+            Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ', NOW(), '
             <br/><br/>
             Navigate: ${chart_aliases_map}
             <br/>
             ',
             %s '
-        </body>        
+        </body>
     </html>
           ') AS html
-          FROM 
+          FROM
             ${database_name}.sv_report_chart_sample, ${database_name}.sv_report_chart_hour, ${database_name}.sv_report_chart_day
         """ % all_img_tags_query
     query = query.replace("${database_name}", database_name)
@@ -1121,20 +1150,23 @@ def create_status_variables_views():
             innodb_row_lock_waits_psec,
             innodb_row_lock_current_waits,
 
+            bytes_sent_psec/1024/1024 AS mega_bytes_sent_psec,
+            bytes_received_psec/1024/1024 AS mega_bytes_received_psec,
+
             key_buffer_size,
             ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1) AS key_buffer_used_percent,
             ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1) AS key_read_hit_percent,
             ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1) AS key_write_hit_percent,
 
-            com_select_psec, 
-            com_insert_psec, 
-            com_update_psec, 
-            com_delete_psec, 
-            com_replace_psec, 
-            com_set_option_psec, 
-            com_commit_psec, 
-            slow_queries_psec, 
-            questions_psec, 
+            com_select_psec,
+            com_insert_psec,
+            com_update_psec,
+            com_delete_psec,
+            com_replace_psec,
+            com_set_option_psec,
+            com_commit_psec,
+            slow_queries_psec,
+            questions_psec,
             ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1) AS com_select_percent,
             ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1) AS com_insert_percent,
             ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1) AS com_update_percent,
@@ -1155,6 +1187,7 @@ def create_status_variables_views():
             ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1) AS table_lock_waited_percent,
 
             IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0) AS table_cache_size,
+            open_tables,
             ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1) AS table_cache_use_percent,
             opened_tables_psec,
 
@@ -1167,7 +1200,7 @@ def create_status_variables_views():
             connections_psec,
             aborted_connects_psec,
             ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 1) AS aborted_connections_percent,
-            
+
             thread_cache_size,
             ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1) AS thread_cache_used_percent,
             threads_created_psec,
@@ -1256,46 +1289,49 @@ def create_status_variables_views():
         """)
 
     create_report_google_chart_view([
-        ("uptime_percent", "uptime_percent", True),
-        
-        ("innodb_read_hit_percent", "innodb_read_hit_percent", False),
-        ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True),
-        ("innodb_buffer_pool_used_percent", "innodb_buffer_pool_used_percent", True),
-        ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True),
-        ("innodb_row_lock_waits_psec", "innodb_row_lock_waits_psec", True),        
+        ("uptime_percent", "uptime_percent", True, True),
 
-        ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True),        
-        ("key_read_hit_percent, key_read_hit_percent", "myisam_key_hit_ratio", True),        
-        
-        ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True),
-        ("questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True),
-        
-        ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True),
+        ("innodb_read_hit_percent", "innodb_read_hit_percent", False, False),
+        ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True, False),
+        ("innodb_buffer_pool_used_percent", "innodb_buffer_pool_used_percent", True, True),
+        ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True, False),
+        ("innodb_row_lock_waits_psec", "innodb_row_lock_waits_psec", True, False),
 
-        ("table_locks_waited_psec", "table_locks_waited_psec", True),
+        ("mega_bytes_sent_psec, mega_bytes_received_psec", "bytes_io", True, False),
 
-        ("table_cache_use_percent", "table_cache_use_percent", True),
-        ("opened_tables_psec", "opened_tables_psec", True),
-        
-        ("connections_psec, aborted_connects_psec", "connections_psec", True),
-        ("max_connections, threads_connected", "threads_connected_used", True),
+        ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True, True),
+        ("key_read_hit_percent, key_read_hit_percent", "myisam_key_hit_ratio", True, True),
 
-        ("thread_cache_used_percent", "thread_cache_used_percent", True),
-        ("threads_created_psec", "threads_created_psec", True),
+        ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False),
+        ("questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False),
+
+        ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True, False),
+
+        ("table_locks_waited_psec", "table_locks_waited_psec", True, False),
+
+        ("table_cache_size, open_tables", "table_cache_use", True, False),
+        ("opened_tables_psec", "opened_tables_psec", True, False),
+
+        ("connections_psec, aborted_connects_psec", "connections_psec", True, False),
+        ("max_connections, threads_connected", "connections_usage", True, False),
+
+        ("thread_cache_used_percent", "thread_cache_used_percent", True, True),
+        ("threads_created_psec", "threads_created_psec", True, False),
         ])
-    
+
     create_report_html_view("""
-        innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_used_percent, 
+        innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_used_percent,
         myisam_key_buffer_used_percent, myisam_key_hit_ratio,
-        DML, questions, 
+        bytes_io,
+        DML, questions,
         tmp_tables,
-        table_locks_waited_psec, 
-        table_cache_use_percent, opened_tables_psec,
-        connections_psec, threads_connected_used, 
+        table_locks_waited_psec,
+        table_cache_use, opened_tables_psec,
+        connections_psec, connections_usage,
         thread_cache_used_percent, threads_created_psec,
         uptime_percent
         """)
-    
+
 
 def disable_bin_log():
     if options.skip_disable_bin_log:
