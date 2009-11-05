@@ -1215,11 +1215,14 @@ def create_status_variables_views():
 
             master_status_file_number,
             master_status_position,
+            relay_log_space_limit,
+            relay_log_space_limit/1024/1024 AS relay_log_space_limit_mb,
             max_relay_log_size,
+            IF(max_relay_log_size = 0, max_binlog_size, max_relay_log_size) AS relay_log_max_size,
+            IF(max_relay_log_size = 0, max_binlog_size, max_relay_log_size)/1024/1024 AS relay_log_max_size_mb,
             relay_log_space,
             relay_log_space/1024/1024 AS relay_log_space_mb,
-            max_relay_log_size/1024/1024 AS max_relay_log_size_mb,
-            ROUND(100 - 100*relay_log_space/NULLIF(max_relay_log_size, 0), 1) AS relay_log_space_used_percent,
+            ROUND(100*relay_log_space/NULLIF(relay_log_space_limit, 0), 1) AS relay_log_space_used_percent,
             seconds_behind_master,
             seconds_behind_master_psec,
             IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)) AS estimated_slave_catchup_seconds
@@ -1292,8 +1295,8 @@ def create_status_variables_views():
 
     Replication:
         Master status file number: ', IFNULL(master_status_file_number, 'N/A'), ', position: ', IFNULL(master_status_position, 'N/A'), '
-        Relay log space limit: ', IFNULL(max_relay_log_size, 'N/A'), ', free: ', IFNULL(relay_log_space, 'N/A'), '  used: ',
-            IFNULL(ROUND(100 - 100*relay_log_space/NULLIF(max_relay_log_size, 0), 1), 'N/A'), '%
+        Relay log space limit: ', IFNULL(relay_log_space_limit, 'N/A'), ', used: ', IFNULL(relay_log_space, 'N/A'), '  (',
+            IFNULL(ROUND(100*relay_log_space/NULLIF(relay_log_space_limit, 0), 1), 'N/A'), '%)
         Seconds behind master: ', IFNULL(seconds_behind_master, 'N/A'), '
         Estimated time for slave to catch up: ', IFNULL(IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)), 'N/A'), ' seconds (',
             IFNULL(FLOOR(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec)/(60*60*24)), 'N/A'), ' days, ',
@@ -1332,7 +1335,7 @@ def create_status_variables_views():
         ("thread_cache_used_percent", "thread_cache_used_percent", True, True),
         ("threads_created_psec", "threads_created_psec", True, False),
 
-        ("max_relay_log_size_mb, relay_log_space_mb", "relay_log_used_mb", True, False),
+        ("relay_log_space_limit_mb, relay_log_space_mb", "relay_log_used_mb", True, False),
         ("seconds_behind_master", "seconds_behind_master", True, True),
         ("seconds_behind_master_psec", "seconds_behind_master_psec", True, False),
         ("estimated_slave_catchup_seconds", "estimated_slave_catchup_seconds", True, False),
