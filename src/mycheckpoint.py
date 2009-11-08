@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 #
-# Collect GLOBAL STATUS, GLOBAL VARIABLES, master & slave status, store in database, generate supporting views
+# Lightweight, SQL oriented monitoring for MySQL
 #
 # Released under the BSD license
 #
@@ -25,7 +25,7 @@ from optparse import OptionParser
 
 
 def parse_options():
-    usage = "usage: mycheckpoint [options] [create/upgrade]"
+    usage = "usage: mycheckpoint [options] [deploy]"
     parser = OptionParser(usage=usage)
     parser.add_option("-u", "--user", dest="user", default="", help="MySQL user")
     parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL host (default: localhost)")
@@ -34,7 +34,7 @@ def parse_options():
     parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
-    parser.add_option("-d", "--database", dest="database", default="openark", help="Database name (required unless query uses fully qualified table names)")
+    parser.add_option("-d", "--database", dest="database", default="mycheckpoint", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
     parser.add_option("", "--skip-disable-bin-log", dest="skip_disable_bin_log", action="store_true", default=False, help="Skip disabling the binary logging (binary loggind disabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
@@ -122,13 +122,17 @@ def table_exists(check_database_name, check_table_name):
 
 
 def prompt_instructions():
+    print "--"
     print "-- Creating mycheckpoint tables & views. Database name is `%s`" % database_name
-    print "-- Make sure the user has ALL PRIVILEGES on the `%s` schema" % database_name
-    print "-- e.g. GRANT ALL ON `%s`.* TO 'my_user'@'my_host' IDENTIFIED BY 'my_password'" % database_name
+    print "-- Make sure `%s` schema exists, e.g." % database_name
+    print "--   CREATE DATABASE `%s`" % database_name
+    print "-- Make sure the user has ALL PRIVILEGES on the `%s` schema. e.g." % database_name
+    print "--   GRANT ALL ON `%s`.* TO 'my_user'@'my_host' IDENTIFIED BY 'my_password'" % database_name
     print "-- The user will have to have the SUPER privilege in order to disable binary logging"
-    print "-- + Otherwise, use --skip-disable-bin-log (but then be aware that slaves replicate this server's status)"
+    print "-- - Otherwise, use --skip-disable-bin-log (but then be aware that slaves replicate this server's status)"
     print "-- In order to read master and slave status, the user must also be granted with REPLICATION CLIENT or SUPER privileges"
-    print "-- + Otherwise, use --skip-check-replication"
+    print "-- - Otherwise, use --skip-check-replication"
+    print "--"
 
 
 def is_neglectable_variable(variable_name):
@@ -428,31 +432,65 @@ def create_status_variables_table():
             UNIQUE KEY ts (ts)
        )
         """ % (database_name, table_name, columns_listing)
-    act_query(query)
+
+    table_created = False
+    try:
+        act_query(query)
+        table_created = True
+    except MySQLdb.Error, e:
+        pass
+
+    if table_created:
+        verbose("%s table created" % table_name)
+    else:
+        verbose("%s table exists" % table_name)
+    return table_created
 
 
 def create_numbers_table():
-    query = """CREATE TABLE IF NOT EXISTS %s.numbers (
+    query = """CREATE TABLE %s.numbers (
                 n SMALLINT UNSIGNED NOT NULL,
                 PRIMARY KEY (n)
             )
         """ % database_name
-    act_query(query)
+
+    table_created = False
+    try:
+        act_query(query)
+        table_created = True
+    except MySQLdb.Error, e:
+        pass
+
+    if table_created:
+        verbose("numbers table created")
+    else:
+        verbose("numbers table exists")
+    
     numbers_values = ",".join(["(%d)" % n for n in range(0,4096)])
     query = """
         INSERT IGNORE INTO %s.numbers
         VALUES %s
         """ % (database_name, numbers_values)
-    act_query(query)
+
+    return table_created
 
 
 def upgrade_status_variables_table():
+    
+    # I currently prefer SHOW COLUMNS over using INFORMATION_SCHEMA because of the time it takes
+    # to access the INFORMATION_SCHEMA.COLUMNS table.
+    #
+    #    query = """
+    #        SELECT COLUMN_NAME
+    #        FROM INFORMATION_SCHEMA.COLUMNS
+    #        WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s'
+    #        """ % (database_name, table_name)
+    #    existing_columns = [row["COLUMN_NAME"] for row in get_rows(query)]
     query = """
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s'
+            SHOW COLUMNS FROM %s.%s
         """ % (database_name, table_name)
-    existing_columns = [row["COLUMN_NAME"] for row in get_rows(query)]
+    existing_columns = [row["Field"] for row in get_rows(query)]
+    
     new_columns = [column_name for column_name in get_status_variables_columns() if column_name not in existing_columns]
 
     if new_columns:
@@ -461,7 +499,7 @@ def upgrade_status_variables_table():
                 %s
         """ % (database_name, table_name, columns_listing)
         act_query(query)
-    verbose("status_variables table upgraded")
+        verbose("status_variables table upgraded")
 
 
 def create_status_variables_diff_view():
@@ -824,7 +862,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
 
-    verbose("%s custom view created" % view_base_name)
+    verbose("%s custom views created" % view_base_name)
 
 
 def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=False, scale_to_100=False):
@@ -1033,115 +1071,115 @@ def create_status_variables_views():
     create_status_variables_hour_view()
     create_status_variables_day_view()
     create_status_variables_parameter_change_view()
-    #create_status_variables_long_format_view()
-    #create_status_variables_aggregated_view()
-    create_custom_views("dml", """
-            concurrent_insert,
-            com_select, com_insert, com_update, com_delete, com_replace,
-            com_commit,
-            questions, slow_queries
-        """,
-        """
-            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 2) AS com_select_percent,
-            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 2) AS com_insert_percent,
-            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 2) AS com_update_percent,
-            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 2) AS com_delete_percent,
-            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 2) AS com_replace_percent,
-            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
-            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent
-        """)
-    com_commands = [column_name for column_name in status_columns if column_name.startswith("com_")]
-    create_custom_views("com", ",\n ".join(com_commands),
-            ",\n ".join(
-                ["ROUND(100*(%s)/NULLIF(questions_diff, 0), 2) AS %s_percent" % (column_name, column_name,) for column_name in com_commands])
-            )
-
-    create_custom_views("select", """
-            com_select,
-            select_scan, sort_merge_passes, sort_range, sort_rows, sort_scan
-        """,
-        """
-            ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
-            ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
-            ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent
-        """)
-    create_custom_views("tmp_tables", """
-            tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
-        """,
-        """
-            ROUND(100*created_tmp_disk_tables/NULLIF(created_tmp_tables, 0), 2) AS created_disk_tmp_tables_percent
-        """)
-    create_custom_views("threads", """
-            max_delayed_threads, max_insert_delayed_threads, thread_cache_size, thread_stack,
-            delayed_insert_threads, slow_launch_threads, threads_cached, threads_connected, threads_created, threads_running
-        """)
-    create_custom_views("connections", """
-            max_connections,
-            connections, aborted_connects
-        """,
-        """
-            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent
-        """)
-    create_custom_views("table_cache", """
-            table_cache, table_open_cache, table_definition_cache,
-            open_tables, opened_tables
-        """,
-        """
-            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
-            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent
-        """)
-    create_custom_views("innodb_io", """
-            innodb_buffer_pool_size, innodb_page_size,
-            innodb_buffer_pool_write_requests, innodb_buffer_pool_pages_flushed,
-            innodb_buffer_pool_read_requests, innodb_buffer_pool_reads,
-            innodb_log_write_requests, innodb_log_writes,
-            innodb_os_log_written,
-            innodb_rows_read
-        """,
-        """
-            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-            ROUND(100 - (100*innodb_buffer_pool_reads/NULLIF(innodb_buffer_pool_read_requests, 0)), 2) AS innodb_read_hit_percent,
-            innodb_buffer_pool_pages_total * innodb_page_size AS innodb_buffer_pool_total_bytes,
-            (innodb_buffer_pool_pages_total - innodb_buffer_pool_pages_free) * innodb_page_size AS innodb_buffer_pool_used_bytes,
-            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent
-        """)
-    create_custom_views("innodb_io_summary", """
-            innodb_buffer_pool_size,
-            innodb_flush_log_at_trx_commit
-        """,
-        """
-            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-            ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
-            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent,
-            innodb_buffer_pool_reads_psec,
-            innodb_buffer_pool_pages_flushed_psec
-        """)
-    create_custom_views("myisam_io", """
-            key_buffer_size,
-            key_buffer_used,
-            key_read_requests, key_reads,
-            key_write_requests, key_writes,
-        """,
-        """
-            key_buffer_size - (key_blocks_unused * key_cache_block_size) AS key_buffer_usage,
-            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2) AS key_buffer_usage_percent,
-            ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2) AS key_read_hit_percent,
-            ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2) AS key_write_hit_percent
-        """)
-    create_custom_views("locks", """
-            innodb_lock_wait_timeout,
-            table_locks_waited, table_locks_immediate
-        """,
-        """
-            ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
-            innodb_row_lock_waits_psec, innodb_row_lock_current_waits
-        """)
-    create_custom_views("replication", """
-            max_binlog_size, sync_binlog,
-            max_relay_log_size, relay_log_space_limit,
-            master_status_position,  master_status_file_number,
-            Read_Master_Log_Pos, Relay_Log_Pos, Exec_Master_Log_Pos, Relay_Log_Space, Seconds_Behind_Master,
-        """)
+    #    create_status_variables_long_format_view()
+    #    create_status_variables_aggregated_view()
+    #    create_custom_views("dml", """
+    #            concurrent_insert,
+    #            com_select, com_insert, com_update, com_delete, com_replace,
+    #            com_commit,
+    #            questions, slow_queries
+    #        """,
+    #        """
+    #            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 2) AS com_select_percent,
+    #            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 2) AS com_insert_percent,
+    #            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 2) AS com_update_percent,
+    #            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 2) AS com_delete_percent,
+    #            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 2) AS com_replace_percent,
+    #            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
+    #            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent
+    #        """)
+    #    com_commands = [column_name for column_name in status_columns if column_name.startswith("com_")]
+    #    create_custom_views("com", ",\n ".join(com_commands),
+    #            ",\n ".join(
+    #                ["ROUND(100*(%s)/NULLIF(questions_diff, 0), 2) AS %s_percent" % (column_name, column_name,) for column_name in com_commands])
+    #            )
+    #
+    #    create_custom_views("select", """
+    #            com_select,
+    #            select_scan, sort_merge_passes, sort_range, sort_rows, sort_scan
+    #        """,
+    #        """
+    #            ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
+    #            ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
+    #            ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent
+    #        """)
+    #    create_custom_views("tmp_tables", """
+    #            tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
+    #        """,
+    #        """
+    #            ROUND(100*created_tmp_disk_tables/NULLIF(created_tmp_tables, 0), 2) AS created_disk_tmp_tables_percent
+    #        """)
+    #    create_custom_views("threads", """
+    #            max_delayed_threads, max_insert_delayed_threads, thread_cache_size, thread_stack,
+    #            delayed_insert_threads, slow_launch_threads, threads_cached, threads_connected, threads_created, threads_running
+    #        """)
+    #    create_custom_views("connections", """
+    #            max_connections,
+    #            connections, aborted_connects
+    #        """,
+    #        """
+    #            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent
+    #        """)
+    #    create_custom_views("table_cache", """
+    #            table_cache, table_open_cache, table_definition_cache,
+    #            open_tables, opened_tables
+    #        """,
+    #        """
+    #            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
+    #            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent
+    #        """)
+    #    create_custom_views("innodb_io", """
+    #            innodb_buffer_pool_size, innodb_page_size,
+    #            innodb_buffer_pool_write_requests, innodb_buffer_pool_pages_flushed,
+    #            innodb_buffer_pool_read_requests, innodb_buffer_pool_reads,
+    #            innodb_log_write_requests, innodb_log_writes,
+    #            innodb_os_log_written,
+    #            innodb_rows_read
+    #        """,
+    #        """
+    #            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
+    #            ROUND(100 - (100*innodb_buffer_pool_reads/NULLIF(innodb_buffer_pool_read_requests, 0)), 2) AS innodb_read_hit_percent,
+    #            innodb_buffer_pool_pages_total * innodb_page_size AS innodb_buffer_pool_total_bytes,
+    #            (innodb_buffer_pool_pages_total - innodb_buffer_pool_pages_free) * innodb_page_size AS innodb_buffer_pool_used_bytes,
+    #            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent
+    #        """)
+    #    create_custom_views("innodb_io_summary", """
+    #            innodb_buffer_pool_size,
+    #            innodb_flush_log_at_trx_commit
+    #        """,
+    #        """
+    #            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
+    #            ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
+    #            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent,
+    #            innodb_buffer_pool_reads_psec,
+    #            innodb_buffer_pool_pages_flushed_psec
+    #        """)
+    #    create_custom_views("myisam_io", """
+    #            key_buffer_size,
+    #            key_buffer_used,
+    #            key_read_requests, key_reads,
+    #            key_write_requests, key_writes,
+    #        """,
+    #        """
+    #            key_buffer_size - (key_blocks_unused * key_cache_block_size) AS key_buffer_usage,
+    #            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2) AS key_buffer_usage_percent,
+    #            ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2) AS key_read_hit_percent,
+    #            ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2) AS key_write_hit_percent
+    #        """)
+    #    create_custom_views("locks", """
+    #            innodb_lock_wait_timeout,
+    #            table_locks_waited, table_locks_immediate
+    #        """,
+    #        """
+    #            ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
+    #            innodb_row_lock_waits_psec, innodb_row_lock_current_waits
+    #        """)
+    #    create_custom_views("replication", """
+    #            max_binlog_size, sync_binlog,
+    #            max_relay_log_size, relay_log_space_limit,
+    #            master_status_position,  master_status_file_number,
+    #            Read_Master_Log_Pos, Relay_Log_Pos, Exec_Master_Log_Pos, Relay_Log_Space, Seconds_Behind_Master,
+    #        """)
     create_custom_views("report", "", """
             LEAST(100, ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1)) AS uptime_percent,
 
@@ -1351,7 +1389,7 @@ def create_status_variables_views():
         table_cache_use, opened_tables_psec,
         connections_psec, connections_usage,
         thread_cache_used_percent, threads_created_psec,
-        relay_log_used_mb, seconds_behind_master, seconds_behind_master_psec, estimated_slave_catchup_seconds,
+        relay_log_used_mb, seconds_behind_master, seconds_behind_master_psec,
         uptime_percent
         """)
 
@@ -1412,6 +1450,8 @@ try:
         reuse_conn = True
         (options, args) = parse_options()
 
+        verbose("mycheckpoint. Copyright (c) 2009 by Shlomi Noach")
+
         database_name = options.database
         table_name = "status_variables"
         status_dict = {}
@@ -1423,16 +1463,13 @@ try:
             exit_with_error("purge-days must be at least 1")
 
         conn = open_connection()
-        if "create" in args:
+        if "deploy" in args:
             prompt_instructions()
             create_numbers_table()
-            create_status_variables_table()
+            if not create_status_variables_table():
+                upgrade_status_variables_table()
             create_status_variables_views()
-            verbose("Table and views created")
-        elif "upgrade" in args:
-            upgrade_status_variables_table()
-            create_status_variables_views()
-            verbose("Table and views upgraded")
+            verbose("Table and views deployed")
         else:
             collect_status_variables()
             purge_status_variables()
