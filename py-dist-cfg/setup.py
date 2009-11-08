@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name="mycheckpoint",
-    description="Monitoring for MySQL",
+    description="Lightweight, SQL oriented monitoring for MySQL",
     author="Shlomi Noach",
     author_email="shlomi@code.openark.org",
     url="http://code.openark.org/forge/mycheckpoint",
