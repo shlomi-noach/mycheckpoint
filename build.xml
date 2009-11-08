@@ -2,12 +2,14 @@
 
 	<property name="python.distribution.dir" value="py-dist"/>
 	<property name="debian.distribution.dir" value="deb-dist"/>
+	<property name="script.distribution.dir" value="script-dist"/>
 
 	<target name="clean">
 		<delete dir="build"/>
 		<delete dir="dist"/>
 		<delete dir="${python.distribution.dir}"/>
 		<delete dir="deb-dist"/>
+		<delete dir="script-dist"/>
 	</target>
 
 	<target name="scripts">
@@ -54,7 +56,14 @@
 		</exec>
 	</target>
 
-	<target name="dist" depends="deb, python-module">
+	<target name="script-dist" depends="scripts">
+		<mkdir dir="${script.distribution.dir}"/>
+		<copy todir="${script.distribution.dir}">
+			<fileset dir="build/scripts"/>
+		</copy>
+	</target>
+
+	<target name="dist" depends="deb, python-module, script-dist">
 		<mkdir dir="dist"/>
 		<copy todir="dist">
 			<fileset dir="py-dist"/>
@@ -63,6 +72,9 @@
 			<fileset dir="deb-dist">
 				<include name="*.deb"/>
 			</fileset>
+		</copy>
+		<copy todir="dist">
+			<fileset dir="script-dist"/>
 		</copy>
 	</target>
 
