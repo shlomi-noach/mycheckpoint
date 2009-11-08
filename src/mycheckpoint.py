@@ -1268,79 +1268,79 @@ def create_status_variables_views():
     create_report_recent_views()
     create_report_recent_minmax_views()
     create_custom_views("report_human", "", """CONCAT('
-    Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_seconds/60) MINUTE, '. Period is ', ROUND(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
-    Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
-        '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
+Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_seconds/60) MINUTE, '. Period is ', ROUND(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
+Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
+    '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
 
-    InnoDB:
-        innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
-            IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1), 'N/A'), '%
-        Read hit: ', IFNULL(ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2), 'N/A'), '%
-        Disk I/O: ', innodb_buffer_pool_reads_psec, ' reads/sec  ', innodb_buffer_pool_pages_flushed_psec, ' flushes/sec
-        Estimated log written per hour: ', IFNULL(ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1), 'N/A'), 'MB
-        Locks: ', innodb_row_lock_waits_psec, '/sec  current: ', innodb_row_lock_current_waits, '
+InnoDB:
+    innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
+        IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1), 'N/A'), '%
+    Read hit: ', IFNULL(ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2), 'N/A'), '%
+    Disk I/O: ', innodb_buffer_pool_reads_psec, ' reads/sec  ', innodb_buffer_pool_pages_flushed_psec, ' flushes/sec
+    Estimated log written per hour: ', IFNULL(ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1), 'N/A'), 'MB
+    Locks: ', innodb_row_lock_waits_psec, '/sec  current: ', innodb_row_lock_current_waits, '
 
-    MyISAM key cache:
-        key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 1), 'MB). Used: ',
-            IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1), 'N/A'), '%
-        Read hit: ',
-            IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1), 'N/A'), '%  Write hit: ',
-            IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
+MyISAM key cache:
+    key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 1), 'MB). Used: ',
+        IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1), 'N/A'), '%
+    Read hit: ',
+        IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1), 'N/A'), '%  Write hit: ',
+        IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
 
-    DML:
-        SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-        INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-        UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-        DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-        REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-        SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-        COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-        slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '% (slow time: ',
-            long_query_time ,'sec)
+DML:
+    SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+    INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+    UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+    DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+    REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+    SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+    COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
+    slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '% (slow time: ',
+        long_query_time ,'sec)
 
-    Selects:
-        Full scan: ', select_scan_psec, '/sec  ', IFNULL(ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
-        Full join: ', select_full_join_psec, '/sec  ', IFNULL(ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
-        Range:     ', select_range_psec, '/sec  ', IFNULL(ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
-        Sort merge passes: ', sort_merge_passes_psec, '/sec
+Selects:
+    Full scan: ', select_scan_psec, '/sec  ', IFNULL(ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
+    Full join: ', select_full_join_psec, '/sec  ', IFNULL(ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
+    Range:     ', select_range_psec, '/sec  ', IFNULL(ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
+    Sort merge passes: ', sort_merge_passes_psec, '/sec
 
-    Locks:
-        Table locks waited:  ', table_locks_waited_psec, '/sec  ', IFNULL(ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1), 'N/A'), '%
+Locks:
+    Table locks waited:  ', table_locks_waited_psec, '/sec  ', IFNULL(ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1), 'N/A'), '%
 
-    Tables:
-        Table cache: ', (IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0)), '. Used: ',
-            IFNULL(ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1), 'N/A'), '%
-        Opened tables: ', opened_tables_psec, '/sec
+Tables:
+    Table cache: ', (IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0)), '. Used: ',
+        IFNULL(ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1), 'N/A'), '%
+    Opened tables: ', opened_tables_psec, '/sec
 
-    Temp tables:
-        Max tmp table size:  ', tmp_table_size, ' bytes (', ROUND(tmp_table_size/(1024*1024), 1), 'MB)
-        Max heap table size: ', max_heap_table_size, ' bytes (', ROUND(max_heap_table_size/(1024*1024), 1), 'MB)
-        Created:             ', created_tmp_tables_psec, '/sec
-        Created disk tables: ', created_tmp_disk_tables_psec, '/sec  ',
-            IFNULL(ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 1), 'N/A'), '%
+Temp tables:
+    Max tmp table size:  ', tmp_table_size, ' bytes (', ROUND(tmp_table_size/(1024*1024), 1), 'MB)
+    Max heap table size: ', max_heap_table_size, ' bytes (', ROUND(max_heap_table_size/(1024*1024), 1), 'MB)
+    Created:             ', created_tmp_tables_psec, '/sec
+    Created disk tables: ', created_tmp_disk_tables_psec, '/sec  ',
+        IFNULL(ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 1), 'N/A'), '%
 
-    Connections:
-        Max connections: ', max_connections, '. Max used: ', max_used_connections, '  ',
-            IFNULL(ROUND(100*max_used_connections/NULLIF(max_connections, 0), 1), 'N/A'), '%
-        Connections: ', connections_psec, '/sec
-        Aborted:     ', aborted_connects_psec, '/sec  ',
-            IFNULL(ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 1), 'N/A'), '%
+Connections:
+    Max connections: ', max_connections, '. Max used: ', max_used_connections, '  ',
+        IFNULL(ROUND(100*max_used_connections/NULLIF(max_connections, 0), 1), 'N/A'), '%
+    Connections: ', connections_psec, '/sec
+    Aborted:     ', aborted_connects_psec, '/sec  ',
+        IFNULL(ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 1), 'N/A'), '%
 
-    Threads:
-        Thread cache: ', thread_cache_size, '. Used: ',
-            IFNULL(ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1), 'N/A'), '%
-        Created: ', threads_created_psec, '/sec
+Threads:
+    Thread cache: ', thread_cache_size, '. Used: ',
+        IFNULL(ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1), 'N/A'), '%
+    Created: ', threads_created_psec, '/sec
 
-    Replication:
-        Master status file number: ', IFNULL(master_status_file_number, 'N/A'), ', position: ', IFNULL(master_status_position, 'N/A'), '
-        Relay log space limit: ', IFNULL(relay_log_space_limit, 'N/A'), ', used: ', IFNULL(relay_log_space, 'N/A'), '  (',
-            IFNULL(ROUND(100*relay_log_space/NULLIF(relay_log_space_limit, 0), 1), 'N/A'), '%)
-        Seconds behind master: ', IFNULL(seconds_behind_master, 'N/A'), '
-        Estimated time for slave to catch up: ', IFNULL(IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)), 'N/A'), ' seconds (',
-            IFNULL(FLOOR(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec)/(60*60*24)), 'N/A'), ' days, ',
-            IFNULL(SEC_TO_TIME(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) % (60*60*24)), 'N/A'), ' hours)  ETA: ',
-            IFNULL(NOW() + INTERVAL IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) SECOND, 'N/A'), '
-    ') AS report
+Replication:
+    Master status file number: ', IFNULL(master_status_file_number, 'N/A'), ', position: ', IFNULL(master_status_position, 'N/A'), '
+    Relay log space limit: ', IFNULL(relay_log_space_limit, 'N/A'), ', used: ', IFNULL(relay_log_space, 'N/A'), '  (',
+        IFNULL(ROUND(100*relay_log_space/NULLIF(relay_log_space_limit, 0), 1), 'N/A'), '%)
+    Seconds behind master: ', IFNULL(seconds_behind_master, 'N/A'), '
+    Estimated time for slave to catch up: ', IFNULL(IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)), 'N/A'), ' seconds (',
+        IFNULL(FLOOR(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec)/(60*60*24)), 'N/A'), ' days, ',
+        IFNULL(SEC_TO_TIME(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) % (60*60*24)), 'N/A'), ' hours)  ETA: ',
+        IFNULL(NOW() + INTERVAL IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) SECOND, 'N/A'), '
+') AS report
         """)
 
     create_report_google_chart_view([
@@ -1476,7 +1476,7 @@ try:
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        traceback.print_exc()
+        #traceback.print_exc()
         sys.exit(1)
 
 finally:
