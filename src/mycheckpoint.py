@@ -1071,6 +1071,12 @@ def create_status_variables_views():
     create_status_variables_hour_view()
     create_status_variables_day_view()
     create_status_variables_parameter_change_view()
+    #
+    # The following are all commented out for the time being. I first thought they can be very useful.
+    # However, the report views already cover the most interesting metrics; and these views make so much
+    # more mess, what with the sheer numbers.
+    # I will perhaps re-enable them in the furute, or supply with a --deploy-extended option or something.
+    # 
     #    create_status_variables_long_format_view()
     #    create_status_variables_aggregated_view()
     #    create_custom_views("dml", """
