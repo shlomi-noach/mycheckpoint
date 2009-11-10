@@ -895,7 +895,7 @@ def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=Fa
     column_values = [ """
             GROUP_CONCAT(SUBSTRING(
               'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
-              ROUND(
+              1+ROUND(
                 61 *
                 (%s - ${least_value_clause})/(${greatest_value_clause} - ${least_value_clause})
               ), 1)
@@ -932,7 +932,7 @@ def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=Fa
     query = query.replace("${alias}", alias)
     query = query.replace("${x_values}", x_values)
     query = query.replace("${ts_format}", ts_format)
-
+        
     return query
 
 
