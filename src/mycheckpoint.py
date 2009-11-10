@@ -1345,7 +1345,7 @@ Replication:
     Estimated time for slave to catch up: ', IFNULL(IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)), 'N/A'), ' seconds (',
         IFNULL(FLOOR(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec)/(60*60*24)), 'N/A'), ' days, ',
         IFNULL(SEC_TO_TIME(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) % (60*60*24)), 'N/A'), ' hours)  ETA: ',
-        IFNULL(NOW() + INTERVAL IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) SECOND, 'N/A'), '
+        IFNULL(TIMESTAMP(ts) + INTERVAL IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) SECOND, 'N/A'), '
 ') AS report
         """)
 
