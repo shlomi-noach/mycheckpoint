@@ -465,7 +465,7 @@ def create_numbers_table():
         verbose("numbers table created")
     else:
         verbose("numbers table exists")
-    
+
     numbers_values = ",".join(["(%d)" % n for n in range(0,4096)])
     query = """
         INSERT IGNORE INTO %s.numbers
@@ -476,7 +476,7 @@ def create_numbers_table():
 
 
 def upgrade_status_variables_table():
-    
+
     # I currently prefer SHOW COLUMNS over using INFORMATION_SCHEMA because of the time it takes
     # to access the INFORMATION_SCHEMA.COLUMNS table.
     #
@@ -490,7 +490,7 @@ def upgrade_status_variables_table():
             SHOW COLUMNS FROM %s.%s
         """ % (database_name, table_name)
     existing_columns = [row["Field"] for row in get_rows(query)]
-    
+
     new_columns = [column_name for column_name in get_status_variables_columns() if column_name not in existing_columns]
 
     if new_columns:
@@ -932,7 +932,7 @@ def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=Fa
     query = query.replace("${alias}", alias)
     query = query.replace("${x_values}", x_values)
     query = query.replace("${ts_format}", ts_format)
-        
+
     return query
 
 
@@ -1076,7 +1076,7 @@ def create_status_variables_views():
     # However, the report views already cover the most interesting metrics; and these views make so much
     # more mess, what with the sheer numbers.
     # I will perhaps re-enable them in the furute, or supply with a --deploy-extended option or something.
-    # 
+    #
     #    create_status_variables_long_format_view()
     #    create_status_variables_aggregated_view()
     #    create_custom_views("dml", """
@@ -1217,14 +1217,15 @@ def create_status_variables_views():
             com_commit_psec,
             slow_queries_psec,
             questions_psec,
-            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1) AS com_select_percent,
-            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1) AS com_insert_percent,
-            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1) AS com_update_percent,
-            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 1) AS com_delete_percent,
-            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 1) AS com_replace_percent,
-            ROUND(100*com_set_option_diff/NULLIF(questions_diff, 0), 1) AS com_set_option_percent,
-            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 1) AS com_commit_percent,
-            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 1) AS slow_queries_percent,
+            queries_psec,
+            ROUND(100*com_select_diff/NULLIF(queries_psec, 0), 1) AS com_select_percent,
+            ROUND(100*com_insert_diff/NULLIF(queries_psec, 0), 1) AS com_insert_percent,
+            ROUND(100*com_update_diff/NULLIF(queries_psec, 0), 1) AS com_update_percent,
+            ROUND(100*com_delete_diff/NULLIF(queries_psec, 0), 1) AS com_delete_percent,
+            ROUND(100*com_replace_diff/NULLIF(queries_psec, 0), 1) AS com_replace_percent,
+            ROUND(100*com_set_option_diff/NULLIF(queries_psec, 0), 1) AS com_set_option_percent,
+            ROUND(100*com_commit_diff/NULLIF(queries_psec, 0), 1) AS com_commit_percent,
+            ROUND(100*slow_queries_diff/NULLIF(queries_psec, 0), 1) AS slow_queries_percent,
 
             select_scan_psec,
             select_full_join_psec,
@@ -1294,14 +1295,14 @@ MyISAM key cache:
         IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
 
 DML:
-    SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-    INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-    UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-    DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-    REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-    SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-    COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '%
-    slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 1), 'N/A'), '% (slow time: ',
+    SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
+    INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
+    UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
+    DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
+    REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
+    SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
+    COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
+    slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '% (slow time: ',
         long_query_time ,'sec)
 
 Selects:
@@ -1364,7 +1365,7 @@ Replication:
         ("key_read_hit_percent, key_read_hit_percent", "myisam_key_hit_ratio", True, True),
 
         ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False),
-        ("questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False),
+        ("queries_psec, questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False),
 
         ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True, False),
 
