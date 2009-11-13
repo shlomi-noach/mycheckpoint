@@ -311,6 +311,17 @@ def get_global_variables():
     return global_variables
 
 
+
+
+def get_additional_status_variables():
+    additional_status_variables = [
+        "queries",
+        "open_table_definitions",
+        "opened_table_definitions",
+    ]
+    return additional_status_variables
+
+
 def fetch_status_variables():
     """
     Fill in the status_dict. We make point of filling in all variables, even those not existing,
@@ -320,6 +331,10 @@ def fetch_status_variables():
     if status_dict:
         return status_dict
 
+    # Make sure some status variables exist: these are required due to 5.0 - 5.1 
+    # or minor versions incompatabilities.
+    for additional_status_variable in get_additional_status_variables():
+        status_dict[additional_status_variable] = None
     query = "SHOW GLOBAL STATUS"
     rows = get_rows(query);
     for row in rows:
@@ -1218,14 +1233,14 @@ def create_status_variables_views():
             slow_queries_psec,
             questions_psec,
             queries_psec,
-            ROUND(100*com_select_diff/NULLIF(queries_psec, 0), 1) AS com_select_percent,
-            ROUND(100*com_insert_diff/NULLIF(queries_psec, 0), 1) AS com_insert_percent,
-            ROUND(100*com_update_diff/NULLIF(queries_psec, 0), 1) AS com_update_percent,
-            ROUND(100*com_delete_diff/NULLIF(queries_psec, 0), 1) AS com_delete_percent,
-            ROUND(100*com_replace_diff/NULLIF(queries_psec, 0), 1) AS com_replace_percent,
-            ROUND(100*com_set_option_diff/NULLIF(queries_psec, 0), 1) AS com_set_option_percent,
-            ROUND(100*com_commit_diff/NULLIF(queries_psec, 0), 1) AS com_commit_percent,
-            ROUND(100*slow_queries_diff/NULLIF(queries_psec, 0), 1) AS slow_queries_percent,
+            ROUND(100*com_select_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_select_percent,
+            ROUND(100*com_insert_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_insert_percent,
+            ROUND(100*com_update_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_update_percent,
+            ROUND(100*com_delete_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_delete_percent,
+            ROUND(100*com_replace_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_replace_percent,
+            ROUND(100*com_set_option_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_set_option_percent,
+            ROUND(100*com_commit_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_commit_percent,
+            ROUND(100*slow_queries_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS slow_queries_percent,
 
             select_scan_psec,
             select_full_join_psec,
@@ -1295,14 +1310,14 @@ MyISAM key cache:
         IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
 
 DML:
-    SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
-    INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
-    UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
-    DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
-    REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
-    SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
-    COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '%
-    slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(queries_psec, 0), 1), 'N/A'), '% (slow time: ',
+    SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
+    INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
+    UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
+    DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
+    REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
+    SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
+    COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
+    slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '% (slow time: ',
         long_query_time ,'sec)
 
 Selects:
