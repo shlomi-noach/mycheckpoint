@@ -33,6 +33,9 @@ def parse_options():
     parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
     parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
+    parser.add_option("", "--write-host", dest="write_host", default=None, help="MySQL write host. Specity this when you wish to record data in a different server than the monitored one (default: none)")
+    parser.add_option("", "--write-port", dest="write_port", type="int", default="3306", help="Write host TCP/IP port (default: 3306)")
+    parser.add_option("", "--write-socket", dest="write_socket", default="/var/run/mysqld/mysql.sock", help="Write host MySQL socket file. Only applies when write-host is localhost")    
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", default="mycheckpoint", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
@@ -51,7 +54,8 @@ def verbose(message):
 def print_error(message):
     print "-- ERROR: %s" % message
 
-def open_connection():
+
+def open_connections():
     if options.defaults_file:
         conn = MySQLdb.connect(
             read_default_file = options.defaults_file,
@@ -66,15 +70,39 @@ def open_connection():
             user = options.user,
             passwd = password,
             port = options.port,
-            db = database_name,
-            unix_socket = options.socket)
-    return conn;
+            unix_socket = options.socket,
+            db = database_name)
+        
+    # If no write host specified, then read+write hosts are the same one...
+    if not options.write_host:
+        return conn, conn;
+
+    # Need to open a write connection
+    if options.defaults_file:
+        write_conn = MySQLdb.connect(
+            read_default_file = options.defaults_file,
+            host = options.write_host,
+            port = options.write_port,
+            unix_socket = options.write_socket,
+            db = database_name)
+    else:
+        write_conn = MySQLdb.connect(
+            host = options.write_host,
+            user = options.user,
+            passwd = password,
+            port = options.write_port,
+            unix_socket = options.write_socket,
+            db = database_name)
+
+    return conn, write_conn;
+
 
 def act_query(query):
     """
     Run the given query, commit changes
     """
-    connection = conn
+
+    connection = write_conn
     cursor = connection.cursor()
     num_affected_rows = cursor.execute(query)
     cursor.close()
@@ -82,8 +110,9 @@ def act_query(query):
     return num_affected_rows
 
 
-def get_row(query):
-    connection = conn
+def get_row(query, connection=None):
+    if connection is None:
+        connection = conn
     cursor = connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute(query)
     row = cursor.fetchone()
@@ -92,8 +121,9 @@ def get_row(query):
     return row
 
 
-def get_rows(query):
-    connection = conn
+def get_rows(query, connection=None):
+    if connection is None:
+        connection = conn
     cursor = connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute(query)
     rows = cursor.fetchall()
@@ -115,7 +145,7 @@ def table_exists(check_database_name, check_table_name):
             AND TABLE_NAME='%s'
         """ % (check_database_name, check_table_name)
 
-    row = get_row(query)
+    row = get_row(query, write_conn)
     count = int(row['count'])
 
     return count
@@ -500,15 +530,16 @@ def upgrade_status_variables_table():
     #        FROM INFORMATION_SCHEMA.COLUMNS
     #        WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s'
     #        """ % (database_name, table_name)
-    #    existing_columns = [row["COLUMN_NAME"] for row in get_rows(query)]
+    #    existing_columns = [row["COLUMN_NAME"] for row in get_rows(query, write_conn)]
     query = """
             SHOW COLUMNS FROM %s.%s
         """ % (database_name, table_name)
-    existing_columns = [row["Field"] for row in get_rows(query)]
+    existing_columns = [row["Field"] for row in get_rows(query, write_conn)]
 
     new_columns = [column_name for column_name in get_status_variables_columns() if column_name not in existing_columns]
 
     if new_columns:
+        verbose("Will add the following columns to %s: %s" % (table_name, ", ".join(new_columns)))
         columns_listing = ",\n".join(["ADD COLUMN %s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in new_columns])
         query = """ALTER TABLE %s.%s
                 %s
@@ -1422,7 +1453,7 @@ def disable_bin_log():
     try:
         query = "SET SESSION SQL_LOG_BIN=0"
         act_query(query)
-    except:
+    except Exception, err:
         exit_with_error("Failed to disable binary logging. Either grant the SUPER privilege or use --skip-disable-bin-log")
 
 
@@ -1469,6 +1500,7 @@ def exit_with_error(error_message):
 try:
     try:
         conn = None
+        write_conn = None
         reuse_conn = True
         (options, args) = parse_options()
 
@@ -1484,7 +1516,7 @@ try:
         if options.purge_days < 1:
             exit_with_error("purge-days must be at least 1")
 
-        conn = open_connection()
+        conn, write_conn = open_connections()
         if "deploy" in args:
             prompt_instructions()
             create_numbers_table()
