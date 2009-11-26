@@ -28,14 +28,14 @@ def parse_options():
     usage = "usage: mycheckpoint [options] [deploy]"
     parser = OptionParser(usage=usage)
     parser.add_option("-u", "--user", dest="user", default="", help="MySQL user")
-    parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL host (default: localhost)")
+    parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL host. Written to by this application (default: localhost)")
     parser.add_option("-p", "--password", dest="password", default="", help="MySQL password")
     parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
     parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
-    parser.add_option("", "--write-host", dest="write_host", default=None, help="MySQL write host. Specity this when you wish to record data in a different server than the monitored one (default: none)")
-    parser.add_option("", "--write-port", dest="write_port", type="int", default="3306", help="Write host TCP/IP port (default: 3306)")
-    parser.add_option("", "--write-socket", dest="write_socket", default="/var/run/mysqld/mysql.sock", help="Write host MySQL socket file. Only applies when write-host is localhost")    
+    parser.add_option("", "--monitored-host", dest="monitored_host", default=None, help="MySQL monitored host. Specity this when the host you're monitoring is not the same one you're writing to (default: none, host specified by --host is both monitored and written to)")
+    parser.add_option("", "--monitored-port", dest="monitored_port", type="int", default="3306", help="Monitored host's TCP/IP port (default: 3306). Only applies when monitored-host is specified")
+    parser.add_option("", "--monitored-socket", dest="monitored_socket", default="/var/run/mysqld/mysql.sock", help="Monitored host MySQL socket file. Only applies when monitored-host is specified and is localhost")    
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", default="mycheckpoint", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
@@ -57,7 +57,7 @@ def print_error(message):
 
 def open_connections():
     if options.defaults_file:
-        conn = MySQLdb.connect(
+        write_conn = MySQLdb.connect(
             read_default_file = options.defaults_file,
             db = database_name)
     else:
@@ -65,7 +65,7 @@ def open_connections():
             password=getpass.getpass()
         else:
             password=options.password
-        conn = MySQLdb.connect(
+        write_conn = MySQLdb.connect(
             host = options.host,
             user = options.user,
             passwd = password,
@@ -74,27 +74,25 @@ def open_connections():
             db = database_name)
         
     # If no write host specified, then read+write hosts are the same one...
-    if not options.write_host:
-        return conn, conn;
+    if not options.monitored_host:
+        return write_conn, write_conn;
 
     # Need to open a write connection
     if options.defaults_file:
-        write_conn = MySQLdb.connect(
+        monitored_conn = MySQLdb.connect(
             read_default_file = options.defaults_file,
-            host = options.write_host,
-            port = options.write_port,
-            unix_socket = options.write_socket,
-            db = database_name)
+            host = options.monitored_host,
+            port = options.monitored_port,
+            unix_socket = options.monitored_socket)
     else:
-        write_conn = MySQLdb.connect(
-            host = options.write_host,
+        monitored_conn = MySQLdb.connect(
+            host = options.monitored_host,
             user = options.user,
             passwd = password,
-            port = options.write_port,
-            unix_socket = options.write_socket,
-            db = database_name)
+            port = options.monitored_port,
+            unix_socket = options.monitored_socket)
 
-    return conn, write_conn;
+    return monitored_conn, write_conn;
 
 
 def act_query(query):
@@ -112,7 +110,7 @@ def act_query(query):
 
 def get_row(query, connection=None):
     if connection is None:
-        connection = conn
+        connection = monitored_conn
     cursor = connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute(query)
     row = cursor.fetchone()
@@ -123,7 +121,7 @@ def get_row(query, connection=None):
 
 def get_rows(query, connection=None):
     if connection is None:
-        connection = conn
+        connection = monitored_conn
     cursor = connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute(query)
     rows = cursor.fetchall()
@@ -911,7 +909,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     verbose("%s custom views created" % view_base_name)
 
 
-def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=False, scale_to_100=False):
+def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format, count_labels_factor, scale_from_0=False, scale_to_100=False):
     chart_columns_list = [column_name.strip() for column_name in chart_columns.lower().split(",")]
 
     chart_column_min_listing = ",".join(["%s_min" % column_name for column_name in chart_columns_list])
@@ -952,14 +950,14 @@ def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=Fa
         ]
     concatenated_column_values = "',',".join(column_values)
 
-    num_x_values = int(options.chart_width/80)
+    num_x_values = int(count_labels_factor*options.chart_width/80)
     x_values = ",".join(["""'|', DATE_FORMAT(ts_min + INTERVAL (ts_diff_seconds*%d/%d) SECOND, '${ts_format}')""" % (i, num_x_values) for i in range(1,num_x_values)])
 
     query = """
           REPLACE(
           CONCAT(
             'http://chart.apis.google.com/chart?cht=lc&chs=${chart_width}x${chart_height}&chts=303030,12&chtt=',
-            DATE_FORMAT(ts_min, '${ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${ts_format}'),
+            DATE_FORMAT(ts_min, '${title_ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${title_ts_format}'),
               ' (', TIMESTAMPDIFF(DAY, MIN(ts), MAX(ts)), ' days, ',
               TIMESTAMPDIFF(HOUR, ts_min, ts_max) % 24, ' hours)',
             '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:',
@@ -978,6 +976,7 @@ def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=Fa
     query = query.replace("${alias}", alias)
     query = query.replace("${x_values}", x_values)
     query = query.replace("${ts_format}", ts_format)
+    query = query.replace("${title_ts_format}", title_ts_format)    
 
     return query
 
@@ -985,14 +984,15 @@ def generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0=Fa
 def create_report_google_chart_view(charts_list):
 
     ts_formats_map = {
-        "sample": "%b %e, %H:%i",
-        "hour": "%b %e, %H:00",
-        "day": "%b %e, %y",
+        "sample": ("%b %e, %H:%i", "%H:%i", 2),
+        "hour": ("%b %e, %H:00", "%D, %H:00", 1.2),
+        "day": ("%b %e, %y", "%b %e", 1.8),
         }
 
+
     for view_name_extension in ["sample", "hour", "day"]:
-        ts_format = ts_formats_map[view_name_extension]
-        charts_queries = [generate_google_chart_query(chart_columns, alias, ts_format, scale_from_0, scale_to_100) for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list]
+        title_ts_format, ts_format, count_labels_factor = ts_formats_map[view_name_extension]
+        charts_queries = [generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format, count_labels_factor, scale_from_0, scale_to_100) for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list]
         charts_query = ",".join(charts_queries)
         query = """
             CREATE
@@ -1499,9 +1499,8 @@ def exit_with_error(error_message):
 
 try:
     try:
-        conn = None
+        monitored_conn = None
         write_conn = None
-        reuse_conn = True
         (options, args) = parse_options()
 
         verbose("mycheckpoint. Copyright (c) 2009 by Shlomi Noach")
@@ -1516,7 +1515,7 @@ try:
         if options.purge_days < 1:
             exit_with_error("purge-days must be at least 1")
 
-        conn, write_conn = open_connections()
+        monitored_conn, write_conn = open_connections()
         if "deploy" in args:
             prompt_instructions()
             create_numbers_table()
@@ -1534,5 +1533,7 @@ try:
         sys.exit(1)
 
 finally:
-    if conn:
-        conn.close()
+    if monitored_conn:
+        monitored_conn.close()
+    if write_conn and write_conn is not monitored_conn:
+        write_conn.close()
