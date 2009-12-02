@@ -1047,6 +1047,7 @@ def create_report_html_view(charts_aliases):
     <html>
         <head>
         <title>mycheckpoint report</title>
+        <meta http-equiv="refresh" content="300" />
         <style type="text/css">
             body {
                 background:#FFFFFF none repeat scroll 0% 0%;
