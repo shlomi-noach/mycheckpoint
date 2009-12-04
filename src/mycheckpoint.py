@@ -32,18 +32,19 @@ def parse_options():
     parser.add_option("-p", "--password", dest="password", default="", help="MySQL password")
     parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
     parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
-    parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost")
+    parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost (default: /var/run/mysqld/mysql.sock)")
     parser.add_option("", "--monitored-host", dest="monitored_host", default=None, help="MySQL monitored host. Specity this when the host you're monitoring is not the same one you're writing to (default: none, host specified by --host is both monitored and written to)")
     parser.add_option("", "--monitored-port", dest="monitored_port", type="int", default="3306", help="Monitored host's TCP/IP port (default: 3306). Only applies when monitored-host is specified")
-    parser.add_option("", "--monitored-socket", dest="monitored_socket", default="/var/run/mysqld/mysql.sock", help="Monitored host MySQL socket file. Only applies when monitored-host is specified and is localhost")    
+    parser.add_option("", "--monitored-socket", dest="monitored_socket", default="/var/run/mysqld/mysql.sock", help="Monitored host MySQL socket file. Only applies when monitored-host is specified and is localhost (default: /var/run/mysqld/mysql.sock)")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", default="mycheckpoint", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
-    parser.add_option("", "--skip-disable-bin-log", dest="skip_disable_bin_log", action="store_true", default=False, help="Skip disabling the binary logging (binary loggind disabled by default)")
+    parser.add_option("", "--skip-disable-bin-log", dest="skip_disable_bin_log", action="store_true", default=False, help="Skip disabling the binary logging (binary logging disabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
-    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400)")
-    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Google chart image height (default: 200)")
+    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400, min value: 150)")
+    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Google chart image height (default: 200, min value: 100)")
+    parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
     return parser.parse_args()
 
 
@@ -72,7 +73,7 @@ def open_connections():
             port = options.port,
             unix_socket = options.socket,
             db = database_name)
-        
+
     # If no write host specified, then read+write hosts are the same one...
     if not options.monitored_host:
         return write_conn, write_conn;
@@ -359,7 +360,7 @@ def fetch_status_variables():
     if status_dict:
         return status_dict
 
-    # Make sure some status variables exist: these are required due to 5.0 - 5.1 
+    # Make sure some status variables exist: these are required due to 5.0 - 5.1
     # or minor versions incompatabilities.
     for additional_status_variable in get_additional_status_variables():
         status_dict[additional_status_variable] = None
@@ -516,6 +517,39 @@ def create_numbers_table():
         """ % (database_name, numbers_values)
 
     return table_created
+
+
+def create_charts_api_table():
+    query = """
+            DROP TABLE IF EXISTS %s.charts_api
+        """ % database_name
+    try:
+        act_query(query)
+    except MySQLdb.Error, e:
+        exit_with_error("Cannot execute %s" % query )
+
+    query = """
+        CREATE TABLE %s.charts_api (
+            chart_width SMALLINT UNSIGNED NOT NULL,
+            chart_height SMALLINT UNSIGNED NOT NULL,
+            simple_encoding CHAR(62) CHARSET ascii COLLATE ascii_bin,
+            service_url VARCHAR(128) CHARSET ascii COLLATE ascii_bin
+        )
+        """ % database_name
+
+    try:
+        act_query(query)
+        verbose("charts_api table created")
+    except MySQLdb.Error, e:
+        exit_with_error("Cannot create table %s.charts_api" % database_name)
+
+    query = """
+        INSERT INTO %s.charts_api
+            (chart_width, chart_height, simple_encoding, service_url)
+        VALUES
+            (%d, %d, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', '%s')
+        """ % (database_name, options.chart_width, options.chart_height, options.chart_service_url.replace("'", "''"))
+    act_query(query)
 
 
 def upgrade_status_variables_table():
@@ -684,25 +718,33 @@ def create_status_variables_day_view():
 
 def create_report_recent_views():
     """
-    Generate per-sample, per-hour and per-day 'recent' views, which only list the latest 256 rows from respective full views.
+    Generate per-sample, per-hour and per-day 'recent' views, which only list the latest rows from respective full views.
     """
     query = """
         CREATE
         OR REPLACE
-        ALGORITHM = TEMPTABLE
+        ALGORITHM = MERGE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
         VIEW ${database_name}.sv_report_${view_name_extension}_recent AS
           SELECT *
           FROM
             ${database_name}.sv_report_${view_name_extension}
-          ORDER BY id DESC
-          LIMIT 256
+          WHERE
+            ts >= NOW() - INTERVAL ${recent_interval}
         """
     query = query.replace("${database_name}", database_name)
 
-    for view_name_extension in ["sample", "hour", "day"]:
-        custom_query = query.replace("${view_name_extension}", view_name_extension)
+
+    recent_interval_map = {
+        "sample": "24 HOUR",
+        "hour": "10 DAY",
+        "day": "1 YEAR",
+        }
+    for view_name_extension in recent_interval_map:
+        custom_query = query
+        custom_query = custom_query.replace("${view_name_extension}", view_name_extension)
+        custom_query = custom_query.replace("${recent_interval}", recent_interval_map[view_name_extension])
         act_query(custom_query)
 
     verbose("recent reports views created")
@@ -736,7 +778,6 @@ def create_report_recent_minmax_views():
             MIN(TS) AS ts_min,
             MAX(ts) AS ts_max,
             TIMESTAMPDIFF(SECOND, MIN(TS), MAX(ts)) AS ts_diff_seconds,
-
             %s,
             %s
           FROM
@@ -938,7 +979,7 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format
 
     column_values = [ """
             GROUP_CONCAT(SUBSTRING(
-              'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+              charts_api.simple_encoding,
               1+ROUND(
                 61 *
                 (%s - ${least_value_clause})/(${greatest_value_clause} - ${least_value_clause})
@@ -956,9 +997,9 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format
     query = """
           REPLACE(
           CONCAT(
-            'http://chart.apis.google.com/chart?cht=lc&chs=${chart_width}x${chart_height}&chts=303030,12&chtt=',
+            charts_api.service_url, '?cht=lc&chs=', charts_api.chart_width, 'x', charts_api.chart_height, '&chts=303030,12&chtt=',
             DATE_FORMAT(ts_min, '${title_ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${title_ts_format}'),
-              ' (', TIMESTAMPDIFF(DAY, MIN(ts), MAX(ts)), ' days, ',
+              ' (', TIMESTAMPDIFF(DAY, ts_min, ts_max), ' days, ',
               TIMESTAMPDIFF(HOUR, ts_min, ts_max) % 24, ' hours)',
             '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:',
             ${concatenated_column_values}
@@ -966,8 +1007,6 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format
           ), ' ', '+') AS ${alias}
         """
     query = query.replace("${database_name}", database_name)
-    query = query.replace("${chart_width}", str(options.chart_width))
-    query = query.replace("${chart_height}", str(options.chart_height))
     query = query.replace("${piped_chart_column_listing}", piped_chart_column_listing)
     query = query.replace("${chart_colors}", ",".join(chart_colors))
     query = query.replace("${concatenated_column_values}", concatenated_column_values)
@@ -976,7 +1015,7 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format
     query = query.replace("${alias}", alias)
     query = query.replace("${x_values}", x_values)
     query = query.replace("${ts_format}", ts_format)
-    query = query.replace("${title_ts_format}", title_ts_format)    
+    query = query.replace("${title_ts_format}", title_ts_format)
 
     return query
 
@@ -985,8 +1024,13 @@ def create_report_google_chart_view(charts_list):
 
     ts_formats_map = {
         "sample": ("%b %e, %H:%i", "%H:%i", 2),
-        "hour": ("%b %e, %H:00", "%D, %H:00", 1.2),
-        "day": ("%b %e, %y", "%b %e", 1.8),
+        "hour":   ("%b %e, %H:00", "%D, %H:00", 1.2),
+        "day":    ("%b %e, %y", "%b %e", 1.8),
+        }
+    grid_lines_map = {
+        "sample": "ROUND(100/TIMESTAMPDIFF(HOUR, ts_min, ts_max) ,2), ',25,1,3,', ROUND((TIMESTAMPDIFF(MINUTE, ts_min, ts_max) % 60)*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max)/60), ',0'",
+        "hour":   "ROUND(100/TIMESTAMPDIFF(DAY, ts_min, ts_max) ,2), ',25,1,3,', ROUND((TIMESTAMPDIFF(HOUR, ts_min, ts_max) % 24)*100/TIMESTAMPDIFF(DAY, ts_min, ts_max)/24), ',0'",
+        "day":    "ROUND(100/TIMESTAMPDIFF(HOUR, ts_min, ts_max) ,2), ',25,1,3,', ROUND((TIMESTAMPDIFF(MINUTE, ts_min, ts_max) % 60)*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max)/60), ',0'",
         }
 
 
@@ -1004,7 +1048,7 @@ def create_report_google_chart_view(charts_list):
               SELECT
                 %s
               FROM
-                ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax
+                ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.charts_api
             """ % charts_query
         query = query.replace("${database_name}", database_name)
         query = query.replace("${view_name_extension}", view_name_extension)
@@ -1029,8 +1073,6 @@ def create_report_html_view(charts_aliases):
             '</div>
                 ',
             """
-        alias_img_tags_query = alias_img_tags_query.replace("${chart_width}", str(options.chart_width))
-        alias_img_tags_query = alias_img_tags_query.replace("${chart_height}", str(options.chart_height))
         alias_img_tags_query = alias_img_tags_query.replace("${chart_alias}", chart_alias)
         all_img_tags_queries.append(alias_img_tags_query)
     all_img_tags_query = "".join(all_img_tags_queries)
@@ -1074,12 +1116,12 @@ def create_report_html_view(charts_aliases):
                 float: left;
                 white-space: nowrap;
                 margin-right: 10px;
-                width: ${chart_width};
+                width:', charts_api.chart_width, ';
             }
             div.chart img {
                 border:0px none;
-                width: ${chart_width};
-                height: ${chart_height};
+                width: ', charts_api.chart_width, ';
+                height: ', charts_api.chart_height, ';
             }
             .clear {
                 clear:both;
@@ -1099,13 +1141,11 @@ def create_report_html_view(charts_aliases):
     </html>
           ') AS html
           FROM
-            ${database_name}.sv_report_chart_sample, ${database_name}.sv_report_chart_hour, ${database_name}.sv_report_chart_day
+            ${database_name}.sv_report_chart_sample, ${database_name}.sv_report_chart_hour, ${database_name}.sv_report_chart_day, ${database_name}.charts_api
         """ % all_img_tags_query
     query = query.replace("${database_name}", database_name)
     query = query.replace("${chart_aliases_map}", chart_aliases_map)
     query = query.replace("${global_width}", str(options.chart_width*3 + 30))
-    query = query.replace("${chart_width}", str(options.chart_width))
-    query = query.replace("${chart_height}", str(options.chart_height))
     act_query(query)
 
     verbose("report html view created")
@@ -1510,6 +1550,8 @@ try:
         table_name = "status_variables"
         status_dict = {}
         custom_views_columns = {}
+        options.chart_width = max(options.chart_width, 150)
+        options.chart_height = max(options.chart_height, 100)
 
         if not database_name:
             exit_with_error("No database specified. Specify with -d or --database")
@@ -1520,6 +1562,7 @@ try:
         if "deploy" in args:
             prompt_instructions()
             create_numbers_table()
+            create_charts_api_table()
             if not create_status_variables_table():
                 upgrade_status_variables_table()
             create_status_variables_views()
@@ -1530,7 +1573,7 @@ try:
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        #traceback.print_exc()
+        traceback.print_exc()
         sys.exit(1)
 
 finally:
