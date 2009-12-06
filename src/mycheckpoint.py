@@ -492,31 +492,33 @@ def create_status_variables_table():
 
 
 def create_numbers_table():
-    query = """CREATE TABLE %s.numbers (
-                n SMALLINT UNSIGNED NOT NULL,
-                PRIMARY KEY (n)
-            )
+    query = """
+            DROP TABLE IF EXISTS %s.numbers
         """ % database_name
-
-    table_created = False
     try:
         act_query(query)
-        table_created = True
     except MySQLdb.Error, e:
-        pass
+        exit_with_error("Cannot execute %s" % query )
 
-    if table_created:
+    query = """
+        CREATE TABLE %s.numbers (
+            n SMALLINT UNSIGNED NOT NULL,
+            PRIMARY KEY (n)
+        )
+        """ % database_name
+
+    try:
+        act_query(query)
         verbose("numbers table created")
-    else:
-        verbose("numbers table exists")
+    except MySQLdb.Error, e:
+        exit_with_error("Cannot create table %s.numbers" % database_name)
 
     numbers_values = ",".join(["(%d)" % n for n in range(0,4096)])
     query = """
         INSERT IGNORE INTO %s.numbers
         VALUES %s
         """ % (database_name, numbers_values)
-
-    return table_created
+    act_query(query)
 
 
 def create_charts_api_table():
@@ -578,6 +580,27 @@ def upgrade_status_variables_table():
         """ % (database_name, table_name, columns_listing)
         act_query(query)
         verbose("status_variables table upgraded")
+
+
+def create_status_variables_latest_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_latest AS
+          SELECT
+            MAX(id) AS id_latest,
+            MAX(ts) AS ts_latest
+          FROM
+            ${database_name}.${status_variables_table_name}
+    """
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${status_variables_table_name}", table_name)
+    act_query(query)
+
+    verbose("sv_latest view created")
 
 
 def create_status_variables_diff_view():
@@ -729,12 +752,11 @@ def create_report_recent_views():
         VIEW ${database_name}.sv_report_${view_name_extension}_recent AS
           SELECT *
           FROM
-            ${database_name}.sv_report_${view_name_extension}
+            ${database_name}.sv_report_${view_name_extension}, ${database_name}.sv_latest
           WHERE
-            ts >= NOW() - INTERVAL ${recent_interval}
+            ts >= ts_latest - INTERVAL ${recent_interval}
         """
     query = query.replace("${database_name}", database_name)
-
 
     recent_interval_map = {
         "sample": "24 HOUR",
@@ -782,8 +804,6 @@ def create_report_recent_minmax_views():
             %s
           FROM
             ${database_name}.sv_report_${view_name_extension}_recent
-          ORDER BY id DESC
-          LIMIT 256
         """ % (min_columns_listing, max_columns_listing)
     query = query.replace("${database_name}", database_name)
 
@@ -792,6 +812,78 @@ def create_report_recent_minmax_views():
         act_query(custom_query)
 
     verbose("recent reports minmax views created")
+
+
+def create_report_chart_labels_views():
+    """
+    Generate x-axis labels for the google api report views
+    """
+
+    ts_formats = {
+        "sample": "%H:00",
+        "hour":   "%D",
+        "day":    "%b %e",
+        }
+    labels_times = {
+        "sample": ("DATE(ts_min) + INTERVAL HOUR(ts_min) HOUR", "HOUR"),
+        "hour":   ("DATE(ts_min)", "DAY"),
+        "day":    ("DATE(ts_min) - INTERVAL WEEKDAY(ts_min) DAY", "WEEK"),
+        }
+    labels_step_and_limits = {
+        "sample": (4, 24),
+        "hour":   (1, 10),
+        "day":    (1, 52),
+        }
+    x_axis_map = {
+        "sample": ("ROUND(60*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)", "ROUND((60 - MINUTE(ts_min))*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)"),
+        "hour":   ("ROUND(24*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max), 2)", "ROUND((24 - HOUR(ts_min))*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max) ,2)"),
+        "day":    ("ROUND(7*100/TIMESTAMPDIFF(DAY, ts_min, ts_max), 2)", "ROUND((7 - WEEKDAY(ts_min))*100/TIMESTAMPDIFF(DAY, ts_min, ts_max) ,2)"),
+        }
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_report_chart_${view_name_extension}_labels AS
+          SELECT
+            ${x_axis_step_size} AS x_axis_step_size,
+            ${x_axis_offset} AS x_axis_offset,
+            GROUP_CONCAT(
+              IF(${labels_step} = 1 OR numbers.n % ${labels_step} = 1,
+                LOWER(DATE_FORMAT(${base_ts} + INTERVAL numbers.n ${interval_unit}, '${ts_format}')),
+                '')
+              SEPARATOR '|') AS x_axis_labels,
+            GROUP_CONCAT(
+              ${x_axis_offset} + (${x_axis_step_size})*IF(${base_ts} < ts_min, n-1, n)
+              SEPARATOR ',') AS x_axis_labels_positions
+          FROM
+            ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.numbers
+          WHERE
+            ${base_ts} + INTERVAL numbers.n ${interval_unit} >= ts_min
+            AND ${base_ts} + INTERVAL numbers.n ${interval_unit} <= ts_max
+            AND numbers.n <= ${labels_limit}
+        """
+    query = query.replace("${database_name}", database_name)
+
+    for view_name_extension in ["sample", "hour", "day"]:
+        base_ts, interval_unit = labels_times[view_name_extension]
+        ts_format = ts_formats[view_name_extension]
+        labels_step, labels_limit = labels_step_and_limits[view_name_extension]
+        x_axis_step_size, x_axis_offset = x_axis_map[view_name_extension]
+        custom_query = query
+        custom_query = custom_query.replace("${view_name_extension}", view_name_extension)
+        custom_query = custom_query.replace("${base_ts}", base_ts)
+        custom_query = custom_query.replace("${interval_unit}", interval_unit)
+        custom_query = custom_query.replace("${ts_format}", str(ts_format))
+        custom_query = custom_query.replace("${labels_step}", str(labels_step))
+        custom_query = custom_query.replace("${labels_limit}", str(labels_limit))
+        custom_query = custom_query.replace("${x_axis_step_size}", str(x_axis_step_size))
+        custom_query = custom_query.replace("${x_axis_offset}", str(x_axis_offset))
+        act_query(custom_query)
+
+    verbose("report charts labels views created")
 
 
 def create_status_variables_parameter_change_view():
@@ -950,7 +1042,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
     verbose("%s custom views created" % view_base_name)
 
 
-def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format, count_labels_factor, scale_from_0=False, scale_to_100=False):
+def generate_google_chart_query(chart_columns, alias, title_ts_format, scale_from_0=False, scale_to_100=False):
     chart_columns_list = [column_name.strip() for column_name in chart_columns.lower().split(",")]
 
     chart_column_min_listing = ",".join(["%s_min" % column_name for column_name in chart_columns_list])
@@ -991,9 +1083,6 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format
         ]
     concatenated_column_values = "',',".join(column_values)
 
-    num_x_values = int(count_labels_factor*options.chart_width/80)
-    x_values = ",".join(["""'|', DATE_FORMAT(ts_min + INTERVAL (ts_diff_seconds*%d/%d) SECOND, '${ts_format}')""" % (i, num_x_values) for i in range(1,num_x_values)])
-
     query = """
           REPLACE(
           CONCAT(
@@ -1001,9 +1090,10 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format
             DATE_FORMAT(ts_min, '${title_ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${title_ts_format}'),
               ' (', TIMESTAMPDIFF(DAY, ts_min, ts_max), ' days, ',
               TIMESTAMPDIFF(HOUR, ts_min, ts_max) % 24, ' hours)',
-            '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:',
-            ${concatenated_column_values}
-            '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', ${x_values}, '|&chxs=0,505050,10'
+            '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:', ${concatenated_column_values}
+            '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', x_axis_labels, '|&chxs=0,505050,10',
+            '&chg=', x_axis_step_size, ',25,1,3,', x_axis_offset, ',0',
+            '&chxp=0,', x_axis_labels_positions
           ), ' ', '+') AS ${alias}
         """
     query = query.replace("${database_name}", database_name)
@@ -1013,30 +1103,26 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format
     query = query.replace("${least_value_clause}", least_value_clause)
     query = query.replace("${greatest_value_clause}", greatest_value_clause)
     query = query.replace("${alias}", alias)
-    query = query.replace("${x_values}", x_values)
-    query = query.replace("${ts_format}", ts_format)
     query = query.replace("${title_ts_format}", title_ts_format)
 
     return query
 
 
-def create_report_google_chart_view(charts_list):
+def create_report_google_chart_views(charts_list):
 
-    ts_formats_map = {
-        "sample": ("%b %e, %H:%i", "%H:%i", 2),
-        "hour":   ("%b %e, %H:00", "%D, %H:00", 1.2),
-        "day":    ("%b %e, %y", "%b %e", 1.8),
+    title_ts_formats = {
+        "sample": "%b %e, %H:%i",
+        "hour":   "%b %e, %H:00",
+        "day":    "%b %e, %y",
         }
     grid_lines_map = {
         "sample": "ROUND(100/TIMESTAMPDIFF(HOUR, ts_min, ts_max) ,2), ',25,1,3,', ROUND((TIMESTAMPDIFF(MINUTE, ts_min, ts_max) % 60)*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max)/60), ',0'",
         "hour":   "ROUND(100/TIMESTAMPDIFF(DAY, ts_min, ts_max) ,2), ',25,1,3,', ROUND((TIMESTAMPDIFF(HOUR, ts_min, ts_max) % 24)*100/TIMESTAMPDIFF(DAY, ts_min, ts_max)/24), ',0'",
         "day":    "ROUND(100/TIMESTAMPDIFF(HOUR, ts_min, ts_max) ,2), ',25,1,3,', ROUND((TIMESTAMPDIFF(MINUTE, ts_min, ts_max) % 60)*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max)/60), ',0'",
         }
-
-
     for view_name_extension in ["sample", "hour", "day"]:
-        title_ts_format, ts_format, count_labels_factor = ts_formats_map[view_name_extension]
-        charts_queries = [generate_google_chart_query(chart_columns, alias, title_ts_format, ts_format, count_labels_factor, scale_from_0, scale_to_100) for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list]
+        title_ts_format = title_ts_formats[view_name_extension]
+        charts_queries = [generate_google_chart_query(chart_columns, alias, title_ts_format, scale_from_0, scale_to_100) for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list]
         charts_query = ",".join(charts_queries)
         query = """
             CREATE
@@ -1048,7 +1134,7 @@ def create_report_google_chart_view(charts_list):
               SELECT
                 %s
               FROM
-                ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.charts_api
+                ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.charts_api, ${database_name}.sv_report_chart_${view_name_extension}_labels
             """ % charts_query
         query = query.replace("${database_name}", database_name)
         query = query.replace("${view_name_extension}", view_name_extension)
@@ -1089,7 +1175,7 @@ def create_report_html_view(charts_aliases):
     <html>
         <head>
         <title>mycheckpoint report</title>
-        <meta http-equiv="refresh" content="300" />
+        <meta http-equiv="refresh" content="600" />
         <style type="text/css">
             body {
                 background:#FFFFFF none repeat scroll 0% 0%;
@@ -1153,6 +1239,7 @@ def create_report_html_view(charts_aliases):
 
 def create_status_variables_views():
     global_variables, status_columns = get_variables_and_status_columns()
+    create_status_variables_latest_view()
     create_status_variables_diff_view()
     create_status_variables_sample_view()
     create_status_variables_hour_view()
@@ -1437,7 +1524,8 @@ Replication:
 ') AS report
         """)
 
-    create_report_google_chart_view([
+    create_report_chart_labels_views()
+    create_report_google_chart_views([
         ("uptime_percent", "uptime_percent", True, True),
 
         ("innodb_read_hit_percent", "innodb_read_hit_percent", False, False),
