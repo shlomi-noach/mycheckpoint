@@ -39,7 +39,8 @@ def parse_options():
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", default="mycheckpoint", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
-    parser.add_option("", "--skip-disable-bin-log", dest="skip_disable_bin_log", action="store_true", default=False, help="Skip disabling the binary logging (binary logging disabled by default)")
+    parser.add_option("", "--disable-bin-log", dest="disable_bin_log", action="store_true", default=False, help="Disable binary logging (binary logging enabled by default)")
+    parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400, min value: 150)")
@@ -1109,7 +1110,6 @@ def generate_google_chart_query(chart_columns, alias, title_ts_format, scale_fro
 
 
 def create_report_google_chart_views(charts_list):
-
     title_ts_formats = {
         "sample": "%b %e, %H:%i",
         "hour":   "%b %e, %H:00",
@@ -1577,11 +1577,12 @@ Replication:
 
 
 def disable_bin_log():
-    if options.skip_disable_bin_log:
+    if not options.disable_bin_log:
         return
     try:
         query = "SET SESSION SQL_LOG_BIN=0"
         act_query(query)
+        verbose("binary logging disabled")
     except Exception, err:
         exit_with_error("Failed to disable binary logging. Either grant the SUPER privilege or use --skip-disable-bin-log")
 
