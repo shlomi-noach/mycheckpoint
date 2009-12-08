@@ -6,7 +6,7 @@ setup(
     author="Shlomi Noach",
     author_email="shlomi@code.openark.org",
     url="http://code.openark.org/forge/mycheckpoint",
-    version="46",
+    version="54",
     requires=["MySQLdb"],
     packages=[""],
     package_dir={"": "scripts"},
