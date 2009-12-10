@@ -151,9 +151,8 @@ def table_exists(check_database_name, check_table_name):
     return count
 
 
-def prompt_instructions():
+def prompt_deploy_instructions():
     print "--"
-    print "-- Creating mycheckpoint tables & views. Database name is `%s`" % database_name
     print "-- Make sure `%s` schema exists, e.g." % database_name
     print "--   CREATE DATABASE `%s`" % database_name
     print "-- Make sure the user has ALL PRIVILEGES on the `%s` schema. e.g." % database_name
@@ -162,6 +161,14 @@ def prompt_instructions():
     print "-- - Otherwise, use --skip-disable-bin-log (but then be aware that slaves replicate this server's status)"
     print "-- In order to read master and slave status, the user must also be granted with REPLICATION CLIENT or SUPER privileges"
     print "-- - Otherwise, use --skip-check-replication"
+    print "--"
+
+
+def prompt_collect_instructions():
+    print "--"
+    print "-- Make sure you have executed mycheckpoint with 'deploy' after last install/update.upgrade"
+    print "--  If not, run again with same configuration, and add 'deploy'. e.g.:"
+    print "--  mycheckpoint --host=my_host deploy"
     print "--"
 
 
@@ -1656,7 +1663,6 @@ try:
 
         monitored_conn, write_conn = open_connections()
         if "deploy" in args:
-            prompt_instructions()
             create_numbers_table()
             create_charts_api_table()
             if not create_status_variables_table():
@@ -1669,7 +1675,13 @@ try:
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        traceback.print_exc()
+        #traceback.print_exc()
+
+        if "deploy" in args:
+            prompt_deploy_instructions()
+        else:
+            prompt_collect_instructions()
+
         sys.exit(1)
 
 finally:
