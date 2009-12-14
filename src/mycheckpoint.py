@@ -848,9 +848,9 @@ def create_report_chart_labels_views():
         "day":    ("DATE(ts_min) - INTERVAL WEEKDAY(ts_min) DAY", "WEEK"),
         }
     labels_step_and_limits = {
-        "sample": (4, 24),
-        "hour":   (1, 10),
-        "day":    (1, 52),
+        "sample": ("HOUR", 4, 24),
+        "hour":   ("DAY", 1, 10),
+        "day":    ("DAY", 1, 52),
         }
     x_axis_map = {
         "sample": ("ROUND(60*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)", "ROUND((60 - MINUTE(ts_min))*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)"),
@@ -870,7 +870,7 @@ def create_report_chart_labels_views():
             IFNULL(${x_axis_offset}, '') AS x_axis_offset,
             IFNULL(
               GROUP_CONCAT(
-                IF(${labels_step} = 1 OR numbers.n % ${labels_step} = 1,
+                IF(${label_function}(${base_ts} + INTERVAL numbers.n ${interval_unit}) % ${labels_step} = 0,
                   LOWER(DATE_FORMAT(${base_ts} + INTERVAL numbers.n ${interval_unit}, '${ts_format}')),
                 '')
                 SEPARATOR '|'),
@@ -896,7 +896,7 @@ def create_report_chart_labels_views():
         title_numeric_description, title_unit_description = title_descriptions[view_name_extension]
         base_ts, interval_unit = labels_times[view_name_extension]
         ts_format = ts_formats[view_name_extension]
-        labels_step, labels_limit = labels_step_and_limits[view_name_extension]
+        label_function, labels_step, labels_limit = labels_step_and_limits[view_name_extension]
         x_axis_step_size, x_axis_offset = x_axis_map[view_name_extension]
         custom_query = query
         custom_query = custom_query.replace("${view_name_extension}", view_name_extension)
@@ -907,6 +907,7 @@ def create_report_chart_labels_views():
         custom_query = custom_query.replace("${interval_unit}", interval_unit)
         custom_query = custom_query.replace("${ts_format}", str(ts_format))
         custom_query = custom_query.replace("${labels_step}", str(labels_step))
+        custom_query = custom_query.replace("${label_function}", label_function)
         custom_query = custom_query.replace("${labels_limit}", str(labels_limit))
         custom_query = custom_query.replace("${x_axis_step_size}", str(x_axis_step_size))
         custom_query = custom_query.replace("${x_axis_offset}", str(x_axis_offset))
@@ -1119,7 +1120,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
             chart_time_description,
             '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:', ${concatenated_column_values}
             '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', x_axis_labels, '|&chxs=0,505050,10',
-            '&chg=', x_axis_step_size, ',25,1,3,', x_axis_offset, ',0',
+            '&chg=', x_axis_step_size, ',25,1,2,', x_axis_offset, ',0',
             '&chxp=0,', x_axis_labels_positions
           ), ' ', '+') AS ${alias}
         """
