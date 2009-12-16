@@ -1,11 +1,11 @@
 Package: mycheckpoint
-Version: 54-1
+Version: 57-1
 Section: python
 Priority: optional
 Architecture: all
 Essential: no
 Depends: python-mysqldb
-Installed-Size: 40
+Installed-Size: 80
 Maintainer: Shlomi Noach [shlomi@code.openark.org]
 Description: Monitoring for MySQL
  Lightweight, SQL oriented monitoring for MySQL
