@@ -825,6 +825,87 @@ def create_status_variables_day_view():
     verbose("sv_day view created")
 
 
+
+def create_report_24_7_view():
+    """
+    Generate a 24/7 report view
+    """
+    
+    all_columns = custom_views_columns["report"]
+    columns_listing = ",\n".join(["AVG(%s) AS %s" % (column_name, column_name,) for column_name in all_columns])
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_report_24_7 AS
+          SELECT
+            NULL AS ts,
+            WEEKDAY(ts) AS wd,
+            HOUR(ts) AS hr, 
+            %s
+          FROM
+            ${database_name}.sv_report_sample
+          GROUP BY WEEKDAY(ts), HOUR(ts)
+          ORDER BY WEEKDAY(ts), HOUR(ts)
+        """ % (columns_listing)
+    query = query.replace("${database_name}", database_name)
+
+    act_query(query)
+
+    verbose("24/7 report view created")
+
+
+
+def generate_google_chart_24_7_query(chart_column):
+
+    chart_color = "ff8c00"
+
+    query = """
+          REPLACE(
+          CONCAT(
+            charts_api.service_url, '?cht=s&chs=', charts_api.chart_width, 'x', charts_api.chart_height, 
+            '&chts=303030,12&chtt=${chart_column}&chd=t:',
+            CONCAT_WS('|', 
+              GROUP_CONCAT(ROUND(hr*100/23)), 
+              GROUP_CONCAT(ROUND(wd*100/6)), 
+              GROUP_CONCAT(ROUND(
+                100*(${chart_column} - LEAST(0, ${chart_column}_min))/(${chart_column}_max - LEAST(0, ${chart_column}_min))
+                ))
+            ),
+            '&chxt=x,y&chxl=0:|00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|16|17|18|19|20|21|22|23|1:|Mon|Tue|Wed|Thu|Fri|Sat|Sun',
+            '&chm=o,${chart_color},0,-1,10,0'
+          ), ' ', '+') AS ${chart_column}
+        """
+    query = query.replace("${chart_column}", chart_column)
+    query = query.replace("${chart_color}", chart_color)
+
+    return query
+
+
+def create_report_google_chart_24_7_view(charts_list):
+    charts_queries = [generate_google_chart_24_7_query(chart_column) for chart_column in charts_list]
+    charts_query = ",".join(charts_queries)
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_report_chart_24_7 AS
+          SELECT
+            %s
+          FROM
+            ${database_name}.sv_report_24_7, ${database_name}.sv_report_24_7_minmax, ${database_name}.charts_api
+        """ % charts_query
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("report 24/7 chart view created")
+
+
 def create_report_recent_views():
     """
     Generate per-sample, per-hour and per-day 'recent' views, which only list the latest rows from respective full views.
@@ -858,9 +939,9 @@ def create_report_recent_views():
     verbose("recent reports views created")
 
 
-def create_report_recent_minmax_views():
+def create_report_minmax_views():
     """
-    Generate min/max values view for the recent views.
+    Generate min/max values view for the report views.
     """
     global_variables, status_columns = get_variables_and_status_columns()
 
@@ -880,24 +961,24 @@ def create_report_recent_minmax_views():
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_report_${view_name_extension}_recent_minmax AS
+        VIEW ${database_name}.sv_report_${view_name_extension}_minmax AS
           SELECT
             COUNT(*) AS count_rows,
-            MIN(TS) AS ts_min,
+            MIN(ts) AS ts_min,
             MAX(ts) AS ts_max,
             TIMESTAMPDIFF(SECOND, MIN(TS), MAX(ts)) AS ts_diff_seconds,
             %s,
             %s
           FROM
-            ${database_name}.sv_report_${view_name_extension}_recent
+            ${database_name}.sv_report_${view_name_extension}
         """ % (min_columns_listing, max_columns_listing)
     query = query.replace("${database_name}", database_name)
 
-    for view_name_extension in ["sample", "hour", "day"]:
+    for view_name_extension in ["sample_recent", "hour_recent", "day_recent", "24_7"]:
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
 
-    verbose("recent reports minmax views created")
+    verbose("reports minmax views created")
 
 
 def create_report_chart_labels_views():
@@ -992,162 +1073,6 @@ def create_report_chart_labels_views():
         act_query(custom_query)
 
     verbose("report charts labels views created")
-
-
-def create_status_variables_parameter_change_view():
-    global_variables, diff_columns = get_variables_and_status_columns()
-
-    global_variables_select_listing = ["""
-        SELECT ${status_variables_table_alias}2.ts AS ts, '%s' AS variable_name, ${status_variables_table_alias}1.%s AS old_value, ${status_variables_table_alias}2.%s AS new_value
-        FROM
-          ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}1
-          INNER JOIN ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}2
-          ON (${status_variables_table_alias}1.id = ${status_variables_table_alias}2.id-GREATEST(1, IFNULL(${status_variables_table_alias}2.auto_increment_increment, 1)))
-        WHERE ${status_variables_table_alias}2.%s != ${status_variables_table_alias}1.%s
-        """ % (column_name, column_name, column_name,
-               column_name, column_name,) for column_name in global_variables if column_name != 'timestamp']
-    global_variables_select_union = " UNION ALL \n".join(global_variables_select_listing)
-
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_parameter_change_union AS
-          %s
-    """ % (global_variables_select_union,)
-    query = query.replace("${database_name}", database_name)
-    query = query.replace("${status_variables_table_name}", table_name)
-    query = query.replace("${status_variables_table_alias}", table_name)
-    act_query(query)
-
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_param_change AS
-          SELECT *
-          FROM ${database_name}.sv_parameter_change_union
-          ORDER BY ts, variable_name
-    """
-    query = query.replace("${database_name}", database_name)
-    act_query(query)
-
-    verbose("sv_param_change view created")
-
-
-def create_status_variables_long_format_view():
-    global_variables, status_variables = get_variables_and_status_columns()
-    all_columns_listing = []
-    all_columns_listing.extend(global_variables);
-    all_columns_listing.extend(status_variables);
-    all_columns_listing.extend(["%s_diff" % (column_name,) for column_name in status_variables])
-    all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in status_variables])
-    all_columns = ",".join(all_columns_listing)
-
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_long_hour AS
-            SELECT
-                id, ts,
-                SUBSTRING_INDEX(SUBSTRING_INDEX('%s', ',', numbers.n), ',', -1) AS variable_name,
-                CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(CONCAT_WS(',', %s), ',', numbers.n), ',', -1) AS UNSIGNED) AS variable_value
-            FROM
-                ${database_name}.sv_hour,
-                ${database_name}.numbers
-            WHERE
-                numbers.n >= 1 AND numbers.n <= %d
-            ORDER BY
-                id ASC, variable_name ASC
-        """ % (all_columns, all_columns, len(all_columns_listing))
-    query = query.replace("${database_name}", database_name)
-    act_query(query)
-
-
-def create_status_variables_aggregated_view():
-    global_variables, status_variables = get_variables_and_status_columns()
-    all_columns_listing = []
-    all_columns_listing.extend(global_variables);
-    all_columns_listing.extend(status_variables);
-    all_columns = ",".join(all_columns_listing)
-
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_agg_hour AS
-            SELECT
-                MIN(id) AS id, MIN(ts) AS min_ts, MAX(ts) AS max_ts,
-                SUBSTRING_INDEX(SUBSTRING_INDEX('%s', ',', numbers.n), ',', -1) AS variable_name,
-                GROUP_CONCAT(CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(CONCAT_WS(',', %s), ',', numbers.n), ',', -1) AS UNSIGNED) ORDER BY ts ASC) AS variable_values
-            FROM
-                ${database_name}.sv_hour,
-                ${database_name}.numbers
-            WHERE
-                numbers.n >= 1 AND numbers.n <= %d
-            GROUP BY
-                variable_name ASC
-        """ % (all_columns, all_columns, len(all_columns_listing))
-    query = query.replace("${database_name}", database_name)
-    act_query(query)
-
-
-def create_custom_views(view_base_name, view_columns, custom_columns = ""):
-    global_variables, status_variables = get_variables_and_status_columns()
-
-    view_columns_list = [column_name.strip() for column_name in view_columns.lower().split(",")]
-    all_columns_listing = []
-    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in global_variables])
-    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in status_variables])
-    all_columns_listing.extend([" %s_diff" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
-    all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
-    columns_listing = ",\n".join(all_columns_listing)
-    if custom_columns:
-        if view_columns:
-            columns_listing = columns_listing + ",\n "
-        columns_listing = columns_listing + custom_columns
-
-    # This is currently an ugly patch (first one in this code...)
-    # We need to know which custom columns have been created in the "report" views, so that we can later build the
-    # sv_report_minmax_* views.
-    # So we parse the custom columns. We expect one column per line; we allow for aliasing (" as ")
-    # We then store the columns for later use.
-    custom_columns_names_list = [column_name for column_name in custom_columns.lower().split("\n")]
-    custom_columns_names_list = [column_name.split(" as ")[-1].replace(",","").strip() for column_name in custom_columns_names_list]
-    custom_columns_names_list = [column_name for column_name in custom_columns_names_list if column_name]
-    custom_views_columns[view_base_name] = custom_columns_names_list
-
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = MERGE
-        DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_%s_${view_name_extension} AS
-          SELECT
-            id,
-            ts,
-            %s
-          FROM
-            ${database_name}.sv_${view_name_extension}
-    """ % (view_base_name,
-           columns_listing)
-    query = query.replace("${database_name}", database_name)
-
-    for view_name_extension in ["sample", "hour", "day"]:
-        custom_query = query.replace("${view_name_extension}", view_name_extension)
-        act_query(custom_query)
-
-    verbose("%s custom views created" % view_base_name)
 
 
 def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_to_100=False):
@@ -1328,6 +1253,163 @@ def create_report_html_view(charts_aliases):
     act_query(query)
 
     verbose("report html view created")
+
+
+
+def create_status_variables_parameter_change_view():
+    global_variables, diff_columns = get_variables_and_status_columns()
+
+    global_variables_select_listing = ["""
+        SELECT ${status_variables_table_alias}2.ts AS ts, '%s' AS variable_name, ${status_variables_table_alias}1.%s AS old_value, ${status_variables_table_alias}2.%s AS new_value
+        FROM
+          ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}1
+          INNER JOIN ${database_name}.${status_variables_table_name} AS ${status_variables_table_alias}2
+          ON (${status_variables_table_alias}1.id = ${status_variables_table_alias}2.id-GREATEST(1, IFNULL(${status_variables_table_alias}2.auto_increment_increment, 1)))
+        WHERE ${status_variables_table_alias}2.%s != ${status_variables_table_alias}1.%s
+        """ % (column_name, column_name, column_name,
+               column_name, column_name,) for column_name in global_variables if column_name != 'timestamp']
+    global_variables_select_union = " UNION ALL \n".join(global_variables_select_listing)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_parameter_change_union AS
+          %s
+    """ % (global_variables_select_union,)
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${status_variables_table_name}", table_name)
+    query = query.replace("${status_variables_table_alias}", table_name)
+    act_query(query)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_param_change AS
+          SELECT *
+          FROM ${database_name}.sv_parameter_change_union
+          ORDER BY ts, variable_name
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("sv_param_change view created")
+
+
+def create_status_variables_long_format_view():
+    global_variables, status_variables = get_variables_and_status_columns()
+    all_columns_listing = []
+    all_columns_listing.extend(global_variables);
+    all_columns_listing.extend(status_variables);
+    all_columns_listing.extend(["%s_diff" % (column_name,) for column_name in status_variables])
+    all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in status_variables])
+    all_columns = ",".join(all_columns_listing)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_long_hour AS
+            SELECT
+                id, ts,
+                SUBSTRING_INDEX(SUBSTRING_INDEX('%s', ',', numbers.n), ',', -1) AS variable_name,
+                CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(CONCAT_WS(',', %s), ',', numbers.n), ',', -1) AS UNSIGNED) AS variable_value
+            FROM
+                ${database_name}.sv_hour,
+                ${database_name}.numbers
+            WHERE
+                numbers.n >= 1 AND numbers.n <= %d
+            ORDER BY
+                id ASC, variable_name ASC
+        """ % (all_columns, all_columns, len(all_columns_listing))
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+def create_status_variables_aggregated_view():
+    global_variables, status_variables = get_variables_and_status_columns()
+    all_columns_listing = []
+    all_columns_listing.extend(global_variables);
+    all_columns_listing.extend(status_variables);
+    all_columns = ",".join(all_columns_listing)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_agg_hour AS
+            SELECT
+                MIN(id) AS id, MIN(ts) AS min_ts, MAX(ts) AS max_ts,
+                SUBSTRING_INDEX(SUBSTRING_INDEX('%s', ',', numbers.n), ',', -1) AS variable_name,
+                GROUP_CONCAT(CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(CONCAT_WS(',', %s), ',', numbers.n), ',', -1) AS UNSIGNED) ORDER BY ts ASC) AS variable_values
+            FROM
+                ${database_name}.sv_hour,
+                ${database_name}.numbers
+            WHERE
+                numbers.n >= 1 AND numbers.n <= %d
+            GROUP BY
+                variable_name ASC
+        """ % (all_columns, all_columns, len(all_columns_listing))
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+def create_custom_views(view_base_name, view_columns, custom_columns = ""):
+    global_variables, status_variables = get_variables_and_status_columns()
+
+    view_columns_list = [column_name.strip() for column_name in view_columns.lower().split(",")]
+    all_columns_listing = []
+    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in global_variables])
+    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in status_variables])
+    all_columns_listing.extend([" %s_diff" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
+    all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
+    columns_listing = ",\n".join(all_columns_listing)
+    if custom_columns:
+        if view_columns:
+            columns_listing = columns_listing + ",\n "
+        columns_listing = columns_listing + custom_columns
+
+    # This is currently an ugly patch (first one in this code...)
+    # We need to know which custom columns have been created in the "report" views, so that we can later build the
+    # sv_report_minmax_* views.
+    # So we parse the custom columns. We expect one column per line; we allow for aliasing (" as ")
+    # We then store the columns for later use.
+    custom_columns_names_list = [column_name for column_name in custom_columns.lower().split("\n")]
+    custom_columns_names_list = [column_name.split(" as ")[-1].replace(",","").strip() for column_name in custom_columns_names_list]
+    custom_columns_names_list = [column_name for column_name in custom_columns_names_list if column_name]
+    custom_views_columns[view_base_name] = custom_columns_names_list
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = MERGE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_%s_${view_name_extension} AS
+          SELECT
+            id,
+            ts,
+            %s
+          FROM
+            ${database_name}.sv_${view_name_extension}
+    """ % (view_base_name,
+           columns_listing)
+    query = query.replace("${database_name}", database_name)
+
+    for view_name_extension in ["sample", "hour", "day"]:
+        custom_query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(custom_query)
+
+    verbose("%s custom views created" % view_base_name)
 
 
 def create_status_variables_views():
@@ -1542,8 +1624,9 @@ def create_status_variables_views():
             ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2) AS os_loadavg,
             ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1) AS os_cpu_utilization_percent
         """)
+    create_report_24_7_view()
     create_report_recent_views()
-    create_report_recent_minmax_views()
+    create_report_minmax_views()
     create_custom_views("report_human", "", """CONCAT('
 Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_seconds/60) MINUTE, '. Period is ', ROUND(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
 Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
@@ -1659,6 +1742,13 @@ Replication:
         ("seconds_behind_master", "seconds_behind_master", True, True),
         ("seconds_behind_master_psec", "seconds_behind_master_psec", True, False),
         ("estimated_slave_catchup_seconds", "estimated_slave_catchup_seconds", True, False),
+        ])
+    create_report_google_chart_24_7_view([
+        "com_select_psec", 
+        "com_insert_psec", 
+        "com_delete_psec", 
+        "com_update_psec", 
+        "com_replace_psec"
         ])
 
     create_report_html_view("""
