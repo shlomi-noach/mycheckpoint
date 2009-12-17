@@ -423,6 +423,42 @@ def fetch_status_variables():
             verbose("Cannot show master & slave status. Skipping")
             pass
 
+    # OS (linux) load average
+    status_dict["os_loadavg_millis"] = None
+    try:
+        f = open("/proc/loadavg")
+        first_line = f.readline();
+        f.close()
+        
+        tokens = first_line.split()
+        loadavg_1_min = float(tokens[0])
+        loadavg_millis = int(loadavg_1_min * 1000)
+        status_dict["os_loadavg_millis"] = loadavg_millis
+    except:
+        verbose("Cannot read /proc/loadavg")
+        pass
+    
+
+    # OS (linux) CPU
+    status_dict["os_cpu_user"] = None
+    status_dict["os_cpu_nice"] = None
+    status_dict["os_cpu_system"] = None
+    status_dict["os_cpu_idle"] = None
+    try:
+        f = open("/proc/stat")
+        first_line = f.readline();
+        f.close()
+        
+        tokens = first_line.split()
+        os_cpu_user, os_cpu_nice, os_cpu_system, os_cpu_idle = tokens[1:5]
+        status_dict["os_cpu_user"] = int(os_cpu_user)
+        status_dict["os_cpu_nice"] = int(os_cpu_nice)
+        status_dict["os_cpu_system"] = int(os_cpu_system)
+        status_dict["os_cpu_idle"] = int(os_cpu_idle)
+    except:
+        verbose("Cannot read /proc/stat")
+        pass
+    
     return status_dict
 
 
@@ -1459,7 +1495,10 @@ def create_status_variables_views():
             ROUND(100*relay_log_space/NULLIF(relay_log_space_limit, 0), 1) AS relay_log_space_used_percent,
             seconds_behind_master,
             seconds_behind_master_psec,
-            IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)) AS estimated_slave_catchup_seconds
+            IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)) AS estimated_slave_catchup_seconds,
+            
+            ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2) AS os_loadavg,
+            ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1) AS os_cpu_utilization_percent
         """)
     create_report_recent_views()
     create_report_recent_minmax_views()
@@ -1468,6 +1507,10 @@ Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_
 Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
     '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
 
+OS:
+    Load average: ', IFNULL(ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2), 'N/A'), '
+    CPU utilization: ', IFNULL(ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1), 'N/A'), '%
+    
 InnoDB:
     innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
         IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1), 'N/A'), '%
