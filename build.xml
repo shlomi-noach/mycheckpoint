@@ -78,7 +78,7 @@
 		</copy>
 	</target>
 
-	<target name="dist" depends="deb, python-module, script-dist">
+	<target name="dist" depends="clean, deb, python-module, script-dist">
 		<mkdir dir="dist"/>
 		<copy todir="dist">
 			<fileset dir="py-dist"/>
