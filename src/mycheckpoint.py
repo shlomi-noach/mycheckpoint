@@ -535,6 +535,39 @@ def create_status_variables_table():
     return table_created
 
 
+
+def create_metadata_table():
+    query = """
+            DROP TABLE IF EXISTS %s.metadata
+        """ % database_name
+    try:
+        act_query(query)
+    except MySQLdb.Error, e:
+        exit_with_error("Cannot execute %s" % query )
+
+    query = """
+        CREATE TABLE %s.metadata (
+            id TINYINT NOT NULL PRIMARY KEY,
+            revision SMALLINT UNSIGNED NOT NULL,
+            last_deploy TIMESTAMP NOT NULL
+        )
+        """ % database_name
+
+    try:
+        act_query(query)
+        verbose("metadata table created")
+    except MySQLdb.Error, e:
+        exit_with_error("Cannot create table %s.metadata" % database_name)
+
+    query = """
+        REPLACE INTO %s.metadata
+            (id, revision)
+        VALUES
+            (1, %d)
+        """ % (database_name, revision_number)
+    act_query(query)
+
+
 def create_numbers_table():
     query = """
             DROP TABLE IF EXISTS %s.numbers
@@ -596,6 +629,15 @@ def create_charts_api_table():
             (%d, %d, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', '%s')
         """ % (database_name, options.chart_width, options.chart_height, options.chart_service_url.replace("'", "''"))
     act_query(query)
+    
+    
+def get_deployed_revision():
+    try:
+        query = "SELECT SUM(revision) AS revision FROM %s.metadata" % database_name
+        deployed_revision = get_row(query, write_conn)["revision"]
+        return deployed_revision
+    except:
+        return None
 
 
 def upgrade_status_variables_table():
@@ -1676,7 +1718,16 @@ def purge_status_variables():
     if num_affected_rows:
         verbose("Old entries purged")
 
-
+def deploy_schema():
+    create_metadata_table()
+    create_numbers_table()
+    create_charts_api_table()
+    if not create_status_variables_table():
+        upgrade_status_variables_table()
+    create_status_variables_views()
+    verbose("Table and views deployed")
+    
+    
 def exit_with_error(error_message):
     """
     Notify and exit.
@@ -1690,8 +1741,13 @@ try:
         monitored_conn = None
         write_conn = None
         (options, args) = parse_options()
+        
+        revision = "revision.placeholder"
+        if not revision.isdigit():
+            revision = "0"
+        revision_number = int(revision)
 
-        verbose("mycheckpoint. Copyright (c) 2009 by Shlomi Noach")
+        verbose("mycheckpoint rev %d. Copyright (c) 2009 by Shlomi Noach" % revision_number)
 
         database_name = options.database
         table_name = "status_variables"
@@ -1706,14 +1762,20 @@ try:
             exit_with_error("purge-days must be at least 1")
 
         monitored_conn, write_conn = open_connections()
+
+        should_deploy = False
         if "deploy" in args:
-            create_numbers_table()
-            create_charts_api_table()
-            if not create_status_variables_table():
-                upgrade_status_variables_table()
-            create_status_variables_views()
-            verbose("Table and views deployed")
-        else:
+            verbose("Deploy requested. Will deploy")
+            should_deploy = True
+        deployed_revision = get_deployed_revision()
+        if deployed_revision is None or int(deployed_revision) != revision_number:
+            verbose("Non matching deployed revision. Will auto-deploy")
+            should_deploy = True
+            
+        if should_deploy:
+            deploy_schema()
+        
+        if not "deploy" in args:
             collect_status_variables()
             purge_status_variables()
             verbose("Status variables checkpoint complete")
