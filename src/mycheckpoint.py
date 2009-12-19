@@ -547,8 +547,8 @@ def create_metadata_table():
 
     query = """
         CREATE TABLE %s.metadata (
-            id TINYINT NOT NULL PRIMARY KEY,
             revision SMALLINT UNSIGNED NOT NULL,
+            build BIGINT UNSIGNED NOT NULL,
             last_deploy TIMESTAMP NOT NULL
         )
         """ % database_name
@@ -561,10 +561,10 @@ def create_metadata_table():
 
     query = """
         REPLACE INTO %s.metadata
-            (id, revision)
+            (revision, build)
         VALUES
-            (1, %d)
-        """ % (database_name, revision_number)
+            (%d, %d)
+        """ % (database_name, revision_number, build_number)
     act_query(query)
 
 
@@ -631,13 +631,13 @@ def create_charts_api_table():
     act_query(query)
     
     
-def get_deployed_revision():
+def is_same_deploy():
     try:
-        query = "SELECT SUM(revision) AS revision FROM %s.metadata" % database_name
-        deployed_revision = get_row(query, write_conn)["revision"]
-        return deployed_revision
+        query = "SELECT COUNT(*) AS same_deploy FROM %s.metadata WHERE revision = %d AND build = %d" % (database_name, revision_number, build_number)
+        same_deploy = get_row(query, write_conn)["same_deploy"]
+        return (same_deploy > 0)
     except:
-        return None
+        return False
 
 
 def upgrade_status_variables_table():
@@ -1816,7 +1816,7 @@ def deploy_schema():
         upgrade_status_variables_table()
     create_status_variables_views()
     verbose("Table and views deployed")
-    
+        
     
 def exit_with_error(error_message):
     """
@@ -1832,12 +1832,19 @@ try:
         write_conn = None
         (options, args) = parse_options()
         
-        revision = "revision.placeholder"
-        if not revision.isdigit():
-            revision = "0"
-        revision_number = int(revision)
+        # The following are overwritten by the ANT build script, and indicate
+        # the revision number (e.g. SVN) and build number (e.g. timestamp)
+        # In case ANT does not work for some reason, both are assumed to be 0.
+        revision_placeholder = "revision.placeholder"
+        if not revision_placeholder.isdigit():
+            revision_placeholder = "0"
+        revision_number = int(revision_placeholder)
+        build_placeholder = "build.placeholder"
+        if not build_placeholder.isdigit():
+            build_placeholder = "0"
+        build_number = int(build_placeholder)
 
-        verbose("mycheckpoint rev %d. Copyright (c) 2009 by Shlomi Noach" % revision_number)
+        verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009 by Shlomi Noach" % (revision_number, build_number))
 
         database_name = options.database
         table_name = "status_variables"
@@ -1857,8 +1864,8 @@ try:
         if "deploy" in args:
             verbose("Deploy requested. Will deploy")
             should_deploy = True
-        deployed_revision = get_deployed_revision()
-        if deployed_revision is None or int(deployed_revision) != revision_number:
+
+        if not is_same_deploy():
             verbose("Non matching deployed revision. Will auto-deploy")
             should_deploy = True
             
