@@ -75,11 +75,11 @@ def open_connections():
             unix_socket = options.socket,
             db = database_name)
 
-    # If no write host specified, then read+write hosts are the same one...
+    # If no read (monitored) host specified, then read+write hosts are the same one...
     if not options.monitored_host:
         return write_conn, write_conn;
 
-    # Need to open a write connection
+    # Need to open a read connection
     if options.defaults_file:
         monitored_conn = MySQLdb.connect(
             read_default_file = options.defaults_file,
@@ -170,6 +170,20 @@ def prompt_collect_instructions():
     print "--  If not, run again with same configuration, and add 'deploy'. e.g.:"
     print "--  mycheckpoint --host=my_host deploy"
     print "--"
+
+
+def get_monitored_host():
+    monitored_host = options.monitored_host
+    if not monitored_host:
+        monitored_host = options.host
+    return monitored_host
+
+
+def is_local_monitoring():
+    monitored_host = get_monitored_host()
+    if monitored_host in ["localhost", "127.0.0.1"]:
+        return True
+    return False
 
 
 def is_neglectable_variable(variable_name):
@@ -349,7 +363,6 @@ def get_global_variables():
 
 
 
-
 def get_additional_status_variables():
     additional_status_variables = [
         "queries",
@@ -425,39 +438,43 @@ def fetch_status_variables():
 
     # OS (linux) load average
     status_dict["os_loadavg_millis"] = None
-    try:
-        f = open("/proc/loadavg")
-        first_line = f.readline();
-        f.close()
-        
-        tokens = first_line.split()
-        loadavg_1_min = float(tokens[0])
-        loadavg_millis = int(loadavg_1_min * 1000)
-        status_dict["os_loadavg_millis"] = loadavg_millis
-    except:
-        verbose("Cannot read /proc/loadavg")
-        pass
-    
-
     # OS (linux) CPU
     status_dict["os_cpu_user"] = None
     status_dict["os_cpu_nice"] = None
     status_dict["os_cpu_system"] = None
     status_dict["os_cpu_idle"] = None
-    try:
-        f = open("/proc/stat")
-        first_line = f.readline();
-        f.close()
+
+    # Only monitor OS params if we're monitoring the local machine
+    if is_local_monitoring():
+        try:
+            f = open("/proc/loadavg")
+            first_line = f.readline();
+            f.close()
+            
+            tokens = first_line.split()
+            loadavg_1_min = float(tokens[0])
+            loadavg_millis = int(loadavg_1_min * 1000)
+            status_dict["os_loadavg_millis"] = loadavg_millis
+        except:
+            verbose("Cannot read /proc/loadavg")
+            pass
         
-        tokens = first_line.split()
-        os_cpu_user, os_cpu_nice, os_cpu_system, os_cpu_idle = tokens[1:5]
-        status_dict["os_cpu_user"] = int(os_cpu_user)
-        status_dict["os_cpu_nice"] = int(os_cpu_nice)
-        status_dict["os_cpu_system"] = int(os_cpu_system)
-        status_dict["os_cpu_idle"] = int(os_cpu_idle)
-    except:
-        verbose("Cannot read /proc/stat")
-        pass
+        try:
+            f = open("/proc/stat")
+            first_line = f.readline();
+            f.close()
+            
+            tokens = first_line.split()
+            os_cpu_user, os_cpu_nice, os_cpu_system, os_cpu_idle = tokens[1:5]
+            status_dict["os_cpu_user"] = int(os_cpu_user)
+            status_dict["os_cpu_nice"] = int(os_cpu_nice)
+            status_dict["os_cpu_system"] = int(os_cpu_system)
+            status_dict["os_cpu_idle"] = int(os_cpu_idle)
+        except:
+            verbose("Cannot read /proc/stat")
+            pass
+    else:
+        verbose("Non-local monitoring; will not read OS data")
     
     return status_dict
 
@@ -1255,6 +1272,95 @@ def create_report_html_view(charts_aliases):
     verbose("report html view created")
 
 
+def create_report_html_short_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY DEFINER
+        VIEW ${database_name}.sv_report_html_short AS
+          SELECT CONCAT('
+    <html>
+        <head>
+        <title>mycheckpoint short report</title>
+        <meta http-equiv="refresh" content="600" />
+        <style type="text/css">
+            body {
+                background:#FFFFFF none repeat scroll 0% 0%;
+                color:#505050;
+                font-family:Verdana,Arial,Helvetica,sans-serif;
+                font-size:9pt;
+                line-height:1.5;
+            }
+            a {
+                color:#f26522;
+                text-decoration:none;
+            }
+            h2 {
+                font-weight:normal;
+                margin-top:20px;
+            }
+            .nobr {
+                white-space: nowrap;
+            }
+            div.row {
+                width: ${global_width};
+            }
+            div.chart {
+                float: left;
+                white-space: nowrap;
+                margin-right: 10px;
+                width:', charts_api.chart_width, ';
+            }
+            div.chart img {
+                border:0px none;
+                width: ', charts_api.chart_width, ';
+                height: ', charts_api.chart_height, ';
+            }
+            .clear {
+                clear:both;
+                height:1px;
+            }
+        </style>
+        </head>
+        <body>
+            Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                DATE_FORMAT(NOW(),'%b %D %y, %H:%i'), '
+            <br/><br/>
+            <div class="row">
+                <div class="chart"><h2>Innodb read hit percent</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.innodb_read_hit_percent, '"/>'), 'N/A'), '</div>
+                <div class="chart"><h2>Innodb I/O</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.innodb_io, '"/>'), 'N/A'), '</div>
+                <div class="chart"><h2>MySQL I/O</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.bytes_io, '"/>'), 'N/A'), '</div>
+                <div class="clear"></div>
+            </div>
+                
+            <div class="row">
+                <div class="chart"><h2>DML</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.DML, '"/>'), 'N/A'), '</div>
+                <div class="chart"><h2>Questions</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.questions, '"/>'), 'N/A'), '</div>
+                <div class="chart"><h2>Temporary tables</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.tmp_tables, '"/>'), 'N/A'), '</div>
+                <div class="clear"></div>
+            </div>
+                
+            <div class="row">                
+                <div class="chart"><h2>OS CPU utilization</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_cpu_utilization_percent, '"/>'), 'N/A'), '</div>
+                <div class="chart"><h2>OS load average</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_loadavg, '"/>'), 'N/A'), '</div>
+                <div class="chart"><h2>Seconds behind master</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.seconds_behind_master, '"/>'), 'N/A'), '</div>
+                <div class="clear"></div>                
+            </div>
+        </body>
+    </html>
+          ') AS html
+          FROM
+            ${database_name}.sv_report_chart_sample, ${database_name}.charts_api
+        """
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
+    act_query(query)
+
+    verbose("report html short view created")
+
+
 
 def create_status_variables_parameter_change_view():
     global_variables, diff_columns = get_variables_and_status_columns()
@@ -1742,6 +1848,9 @@ Replication:
         ("seconds_behind_master", "seconds_behind_master", True, True),
         ("seconds_behind_master_psec", "seconds_behind_master_psec", True, False),
         ("estimated_slave_catchup_seconds", "estimated_slave_catchup_seconds", True, False),
+        
+        ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True),
+        ("os_loadavg", "os_loadavg", True, False),
         ])
     create_report_google_chart_24_7_view([
         "com_select_psec", 
@@ -1764,6 +1873,7 @@ Replication:
         relay_log_used_mb, seconds_behind_master, seconds_behind_master_psec,
         uptime_percent
         """)
+    create_report_html_short_view()
 
 
 def disable_bin_log():
