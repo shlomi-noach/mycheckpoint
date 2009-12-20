@@ -42,6 +42,7 @@ def parse_options():
     parser.add_option("", "--disable-bin-log", dest="disable_bin_log", action="store_true", default=False, help="Disable binary logging (binary logging enabled by default)")
     parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
+    parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", default=False, help="Monitor OS even if monitored host does is not 127.0.0.1 or localhost. Use when you are certain the monitored host is local")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400, min value: 150)")
     parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Google chart image height (default: 200, min value: 100)")
@@ -182,6 +183,14 @@ def get_monitored_host():
 def is_local_monitoring():
     monitored_host = get_monitored_host()
     if monitored_host in ["localhost", "127.0.0.1"]:
+        return True
+    return False
+
+
+def should_monitor_os():
+    if options.force_os_monitoring:
+        return True
+    if is_local_monitoring():
         return True
     return False
 
@@ -444,8 +453,8 @@ def fetch_status_variables():
     status_dict["os_cpu_system"] = None
     status_dict["os_cpu_idle"] = None
 
-    # Only monitor OS params if we're monitoring the local machine
-    if is_local_monitoring():
+    # We monitor OS params if this is the local machine, or --force-os-monitoring has been specified
+    if should_monitor_os():
         try:
             f = open("/proc/loadavg")
             first_line = f.readline();
