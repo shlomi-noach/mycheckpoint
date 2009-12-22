@@ -1154,13 +1154,18 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
 
     chart_colors = ["ff8c00", "4682b4", "9acd32", "dc143c", "9932cc", "ffd700", "191970", "7fffd4", "808080", "dda0dd"][0:len(chart_columns_list)]
 
+    # '_' is used for missing (== NULL) values.
     column_values = [ """
-            GROUP_CONCAT(SUBSTRING(
-              charts_api.simple_encoding,
-              1+ROUND(
-                61 *
-                (%s - ${least_value_clause})/(${greatest_value_clause} - ${least_value_clause})
-              ), 1)
+            GROUP_CONCAT(
+              IFNULL(
+                SUBSTRING(
+                  charts_api.simple_encoding,
+                  1+ROUND(
+                    61 *
+                    (%s - IFNULL(${least_value_clause}, 0))/(IFNULL(${greatest_value_clause}, 0) - IFNULL(${least_value_clause}, 0))
+                  )
+                , 1)
+              , '_')
               ORDER BY ts ASC
               SEPARATOR ''
             ),
