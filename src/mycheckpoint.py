@@ -452,14 +452,19 @@ def fetch_status_variables():
     status_dict["os_cpu_nice"] = None
     status_dict["os_cpu_system"] = None
     status_dict["os_cpu_idle"] = None
+    # OS Mem
+    status_dict["os_mem_total_kb"] = None
+    status_dict["os_mem_free_kb"] = None
+    status_dict["os_swap_total_kb"] = None
+    status_dict["os_swap_free_kb"] = None
 
     # We monitor OS params if this is the local machine, or --force-os-monitoring has been specified
     if should_monitor_os():
         try:
             f = open("/proc/loadavg")
-            first_line = f.readline();
+            first_line = f.readline()
             f.close()
-            
+
             tokens = first_line.split()
             loadavg_1_min = float(tokens[0])
             loadavg_millis = int(loadavg_1_min * 1000)
@@ -467,12 +472,12 @@ def fetch_status_variables():
         except:
             verbose("Cannot read /proc/loadavg")
             pass
-        
+
         try:
             f = open("/proc/stat")
-            first_line = f.readline();
+            first_line = f.readline()
             f.close()
-            
+
             tokens = first_line.split()
             os_cpu_user, os_cpu_nice, os_cpu_system, os_cpu_idle = tokens[1:5]
             status_dict["os_cpu_user"] = int(os_cpu_user)
@@ -482,9 +487,30 @@ def fetch_status_variables():
         except:
             verbose("Cannot read /proc/stat")
             pass
+
+        try:
+            f = open("/proc/meminfo")
+            lines = f.readlines()
+            f.close()
+
+            for line in lines:
+                tokens = line.split()
+                param_name = tokens[0].replace(":", "").lower()
+                param_value = int(tokens[1])
+                if param_name == "memtotal":
+                    status_dict["os_mem_total_kb"] = param_value
+                elif param_name == "memfree":
+                    status_dict["os_mem_free_kb"] = param_value
+                elif param_name == "swaptotal":
+                    status_dict["os_swap_total_kb"] = param_value
+                elif param_name == "swapfree":
+                    status_dict["os_swap_free_kb"] = param_value
+        except:
+            verbose("Cannot read /proc/meminfo")
+            pass
     else:
         verbose("Non-local monitoring; will not read OS data")
-    
+
     return status_dict
 
 
@@ -655,8 +681,8 @@ def create_charts_api_table():
             (%d, %d, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', '%s')
         """ % (database_name, options.chart_width, options.chart_height, options.chart_service_url.replace("'", "''"))
     act_query(query)
-    
-    
+
+
 def is_same_deploy():
     try:
         query = "SELECT COUNT(*) AS same_deploy FROM %s.metadata WHERE revision = %d AND build = %d" % (database_name, revision_number, build_number)
@@ -789,7 +815,7 @@ def create_status_variables_hour_view():
     global_variables, status_columns = get_variables_and_status_columns()
 
     global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
-    status_columns_listing = ",\n".join([" %s" % (column_name,) for column_name in status_columns])
+    status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
     sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
     avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
     query = """
@@ -821,8 +847,8 @@ def create_status_variables_hour_view():
 def create_status_variables_day_view():
     global_variables, status_columns = get_variables_and_status_columns()
 
-    global_variables_columns_listing = ",\n".join([" MIN(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
-    status_columns_listing = ",\n".join([" %s" % (column_name,) for column_name in status_columns])
+    global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
+    status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
     sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
     avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
     query = """
@@ -856,7 +882,7 @@ def create_report_24_7_view():
     """
     Generate a 24/7 report view
     """
-    
+
     all_columns = custom_views_columns["report"]
     columns_listing = ",\n".join(["AVG(%s) AS %s" % (column_name, column_name,) for column_name in all_columns])
 
@@ -870,7 +896,7 @@ def create_report_24_7_view():
           SELECT
             NULL AS ts,
             WEEKDAY(ts) AS wd,
-            HOUR(ts) AS hr, 
+            HOUR(ts) AS hr,
             %s
           FROM
             ${database_name}.sv_report_sample
@@ -892,11 +918,11 @@ def generate_google_chart_24_7_query(chart_column):
     query = """
           REPLACE(
           CONCAT(
-            charts_api.service_url, '?cht=s&chs=', charts_api.chart_width, 'x', charts_api.chart_height, 
+            charts_api.service_url, '?cht=s&chs=', charts_api.chart_width, 'x', charts_api.chart_height,
             '&chts=303030,12&chtt=${chart_column}&chd=t:',
-            CONCAT_WS('|', 
-              GROUP_CONCAT(ROUND(hr*100/23)), 
-              GROUP_CONCAT(ROUND(wd*100/6)), 
+            CONCAT_WS('|',
+              GROUP_CONCAT(ROUND(hr*100/23)),
+              GROUP_CONCAT(ROUND(wd*100/6)),
               GROUP_CONCAT(ROUND(
                 100*(${chart_column} - LEAST(0, ${chart_column}_min))/(${chart_column}_max - LEAST(0, ${chart_column}_min))
                 ))
@@ -1281,18 +1307,18 @@ def create_report_html_view(charts_aliases):
     verbose("report html view created")
 
 
-def create_report_html_short_view():
+def create_report_html_brief_view():
     query = """
         CREATE
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY DEFINER
-        VIEW ${database_name}.sv_report_html_short AS
+        VIEW ${database_name}.sv_report_html_brief AS
           SELECT CONCAT('
     <html>
         <head>
-        <title>mycheckpoint short report</title>
+        <title>mycheckpoint brief report</title>
         <meta http-equiv="refresh" content="600" />
         <style type="text/css">
             body {
@@ -1343,19 +1369,19 @@ def create_report_html_short_view():
                 <div class="chart"><h2>MySQL I/O</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.bytes_io, '"/>'), 'N/A'), '</div>
                 <div class="clear"></div>
             </div>
-                
+
             <div class="row">
                 <div class="chart"><h2>DML</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.DML, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>Questions</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.questions, '"/>'), 'N/A'), '</div>
                 <div class="chart"><h2>Temporary tables</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.tmp_tables, '"/>'), 'N/A'), '</div>
+                <div class="chart"><h2>Seconds behind master</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.seconds_behind_master, '"/>'), 'N/A'), '</div>
                 <div class="clear"></div>
             </div>
-                
-            <div class="row">                
+
+            <div class="row">
                 <div class="chart"><h2>OS CPU utilization</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_cpu_utilization_percent, '"/>'), 'N/A'), '</div>
                 <div class="chart"><h2>OS load average</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_loadavg, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>Seconds behind master</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.seconds_behind_master, '"/>'), 'N/A'), '</div>
-                <div class="clear"></div>                
+                <div class="chart"><h2>OS Memory</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_memory, '"/>'), 'N/A'), '</div>
+                <div class="clear"></div>
             </div>
         </body>
     </html>
@@ -1367,7 +1393,7 @@ def create_report_html_short_view():
     query = query.replace("${global_width}", str(options.chart_width*3 + 30))
     act_query(query)
 
-    verbose("report html short view created")
+    verbose("report html brief view created")
 
 
 
@@ -1735,9 +1761,15 @@ def create_status_variables_views():
             seconds_behind_master,
             seconds_behind_master_psec,
             IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)) AS estimated_slave_catchup_seconds,
-            
-            ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2) AS os_loadavg,
-            ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1) AS os_cpu_utilization_percent
+
+            ROUND((os_loadavg_millis/1000), 2) AS os_loadavg,
+            ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1) AS os_cpu_utilization_percent,
+            ROUND(os_mem_total_kb/1000, 1) AS os_mem_total_mb,
+            ROUND(os_mem_free_kb/1000, 1) AS os_mem_free_mb,
+            ROUND((os_mem_total_kb-os_mem_free_kb)/1000, 1) AS os_mem_used_mb,
+            ROUND(os_swap_total_kb/1000, 1) AS os_swap_total_mb,
+            ROUND(os_swap_free_kb/1000, 1) AS os_swap_free_mb,
+            ROUND((os_swap_total_kb-os_swap_free_kb)/1000, 1) AS os_swap_used_mb
         """)
     create_report_24_7_view()
     create_report_recent_views()
@@ -1750,7 +1782,9 @@ Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
 OS:
     Load average: ', IFNULL(ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2), 'N/A'), '
     CPU utilization: ', IFNULL(ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1), 'N/A'), '%
-    
+    Memory: ', IFNULL(ROUND((os_mem_total_kb-os_mem_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(os_mem_total_kb/1024, 'N/A'), 'MB
+    Swap: ', IFNULL(ROUND((os_swap_total_kb-os_swap_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(os_swap_total_kb/1024, 'N/A'), 'MB
+
 InnoDB:
     innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
         IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1), 'N/A'), '%
@@ -1857,15 +1891,16 @@ Replication:
         ("seconds_behind_master", "seconds_behind_master", True, True),
         ("seconds_behind_master_psec", "seconds_behind_master_psec", True, False),
         ("estimated_slave_catchup_seconds", "estimated_slave_catchup_seconds", True, False),
-        
+
         ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True),
         ("os_loadavg", "os_loadavg", True, False),
+        ("os_mem_total_mb, os_mem_used_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
         ])
     create_report_google_chart_24_7_view([
-        "com_select_psec", 
-        "com_insert_psec", 
-        "com_delete_psec", 
-        "com_update_psec", 
+        "com_select_psec",
+        "com_insert_psec",
+        "com_delete_psec",
+        "com_update_psec",
         "com_replace_psec"
         ])
 
@@ -1880,9 +1915,12 @@ Replication:
         connections_psec, connections_usage,
         thread_cache_used_percent, threads_created_psec,
         relay_log_used_mb, seconds_behind_master, seconds_behind_master_psec,
-        uptime_percent
+        uptime_percent,
+        os_cpu_utilization_percent,
+        os_loadavg,
+        os_memory
         """)
-    create_report_html_short_view()
+    create_report_html_brief_view()
 
 
 def disable_bin_log():
@@ -1935,8 +1973,8 @@ def deploy_schema():
         upgrade_status_variables_table()
     create_status_variables_views()
     verbose("Table and views deployed")
-        
-    
+
+
 def exit_with_error(error_message):
     """
     Notify and exit.
@@ -1950,7 +1988,7 @@ try:
         monitored_conn = None
         write_conn = None
         (options, args) = parse_options()
-        
+
         # The following are overwritten by the ANT build script, and indicate
         # the revision number (e.g. SVN) and build number (e.g. timestamp)
         # In case ANT does not work for some reason, both are assumed to be 0.
@@ -1987,10 +2025,10 @@ try:
         if not is_same_deploy():
             verbose("Non matching deployed revision. Will auto-deploy")
             should_deploy = True
-            
+
         if should_deploy:
             deploy_schema()
-        
+
         if not "deploy" in args:
             collect_status_variables()
             purge_status_variables()
