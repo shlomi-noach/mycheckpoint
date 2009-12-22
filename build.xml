@@ -13,13 +13,13 @@
 		<delete dir="ant-tmp"/>
 	</target>
 
-	<target name="revnumber">
+	<target name="revnumber" description="Get the SVN greatest revision number">
 		<mkdir dir="ant-tmp"/>
-		<exec dir="." executable="svn" output="ant-tmp/svn_output" failifexecutionfails="false">
+		<exec dir="." executable="svn" output="ant-tmp/svn_output" failifexecutionfails="false" description="Get SVN info for all files recursively">
 			<arg value="info"/>
-			<arg value="--recursive"/>			
+			<arg value="--recursive"/>
 		</exec>
-		<exec dir="." executable="awk" input="ant-tmp/svn_output" outputproperty="svn.revision" failifexecutionfails="false">
+		<exec dir="." executable="awk" input="ant-tmp/svn_output" outputproperty="svn.revision" failifexecutionfails="false" description="Extract highest revision number">
 			<arg value="BEGIN {max=0} /Revision:/ {if ($2 > max) max=$2} END {print max}"/>
 		</exec>
 		<condition property="svn.revision" value="0">
@@ -28,6 +28,7 @@
 			</not>
 		</condition>
 		<delete dir="ant-tmp"/>
+		<tstamp description="To be used as build number"/>
 	</target>
 
 	<target name="scripts">
@@ -38,12 +39,14 @@
 			</fileset>
 			<globmapper from="*.py" to="*"/>
 		</copy>
+		<replace file="build/scripts/mycheckpoint" token="revision.placeholder" value="${svn.revision}"/>
+		<replace file="build/scripts/mycheckpoint" token="build.placeholder" value="${DSTAMP}${TSTAMP}"/>
 	</target>
 
 	<target name="python-module" depends="revnumber, scripts">
 		<mkdir dir="${python.distribution.dir}"/>
 		<copy file="py-dist-cfg/setup.py" todir="build"/>
-		<replace file="build/setup.py" token="svn.revision" value="${svn.revision}"/>
+		<replace file="build/setup.py" token="revision.placeholder" value="${svn.revision}"/>
 		<copy file="py-dist-cfg/MANIFEST.in" todir="build"/>
 		<copy todir="build/">
 			<fileset dir="doc"/>
@@ -63,7 +66,7 @@
 		<copy todir="${debian.distribution.dir}/mycheckpoint/DEBIAN">
 			<fileset dir="deb-dist-cfg/control"/>
 		</copy>
-		<replace file="${debian.distribution.dir}/mycheckpoint/DEBIAN/control" token="svn.revision" value="${svn.revision}"/>
+		<replace file="${debian.distribution.dir}/mycheckpoint/DEBIAN/control" token="revision.placeholder" value="${svn.revision}"/>
 		<copy todir="${debian.distribution.dir}/mycheckpoint/usr/bin">
 			<fileset dir="build/scripts"/>
 		</copy>
@@ -95,5 +98,6 @@
 		<copy todir="dist">
 			<fileset dir="script-dist"/>
 		</copy>
+		<echo>dist: rev ${svn.revision}</echo>
 	</target>
 </project>
