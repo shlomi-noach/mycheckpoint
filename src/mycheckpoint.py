@@ -43,10 +43,11 @@ def parse_options():
     parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
     parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", default=False, help="Monitor OS even if monitored host does is not 127.0.0.1 or localhost. Use when you are certain the monitored host is local")
-    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400, min value: 150)")
     parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Google chart image height (default: 200, min value: 100)")
     parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
+    parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
+    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     return parser.parse_args()
 
 
@@ -455,6 +456,7 @@ def fetch_status_variables():
     # OS Mem
     status_dict["os_mem_total_kb"] = None
     status_dict["os_mem_free_kb"] = None
+    status_dict["os_mem_active_kb"] = None
     status_dict["os_swap_total_kb"] = None
     status_dict["os_swap_free_kb"] = None
 
@@ -501,6 +503,8 @@ def fetch_status_variables():
                     status_dict["os_mem_total_kb"] = param_value
                 elif param_name == "memfree":
                     status_dict["os_mem_free_kb"] = param_value
+                elif param_name == "active":
+                    status_dict["os_mem_active_kb"] = param_value
                 elif param_name == "swaptotal":
                     status_dict["os_swap_total_kb"] = param_value
                 elif param_name == "swapfree":
@@ -1771,6 +1775,7 @@ def create_status_variables_views():
             ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1) AS os_cpu_utilization_percent,
             ROUND(os_mem_total_kb/1000, 1) AS os_mem_total_mb,
             ROUND(os_mem_free_kb/1000, 1) AS os_mem_free_mb,
+            ROUND(os_mem_active_kb/1000, 1) AS os_mem_active_mb,
             ROUND((os_mem_total_kb-os_mem_free_kb)/1000, 1) AS os_mem_used_mb,
             ROUND(os_swap_total_kb/1000, 1) AS os_swap_total_mb,
             ROUND(os_swap_free_kb/1000, 1) AS os_swap_free_mb,
@@ -1787,7 +1792,7 @@ Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
 OS:
     Load average: ', IFNULL(ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2), 'N/A'), '
     CPU utilization: ', IFNULL(ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1), 'N/A'), '%
-    Memory: ', IFNULL(ROUND((os_mem_total_kb-os_mem_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(os_mem_total_kb/1024, 'N/A'), 'MB
+    Memory: ', IFNULL(ROUND((os_mem_total_kb-os_mem_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(os_mem_total_kb/1024, 'N/A'), 'MB (Active: ', IFNULL(os_mem_active_kb/1024, 'N/A'), 'MB)
     Swap: ', IFNULL(ROUND((os_swap_total_kb-os_swap_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(os_swap_total_kb/1024, 'N/A'), 'MB
 
 InnoDB:
@@ -1899,7 +1904,7 @@ Replication:
 
         ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True),
         ("os_loadavg", "os_loadavg", True, False),
-        ("os_mem_total_mb, os_mem_used_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
+        ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
         ])
     create_report_google_chart_24_7_view([
         "com_select_psec",
@@ -2040,7 +2045,8 @@ try:
             verbose("Status variables checkpoint complete")
     except Exception, err:
         print err
-        #traceback.print_exc()
+        if options.debug:
+            traceback.print_exc()
 
         if "deploy" in args:
             prompt_deploy_instructions()
