@@ -1,13 +1,26 @@
-Untar the archive file. In the same path as this README file, execute:
+MySQL-Python installation
+=========================
+You must have the MySQL-Python module installed.
+On Debian/Ubuntu, use:
+	sudo apt-get install python-mysqldb
 
+On RedHat/CentOS, use:
+	sudo yum install MySQL-python
+
+Or get it directly from:
+	http://sourceforge.net/projects/mysql-python/
+
+
+mycheckpoint installation
+=========================
+Untar the archive file. In the same path as this INSTALL file, execute:
 	sudo python setup.py install
 
 or, as user root:
-
 	python setup.py install
 
 On unix like systems, the script will be installed in /usr/bin/
-You must have Python >= 2.3 to install this tool.
+You must have Python >= 2.4 to install this tool.
 
 This tool has not been tested on Windows. There is currently no scheduled plan for that.
 It may work, in which case do let me know!
