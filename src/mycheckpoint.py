@@ -730,7 +730,7 @@ def create_status_variables_latest_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_latest AS
           SELECT
             MAX(id) AS id_latest,
@@ -760,7 +760,7 @@ def create_status_variables_diff_view():
         OR REPLACE
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_diff AS
           SELECT
             ${status_variables_table_name}2.id,
@@ -796,7 +796,7 @@ def create_status_variables_sample_view():
         OR REPLACE
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_sample AS
           SELECT
             id,
@@ -827,7 +827,7 @@ def create_status_variables_hour_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_hour AS
           SELECT
             MIN(id) AS id,
@@ -860,7 +860,7 @@ def create_status_variables_day_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_day AS
           SELECT
             MIN(id) AS id,
@@ -895,7 +895,7 @@ def create_report_24_7_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_24_7 AS
           SELECT
             NULL AS ts,
@@ -949,7 +949,7 @@ def create_report_google_chart_24_7_view(charts_list):
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_chart_24_7 AS
           SELECT
             %s
@@ -971,7 +971,7 @@ def create_report_recent_views():
         OR REPLACE
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_${view_name_extension}_recent AS
           SELECT *
           FROM
@@ -1016,7 +1016,7 @@ def create_report_minmax_views():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_${view_name_extension}_minmax AS
           SELECT
             COUNT(*) AS count_rows,
@@ -1078,7 +1078,7 @@ def create_report_chart_labels_views():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_chart_${view_name_extension}_labels AS
           SELECT
             IFNULL(${x_axis_step_size}, '') AS x_axis_step_size,
@@ -1208,7 +1208,7 @@ def create_report_google_chart_views(charts_list):
             OR REPLACE
             ALGORITHM = TEMPTABLE
             DEFINER = CURRENT_USER
-            SQL SECURITY DEFINER
+            SQL SECURITY INVOKER
             VIEW ${database_name}.sv_report_chart_${view_name_extension} AS
               SELECT
                 %s
@@ -1248,7 +1248,7 @@ def create_report_html_view(charts_aliases):
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_html AS
           SELECT CONCAT('
     <html>
@@ -1322,7 +1322,7 @@ def create_report_html_brief_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_html_brief AS
           SELECT CONCAT('
     <html>
@@ -1425,7 +1425,7 @@ def create_status_variables_parameter_change_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_parameter_change_union AS
           %s
     """ % (global_variables_select_union,)
@@ -1439,7 +1439,7 @@ def create_status_variables_parameter_change_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_param_change AS
           SELECT *
           FROM ${database_name}.sv_parameter_change_union
@@ -1465,7 +1465,7 @@ def create_status_variables_long_format_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_long_hour AS
             SELECT
                 id, ts,
@@ -1495,7 +1495,7 @@ def create_status_variables_aggregated_view():
         OR REPLACE
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_agg_hour AS
             SELECT
                 MIN(id) AS id, MIN(ts) AS min_ts, MAX(ts) AS max_ts,
@@ -1543,7 +1543,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         OR REPLACE
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
-        SQL SECURITY DEFINER
+        SQL SECURITY INVOKER
         VIEW ${database_name}.sv_%s_${view_name_extension} AS
           SELECT
             id,
