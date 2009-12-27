@@ -917,7 +917,7 @@ def create_report_24_7_view():
 
 def generate_google_chart_24_7_query(chart_column):
 
-    chart_color = "ff8c00"
+    chart_color = "4682b4"
 
     query = """
           REPLACE(
@@ -932,7 +932,7 @@ def generate_google_chart_24_7_query(chart_column):
                 ))
             ),
             '&chxt=x,y&chxl=0:|00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|16|17|18|19|20|21|22|23|1:|Mon|Tue|Wed|Thu|Fri|Sat|Sun',
-            '&chm=o,${chart_color},0,-1,10,0'
+            '&chm=o,${chart_color},0,-1,18,0'
           ), ' ', '+') AS ${chart_column}
         """
     query = query.replace("${chart_column}", chart_column)
