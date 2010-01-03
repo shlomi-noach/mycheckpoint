@@ -5,7 +5,7 @@
 #
 # Released under the BSD license
 #
-# Copyright (c) 2009, Shlomi Noach
+# Copyright (c) 2009-2010, Shlomi Noach
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -1907,11 +1907,39 @@ Replication:
         ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
         ])
     create_report_google_chart_24_7_view([
+        "innodb_read_hit_percent",
+        "innodb_buffer_pool_reads_psec",
+        "innodb_buffer_pool_pages_flushed_psec",
+        "innodb_os_log_written_psec",
+        "innodb_row_lock_waits_psec",
+        "mega_bytes_sent_psec",
+        "mega_bytes_received_psec",
+        "key_read_hit_percent",
+        "key_write_hit_percent",
         "com_select_psec",
         "com_insert_psec",
         "com_delete_psec",
         "com_update_psec",
-        "com_replace_psec"
+        "com_replace_psec",
+        "com_set_option_percent",
+        "com_commit_percent",
+        "slow_queries_percent",
+        "select_scan_psec",
+        "select_full_join_psec",
+        "select_range_psec",
+        "table_locks_waited_psec",
+        "opened_tables_psec",
+        "created_tmp_tables_psec",
+        "created_tmp_disk_tables_psec",
+        "connections_psec",
+        "aborted_connects_psec",
+        "threads_created_psec",
+        "seconds_behind_master",
+        "os_loadavg",
+        "os_cpu_utilization_percent",
+        "os_mem_used_mb",
+        "os_mem_active_mb",
+        "os_swap_used_mb",
         ])
 
     create_report_html_view("""
@@ -2031,8 +2059,7 @@ try:
         if "deploy" in args:
             verbose("Deploy requested. Will deploy")
             should_deploy = True
-
-        if not is_same_deploy():
+        elif not is_same_deploy():
             verbose("Non matching deployed revision. Will auto-deploy")
             should_deploy = True
 
