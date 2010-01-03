@@ -1792,8 +1792,8 @@ Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
 OS:
     Load average: ', IFNULL(ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2), 'N/A'), '
     CPU utilization: ', IFNULL(ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1), 'N/A'), '%
-    Memory: ', IFNULL(ROUND((os_mem_total_kb-os_mem_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(os_mem_total_kb/1024, 'N/A'), 'MB (Active: ', IFNULL(os_mem_active_kb/1024, 'N/A'), 'MB)
-    Swap: ', IFNULL(ROUND((os_swap_total_kb-os_swap_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(os_swap_total_kb/1024, 'N/A'), 'MB
+    Memory: ', IFNULL(ROUND((os_mem_total_kb-os_mem_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(ROUND(os_mem_total_kb/1024, 1), 'N/A'), 'MB (Active: ', IFNULL(ROUND(os_mem_active_kb/1024, 1), 'N/A'), 'MB)
+    Swap: ', IFNULL(ROUND((os_swap_total_kb-os_swap_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(ROUND(os_swap_total_kb/1024, 1), 'N/A'), 'MB
 
 InnoDB:
     innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
