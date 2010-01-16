@@ -882,6 +882,103 @@ def create_status_variables_day_view():
 
 
 
+def create_report_human_views():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = MERGE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_report_human_${view_name_extension} AS
+          SELECT
+            id,
+            ts,
+            CONCAT(
+'Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_seconds/60) MINUTE, '. Period is ', ROUND(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
+Uptime: ', uptime_percent,
+    '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
+
+OS:
+    Load average: ', IFNULL(os_loadavg, 'N/A'), '
+    CPU utilization: ', IFNULL(os_cpu_utilization_percent, 'N/A'), '%
+    Memory: ', IFNULL(os_mem_used_mb, 'N/A'), 'MB used out of ', IFNULL(os_mem_total_mb, 'N/A'), 'MB (Active: ', IFNULL(os_mem_active_mb, 'N/A'), 'MB)
+    Swap: ', IFNULL(os_swap_used_mb, 'N/A'), 'MB used out of ', IFNULL(os_swap_total_mb, 'N/A'), 'MB
+
+InnoDB:
+    innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
+        IFNULL(innodb_buffer_pool_used_percent, 'N/A'), '%
+    Read hit: ', IFNULL(innodb_read_hit_percent, 'N/A'), '%
+    Disk I/O: ', innodb_buffer_pool_reads_psec, ' reads/sec  ', innodb_buffer_pool_pages_flushed_psec, ' flushes/sec
+    Estimated log written per hour: ', IFNULL(innodb_estimated_log_mb_written_per_hour, 'N/A'), 'MB
+    Locks: ', innodb_row_lock_waits_psec, '/sec  current: ', innodb_row_lock_current_waits, '
+
+MyISAM key cache:
+    key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 1), 'MB). Used: ', IFNULL(key_buffer_used_percent, 'N/A'), '%
+    Read hit: ', IFNULL(key_read_hit_percent, 'N/A'), '%  Write hit: ', IFNULL(key_write_hit_percent, 'N/A'), '%
+
+DML:
+    SELECT:  ', com_select_psec, '/sec  ', IFNULL(com_select_percent, 'N/A'), '%
+    INSERT:  ', com_insert_psec, '/sec  ', IFNULL(com_insert_percent, 'N/A'), '%
+    UPDATE:  ', com_update_psec, '/sec  ', IFNULL(com_update_percent, 'N/A'), '%
+    DELETE:  ', com_delete_psec, '/sec  ', IFNULL(com_delete_percent, 'N/A'), '%
+    REPLACE: ', com_replace_psec, '/sec  ', IFNULL(com_replace_percent, 'N/A'), '%
+    SET:     ', com_set_option_psec, '/sec  ', IFNULL(com_set_option_percent, 'N/A'), '%
+    COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(com_commit_percent, 'N/A'), '%
+    slow:    ', slow_queries_psec, '/sec  ', IFNULL(slow_queries_percent, 'N/A'), '% (slow time: ',
+        long_query_time ,'sec)
+
+Selects:
+    Full scan: ', select_scan_psec, '/sec  ', IFNULL(select_scan_percent, 'N/A'), '%
+    Full join: ', select_full_join_psec, '/sec  ', IFNULL(select_full_join_percent, 'N/A'), '%
+    Range:     ', select_range_psec, '/sec  ', IFNULL(select_range_percent, 'N/A'), '%
+    Sort merge passes: ', sort_merge_passes_psec, '/sec
+
+Locks:
+    Table locks waited:  ', table_locks_waited_psec, '/sec  ', IFNULL(table_lock_waited_percent, 'N/A'), '%
+
+Tables:
+    Table cache: ', table_cache_size, '. Used: ',
+        IFNULL(table_cache_use_percent, 'N/A'), '%
+    Opened tables: ', opened_tables_psec, '/sec
+
+Temp tables:
+    Max tmp table size:  ', tmp_table_size, ' bytes (', ROUND(tmp_table_size/(1024*1024), 1), 'MB)
+    Max heap table size: ', max_heap_table_size, ' bytes (', ROUND(max_heap_table_size/(1024*1024), 1), 'MB)
+    Created:             ', created_tmp_tables_psec, '/sec
+    Created disk tables: ', created_tmp_disk_tables_psec, '/sec  ', IFNULL(created_disk_tmp_tables_percent, 'N/A'), '%
+
+Connections:
+    Max connections: ', max_connections, '. Max used: ', max_used_connections, '  ',
+        IFNULL(max_connections_used_percent, 'N/A'), '%
+    Connections: ', connections_psec, '/sec
+    Aborted:     ', aborted_connects_psec, '/sec  ', IFNULL(aborted_connections_percent, 'N/A'), '%
+
+Threads:
+    Thread cache: ', thread_cache_size, '. Used: ', IFNULL(thread_cache_used_percent, 'N/A'), '%
+    Created: ', threads_created_psec, '/sec
+
+Replication:
+    Master status file number: ', IFNULL(master_status_file_number, 'N/A'), ', position: ', IFNULL(master_status_position, 'N/A'), '
+    Relay log space limit: ', IFNULL(relay_log_space_limit, 'N/A'), ', used: ', IFNULL(relay_log_space, 'N/A'), '  (',
+        IFNULL(relay_log_space_used_percent, 'N/A'), '%)
+    Seconds behind master: ', IFNULL(seconds_behind_master, 'N/A'), '
+    Estimated time for slave to catch up: ', IFNULL(IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)), 'N/A'), ' seconds (',
+        IFNULL(FLOOR(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec)/(60*60*24)), 'N/A'), ' days, ',
+        IFNULL(SEC_TO_TIME(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) % (60*60*24)), 'N/A'), ' hours)  ETA: ',
+        IFNULL(estimated_slave_catchup_seconds, 'N/A'), '
+') AS report
+          FROM
+            ${database_name}.sv_report_${view_name_extension}
+    """
+    query = query.replace("${database_name}", database_name)
+
+    for view_name_extension in ["sample", "hour", "day"]:
+        custom_query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(custom_query)
+
+    verbose("report human views created")
+
+
 def create_report_24_7_view():
     """
     Generate a 24/7 report view
@@ -977,27 +1074,62 @@ def create_report_recent_views():
           FROM
             ${database_name}.sv_report_${view_name_extension}, ${database_name}.sv_latest
           WHERE
-            ts >= ts_latest - INTERVAL ${recent_interval}
+            ts >= ${recent_timestamp}
         """
     query = query.replace("${database_name}", database_name)
 
-    recent_interval_map = {
-        "sample": "24 HOUR",
-        "hour": "10 DAY",
-        "day": "1 YEAR",
+    # In favour of charts, we round minutes in 10-min groups (e.g. 12:00, 12:10, 12:20, ...), and we therefroe
+    # may include data slightly more than 24 hours ago.
+    # With hour/day reports there's no such problem since nothing is to be rounded.
+    recent_timestamp_map = {
+        "sample": "ts_latest - INTERVAL SECOND(ts_latest) SECOND - INTERVAL (MINUTE(ts_latest) MOD 10) MINUTE - INTERVAL 24 HOUR",
+        "hour": "ts_latest - INTERVAL 10 DAY",
+        "day": "ts_latest - INTERVAL 1 YEAR",
         }
-    for view_name_extension in recent_interval_map:
+    for view_name_extension in recent_timestamp_map:
         custom_query = query
         custom_query = custom_query.replace("${view_name_extension}", view_name_extension)
-        custom_query = custom_query.replace("${recent_interval}", recent_interval_map[view_name_extension])
+        custom_query = custom_query.replace("${recent_timestamp}", recent_timestamp_map[view_name_extension])
         act_query(custom_query)
 
     verbose("recent reports views created")
 
 
+
+def create_report_sample_recent_aggregated_view():
+    all_columns = custom_views_columns["report"]
+    columns_listing = ",\n".join(["AVG(%s) AS %s" % (column_name, column_name,) for column_name in all_columns])
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_report_sample_recent_aggregated AS
+          SELECT
+            MAX(id) AS id,
+            ts
+              - INTERVAL SECOND(ts) SECOND
+              - INTERVAL (MINUTE(ts) %% 10) MINUTE
+              AS ts,
+            %s
+          FROM
+            ${database_name}.sv_report_sample_recent
+          GROUP BY
+            ts
+              - INTERVAL SECOND(ts) SECOND
+              - INTERVAL (MINUTE(ts) %% 10) MINUTE
+        """ % (columns_listing)
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("sv_report_sample_recent_aggregated view created")
+
+
 def create_report_minmax_views():
     """
     Generate min/max values view for the report views.
+    These are used by the chart labels views and the chart views.
     """
     global_variables, status_columns = get_variables_and_status_columns()
 
@@ -1026,15 +1158,118 @@ def create_report_minmax_views():
             %s,
             %s
           FROM
-            ${database_name}.sv_report_${view_name_extension}
+            ${database_name}.sv_report_${input_view_extension}
         """ % (min_columns_listing, max_columns_listing)
     query = query.replace("${database_name}", database_name)
 
-    for view_name_extension in ["sample_recent", "hour_recent", "day_recent", "24_7"]:
-        custom_query = query.replace("${view_name_extension}", view_name_extension)
+    input_views_extensions = {
+        "sample_recent": "sample_recent_aggregated",
+        "hour_recent":   "hour_recent",
+        "day_recent":    "day_recent",
+        "24_7":    "24_7",
+        }
+    for view_name_extension in input_views_extensions:
+        input_view_extension = input_views_extensions[view_name_extension]
+        custom_query = query
+        custom_query = custom_query.replace("${input_view_extension}", input_view_extension)
+        custom_query = custom_query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
 
     verbose("reports minmax views created")
+
+
+def create_report_chart_sample_timeseries_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_report_chart_sample_timeseries AS
+          SELECT
+            numbers.n AS timeseries_key,
+            sv_report_sample_recent_aggregated.*
+          FROM
+            numbers
+            JOIN sv_report_sample_recent_minmax
+            LEFT JOIN sv_report_sample_recent_aggregated ON (
+              ts_min
+                - INTERVAL SECOND(ts_min) SECOND
+                - INTERVAL (MINUTE(ts_min) % 10) MINUTE
+                + INTERVAL (numbers.n*10) MINUTE
+              = ts
+            )
+          WHERE
+            numbers.n <= TIMESTAMPDIFF(MINUTE, ts_min, ts_max)/10 + 1
+            AND ts_min
+              - INTERVAL SECOND(ts_min) SECOND
+              - INTERVAL (MINUTE(ts_min) % 10) MINUTE
+              + INTERVAL (numbers.n*10) MINUTE <= ts_max
+        """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("sv_report_chart_sample_timeseries view created")
+
+
+def create_report_chart_hour_timeseries_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_report_chart_hour_timeseries AS
+          SELECT
+            numbers.n AS timeseries_key,
+            sv_report_hour_recent.*
+          FROM
+            numbers
+            JOIN sv_report_hour_recent_minmax
+            LEFT JOIN sv_report_hour_recent ON (
+              ts_min
+                + INTERVAL numbers.n HOUR
+              = ts
+            )
+          WHERE
+            numbers.n <= TIMESTAMPDIFF(HOUR, ts_min, ts_max) + 1
+            AND ts_min
+              + INTERVAL numbers.n HOUR <= ts_max
+        """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("sv_report_chart_hour_timeseries view created")
+
+
+def create_report_chart_day_timeseries_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_report_chart_day_timeseries AS
+          SELECT
+            numbers.n AS timeseries_key,
+            sv_report_day_recent.*
+          FROM
+            numbers
+            JOIN sv_report_day_recent_minmax
+            LEFT JOIN sv_report_day_recent ON (
+              ts_min
+                + INTERVAL numbers.n DAY
+              = ts
+            )
+          WHERE
+            numbers.n <= TIMESTAMPDIFF(DAY, ts_min, ts_max) + 1
+            AND ts_min
+              + INTERVAL numbers.n DAY <= ts_max
+        """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("sv_report_chart_day_timeseries view created")
 
 
 def create_report_chart_labels_views():
@@ -1068,9 +1303,9 @@ def create_report_chart_labels_views():
         "day":    ("DAY", 1, 52),
         }
     x_axis_map = {
-        "sample": ("ROUND(60*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)", "ROUND((60 - MINUTE(ts_min))*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)"),
-        "hour":   ("ROUND(24*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max), 2)", "ROUND((24 - HOUR(ts_min))*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max) ,2)"),
-        "day":    ("ROUND(7*100/TIMESTAMPDIFF(DAY, ts_min, ts_max), 2)", "ROUND((7 - WEEKDAY(ts_min))*100/TIMESTAMPDIFF(DAY, ts_min, ts_max) ,2)"),
+        "sample": ("ROUND(60*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)", "ROUND(((60 - MINUTE(ts_min)) MOD 60)*100/TIMESTAMPDIFF(MINUTE, ts_min, ts_max), 2)"),
+        "hour":   ("ROUND(24*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max), 2)", "ROUND(((24 - HOUR(ts_min)) MOD 24)*100/TIMESTAMPDIFF(HOUR, ts_min, ts_max) ,2)"),
+        "day":    ("ROUND(7*100/TIMESTAMPDIFF(DAY, ts_min, ts_max), 2)", "ROUND(((7 - WEEKDAY(ts_min)) MOD 7)*100/TIMESTAMPDIFF(DAY, ts_min, ts_max) ,2)"),
         }
 
     query = """
@@ -1087,7 +1322,7 @@ def create_report_chart_labels_views():
               GROUP_CONCAT(
                 IF(${label_function}(${base_ts} + INTERVAL numbers.n ${interval_unit}) % ${labels_step} = 0,
                   LOWER(DATE_FORMAT(${base_ts} + INTERVAL numbers.n ${interval_unit}, '${ts_format}')),
-                '')
+                  '')
                 SEPARATOR '|'),
               '') AS x_axis_labels,
             IFNULL(
@@ -1170,7 +1405,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
                   )
                 , 1)
               , '_')
-              ORDER BY ts ASC
+              ORDER BY timeseries_key ASC
               SEPARATOR ''
             ),
             """ % (column_name) for column_name in chart_columns_list
@@ -1213,7 +1448,7 @@ def create_report_google_chart_views(charts_list):
               SELECT
                 %s
               FROM
-                ${database_name}.sv_report_${view_name_extension}_recent, ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.charts_api, ${database_name}.sv_report_chart_${view_name_extension}_labels
+                ${database_name}.sv_report_chart_${view_name_extension}_timeseries, ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.charts_api, ${database_name}.sv_report_chart_${view_name_extension}_labels
             """ % charts_query
         query = query.replace("${database_name}", database_name)
         query = query.replace("${view_name_extension}", view_name_extension)
@@ -1548,6 +1783,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
           SELECT
             id,
             ts,
+            ts_diff_seconds,
             %s
           FROM
             ${database_name}.sv_${view_name_extension}
@@ -1564,6 +1800,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
 
 def create_status_variables_views():
     global_variables, status_columns = get_variables_and_status_columns()
+    # General status variables views:
     create_status_variables_latest_view()
     create_status_variables_diff_view()
     create_status_variables_sample_view()
@@ -1685,7 +1922,10 @@ def create_status_variables_views():
     #            master_status_position,  master_status_file_number,
     #            Read_Master_Log_Pos, Relay_Log_Pos, Exec_Master_Log_Pos, Relay_Log_Space, Seconds_Behind_Master,
     #        """)
+
+    # Report views:
     create_custom_views("report", "", """
+            uptime,
             LEAST(100, ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1)) AS uptime_percent,
 
             innodb_buffer_pool_size,
@@ -1725,6 +1965,7 @@ def create_status_variables_views():
             ROUND(100*com_set_option_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_set_option_percent,
             ROUND(100*com_commit_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_commit_percent,
             ROUND(100*slow_queries_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS slow_queries_percent,
+            long_query_time,
 
             select_scan_psec,
             select_full_join_psec,
@@ -1732,6 +1973,7 @@ def create_status_variables_views():
             ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 1) AS select_scan_percent,
             ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 1) AS select_full_join_percent,
             ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 1) AS select_range_percent,
+            sort_merge_passes_psec,
 
             table_locks_waited_psec,
             ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1) AS table_lock_waited_percent,
@@ -1741,11 +1983,14 @@ def create_status_variables_views():
             ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1) AS table_cache_use_percent,
             opened_tables_psec,
 
+            tmp_table_size,
+            max_heap_table_size,
             created_tmp_tables_psec,
             created_tmp_disk_tables_psec,
             ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 1) AS created_disk_tmp_tables_percent,
 
             max_connections,
+            max_used_connections,
             ROUND(100*max_used_connections/NULLIF(max_connections, 0), 1) AS max_connections_used_percent,
             connections_psec,
             aborted_connects_psec,
@@ -1783,89 +2028,14 @@ def create_status_variables_views():
         """)
     create_report_24_7_view()
     create_report_recent_views()
+    create_report_sample_recent_aggregated_view()
     create_report_minmax_views()
-    create_custom_views("report_human", "", """CONCAT('
-Report period: ', TIMESTAMP(ts), ' to ', TIMESTAMP(ts) + INTERVAL ROUND(ts_diff_seconds/60) MINUTE, '. Period is ', ROUND(ts_diff_seconds/60), ' minutes (', round(ts_diff_seconds/60/60, 2), ' hours)
-Uptime: ', ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1),
-    '% (Up: ', FLOOR(uptime/(60*60*24)), ' days, ', SEC_TO_TIME(uptime % (60*60*24)), ' hours)
+    create_report_human_views()
 
-OS:
-    Load average: ', IFNULL(ROUND((os_loadavg_millis_psec * ts_diff_seconds)/1000, 2), 'N/A'), '
-    CPU utilization: ', IFNULL(ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1), 'N/A'), '%
-    Memory: ', IFNULL(ROUND((os_mem_total_kb-os_mem_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(ROUND(os_mem_total_kb/1024, 1), 'N/A'), 'MB (Active: ', IFNULL(ROUND(os_mem_active_kb/1024, 1), 'N/A'), 'MB)
-    Swap: ', IFNULL(ROUND((os_swap_total_kb-os_swap_free_kb)/1024, 1), 'N/A'), 'MB used out of ', IFNULL(ROUND(os_swap_total_kb/1024, 1), 'N/A'), 'MB
-
-InnoDB:
-    innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
-        IFNULL(ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1), 'N/A'), '%
-    Read hit: ', IFNULL(ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2), 'N/A'), '%
-    Disk I/O: ', innodb_buffer_pool_reads_psec, ' reads/sec  ', innodb_buffer_pool_pages_flushed_psec, ' flushes/sec
-    Estimated log written per hour: ', IFNULL(ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1), 'N/A'), 'MB
-    Locks: ', innodb_row_lock_waits_psec, '/sec  current: ', innodb_row_lock_current_waits, '
-
-MyISAM key cache:
-    key_buffer_size: ', key_buffer_size, ' bytes (', ROUND(key_buffer_size/1024/1024, 1), 'MB). Used: ',
-        IFNULL(ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1), 'N/A'), '%
-    Read hit: ',
-        IFNULL(ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1), 'N/A'), '%  Write hit: ',
-        IFNULL(ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1), 'N/A'), '%
-
-DML:
-    SELECT:  ', com_select_psec, '/sec  ', IFNULL(ROUND(100*com_select_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
-    INSERT:  ', com_insert_psec, '/sec  ', IFNULL(ROUND(100*com_insert_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
-    UPDATE:  ', com_update_psec, '/sec  ', IFNULL(ROUND(100*com_update_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
-    DELETE:  ', com_delete_psec, '/sec  ', IFNULL(ROUND(100*com_delete_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
-    REPLACE: ', com_replace_psec, '/sec  ', IFNULL(ROUND(100*com_replace_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
-    SET:     ', com_set_option_psec, '/sec  ', IFNULL(ROUND(100*com_set_option_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
-    COMMIT:  ', com_commit_psec, '/sec  ', IFNULL(ROUND(100*com_commit_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '%
-    slow:    ', slow_queries_psec, '/sec  ', IFNULL(ROUND(100*slow_queries_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1), 'N/A'), '% (slow time: ',
-        long_query_time ,'sec)
-
-Selects:
-    Full scan: ', select_scan_psec, '/sec  ', IFNULL(ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
-    Full join: ', select_full_join_psec, '/sec  ', IFNULL(ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
-    Range:     ', select_range_psec, '/sec  ', IFNULL(ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 1), 'N/A'), '%
-    Sort merge passes: ', sort_merge_passes_psec, '/sec
-
-Locks:
-    Table locks waited:  ', table_locks_waited_psec, '/sec  ', IFNULL(ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1), 'N/A'), '%
-
-Tables:
-    Table cache: ', (IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0)), '. Used: ',
-        IFNULL(ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1), 'N/A'), '%
-    Opened tables: ', opened_tables_psec, '/sec
-
-Temp tables:
-    Max tmp table size:  ', tmp_table_size, ' bytes (', ROUND(tmp_table_size/(1024*1024), 1), 'MB)
-    Max heap table size: ', max_heap_table_size, ' bytes (', ROUND(max_heap_table_size/(1024*1024), 1), 'MB)
-    Created:             ', created_tmp_tables_psec, '/sec
-    Created disk tables: ', created_tmp_disk_tables_psec, '/sec  ',
-        IFNULL(ROUND(100*created_tmp_disk_tables_diff/NULLIF(created_tmp_tables_diff, 0), 1), 'N/A'), '%
-
-Connections:
-    Max connections: ', max_connections, '. Max used: ', max_used_connections, '  ',
-        IFNULL(ROUND(100*max_used_connections/NULLIF(max_connections, 0), 1), 'N/A'), '%
-    Connections: ', connections_psec, '/sec
-    Aborted:     ', aborted_connects_psec, '/sec  ',
-        IFNULL(ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 1), 'N/A'), '%
-
-Threads:
-    Thread cache: ', thread_cache_size, '. Used: ',
-        IFNULL(ROUND(100*threads_cached/NULLIF(thread_cache_size, 0), 1), 'N/A'), '%
-    Created: ', threads_created_psec, '/sec
-
-Replication:
-    Master status file number: ', IFNULL(master_status_file_number, 'N/A'), ', position: ', IFNULL(master_status_position, 'N/A'), '
-    Relay log space limit: ', IFNULL(relay_log_space_limit, 'N/A'), ', used: ', IFNULL(relay_log_space, 'N/A'), '  (',
-        IFNULL(ROUND(100*relay_log_space/NULLIF(relay_log_space_limit, 0), 1), 'N/A'), '%)
-    Seconds behind master: ', IFNULL(seconds_behind_master, 'N/A'), '
-    Estimated time for slave to catch up: ', IFNULL(IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)), 'N/A'), ' seconds (',
-        IFNULL(FLOOR(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec)/(60*60*24)), 'N/A'), ' days, ',
-        IFNULL(SEC_TO_TIME(IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) % (60*60*24)), 'N/A'), ' hours)  ETA: ',
-        IFNULL(TIMESTAMP(ts) + INTERVAL IF(seconds_behind_master_psec >= 0, NULL, -seconds_behind_master/seconds_behind_master_psec) SECOND, 'N/A'), '
-') AS report
-        """)
-
+    # Report chart views:
+    create_report_chart_sample_timeseries_view()
+    create_report_chart_hour_timeseries_view()
+    create_report_chart_day_timeseries_view()
     create_report_chart_labels_views()
     create_report_google_chart_views([
         ("uptime_percent", "uptime_percent", True, True),
@@ -1942,6 +2112,7 @@ Replication:
         "os_swap_used_mb",
         ])
 
+    # Report HTML views:
     create_report_html_view("""
         innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_used_percent,
         myisam_key_buffer_used_percent, myisam_key_hit_ratio,
