@@ -187,8 +187,6 @@ def is_local_monitoring():
     monitored_host = get_monitored_host()
     if monitored_host in ["localhost", "127.0.0.1"]:
         return True
-    if monitored_host == extra_dict["hostname"]:
-        return True
     if monitored_host in [socket.getfqdn(), socket.gethostname()]:
         return True
     return False
