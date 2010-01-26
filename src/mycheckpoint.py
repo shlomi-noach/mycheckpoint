@@ -19,9 +19,10 @@
 
 import getpass
 import MySQLdb
-import traceback
+import os
 import sys
 import socket
+import traceback
 from optparse import OptionParser
 
 
@@ -185,6 +186,8 @@ def get_monitored_host():
 def is_local_monitoring():
     monitored_host = get_monitored_host()
     if monitored_host in ["localhost", "127.0.0.1"]:
+        return True
+    if monitored_host == extra_dict["hostname"]:
         return True
     if monitored_host in [socket.getfqdn(), socket.gethostname()]:
         return True
@@ -375,6 +378,43 @@ def get_global_variables():
     return global_variables
 
 
+def get_extra_variables():
+    extra_variables = [
+        "hostname",
+        "datadir",
+        "tmpdir",
+        ]
+    return extra_variables
+
+
+def get_mountpoint_usage_percent(path):
+    """
+    Find the mountpoint for the given path; return the integer number of disk used percent.
+    """
+    mountpoint = os.path.abspath(path)
+    while not os.path.ismount(mountpoint):
+        mountpoint = os.path.split(mountpoint)[0]
+
+    statvfs = os.statvfs(mountpoint)
+    #mount_usage = int(100-100.0*statvfs.f_bavail/statvfs.f_blocks)
+
+    # The following calculation is takes from df.c (part of coreutils)
+    total = statvfs.f_blocks
+    available = statvfs.f_bavail
+    available_to_root = statvfs.f_bfree
+    #negate_available = False
+
+    used = total - available_to_root
+    #negate_used = (total < available_to_root)
+
+    u100 = used * 100
+    nonroot_total = used + available
+    pct = u100 / nonroot_total
+    if u100 % nonroot_total != 0:
+        pct = pct+1
+
+    return pct
+
 
 def get_additional_status_variables():
     additional_status_variables = [
@@ -408,6 +448,7 @@ def fetch_status_variables():
 
     # Listing of interesting global variables:
     global_variables = get_global_variables()
+    extra_variables = get_extra_variables()
     for variable_name in global_variables:
         status_dict[variable_name.lower()] = None
     query = "SHOW GLOBAL VARIABLES"
@@ -417,6 +458,10 @@ def fetch_status_variables():
         variable_value = row["Value"].lower()
         if variable_name in global_variables:
             status_dict[variable_name] = normalize_variable_value(variable_value)
+        elif variable_name in extra_variables:
+            extra_dict[variable_name] = variable_value
+
+    verbose("Global status & variables recorded")
 
     # Master & slave status
     status_dict["master_status_position"] = None
@@ -444,6 +489,7 @@ def fetch_status_variables():
             if slave_status:
                 for variable_name in slave_status_variables:
                     status_dict[variable_name.lower()] = slave_status[variable_name]
+            verbose("Master and slave status recorded")
         except:
             # An exception can be thrown if the user does not have enough privileges:
             verbose("Cannot show master & slave status. Skipping")
@@ -463,21 +509,12 @@ def fetch_status_variables():
     status_dict["os_swap_total_kb"] = None
     status_dict["os_swap_free_kb"] = None
 
+    status_dict["os_root_mountpoint_usage_percent"] = None
+    status_dict["os_datadir_mountpoint_usage_percent"] = None
+    status_dict["os_tmpdir_mountpoint_usage_percent"] = None
+
     # We monitor OS params if this is the local machine, or --force-os-monitoring has been specified
     if should_monitor_os():
-        try:
-            f = open("/proc/loadavg")
-            first_line = f.readline()
-            f.close()
-
-            tokens = first_line.split()
-            loadavg_1_min = float(tokens[0])
-            loadavg_millis = int(loadavg_1_min * 1000)
-            status_dict["os_loadavg_millis"] = loadavg_millis
-        except:
-            verbose("Cannot read /proc/loadavg")
-            pass
-
         try:
             f = open("/proc/stat")
             first_line = f.readline()
@@ -489,8 +526,23 @@ def fetch_status_variables():
             status_dict["os_cpu_nice"] = int(os_cpu_nice)
             status_dict["os_cpu_system"] = int(os_cpu_system)
             status_dict["os_cpu_idle"] = int(os_cpu_idle)
+            verbose("OS CPU info recorded")
         except:
             verbose("Cannot read /proc/stat")
+            pass
+
+        try:
+            f = open("/proc/loadavg")
+            first_line = f.readline()
+            f.close()
+
+            tokens = first_line.split()
+            loadavg_1_min = float(tokens[0])
+            loadavg_millis = int(loadavg_1_min * 1000)
+            status_dict["os_loadavg_millis"] = loadavg_millis
+            verbose("OS load average info recorded")
+        except:
+            verbose("Cannot read /proc/loadavg")
             pass
 
         try:
@@ -512,9 +564,21 @@ def fetch_status_variables():
                     status_dict["os_swap_total_kb"] = param_value
                 elif param_name == "swapfree":
                     status_dict["os_swap_free_kb"] = param_value
+            verbose("OS mem info recorded")
         except:
             verbose("Cannot read /proc/meminfo")
             pass
+
+        # Filesystems:
+        try:
+            status_dict["os_root_mountpoint_usage_percent"] = get_mountpoint_usage_percent("/")
+            status_dict["os_datadir_mountpoint_usage_percent"] = get_mountpoint_usage_percent(extra_dict["datadir"])
+            status_dict["os_tmpdir_mountpoint_usage_percent"] = get_mountpoint_usage_percent(extra_dict["tmpdir"])
+            verbose("OS mountpoints info recorded")
+        except:
+            verbose("Cannot read mountpoints info")
+            pass
+
     else:
         verbose("Non-local monitoring; will not read OS data")
 
@@ -2035,7 +2099,11 @@ def create_status_variables_views():
             ROUND((os_mem_total_kb-os_mem_free_kb)/1000, 1) AS os_mem_used_mb,
             ROUND(os_swap_total_kb/1000, 1) AS os_swap_total_mb,
             ROUND(os_swap_free_kb/1000, 1) AS os_swap_free_mb,
-            ROUND((os_swap_total_kb-os_swap_free_kb)/1000, 1) AS os_swap_used_mb
+            ROUND((os_swap_total_kb-os_swap_free_kb)/1000, 1) AS os_swap_used_mb,
+
+            os_root_mountpoint_usage_percent,
+            os_datadir_mountpoint_usage_percent,
+            os_tmpdir_mountpoint_usage_percent
         """)
     create_report_24_7_view()
     create_report_recent_views()
@@ -2086,6 +2154,8 @@ def create_status_variables_views():
         ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True),
         ("os_loadavg", "os_loadavg", True, False),
         ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
+
+        ("os_root_mountpoint_usage_percent, os_datadir_mountpoint_usage_percent, os_tmpdir_mountpoint_usage_percent", "os_mountpoints_usage_percent", True, True),
         ])
     create_report_google_chart_24_7_view([
         "innodb_read_hit_percent",
@@ -2138,7 +2208,8 @@ def create_status_variables_views():
         uptime_percent,
         os_cpu_utilization_percent,
         os_loadavg,
-        os_memory
+        os_memory,
+        os_mountpoints_usage_percent
         """)
     create_report_html_brief_view()
 
@@ -2226,6 +2297,7 @@ try:
         database_name = options.database
         table_name = "status_variables"
         status_dict = {}
+        extra_dict = {}
         custom_views_columns = {}
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
