@@ -1402,7 +1402,8 @@ def create_report_chart_labels_views():
               '') AS x_axis_labels_positions,
             CONCAT(IF (${stale_error_condition}, 'STALE DATA! ', 'Latest '), ${title_numeric_description}, ' ${title_unit_description}: ',
               DATE_FORMAT(ts_min, '${title_ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${title_ts_format}')) AS chart_time_description,
-            IF (${stale_error_condition}, 'ff0000', '303030') AS chart_title_color
+            IF (${stale_error_condition}, 'ad5200', '303030') AS chart_title_color,
+            IF (${stale_error_condition}, 'fff88f', 'ffffff') AS chart_bg_color
           FROM
             ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.numbers
           WHERE
@@ -1489,7 +1490,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
           REPLACE(
           CONCAT(
             charts_api.service_url, '?cht=lc&chs=', charts_api.chart_width, 'x', charts_api.chart_height, '&chts=', chart_title_color, ',12&chtt=',
-            chart_time_description,
+            chart_time_description, '&chf=c,s,', chart_bg_color,
             '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:', ${concatenated_column_values}
             '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', x_axis_labels, '|&chxs=0,505050,10',
             '&chg=', x_axis_step_size, ',25,1,2,', x_axis_offset, ',0',
