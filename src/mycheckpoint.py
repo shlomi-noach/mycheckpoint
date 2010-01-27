@@ -1392,7 +1392,10 @@ def create_report_chart_labels_views():
               GROUP_CONCAT(
                 IF(${label_function}(${base_ts} + INTERVAL numbers.n ${interval_unit}) % ${labels_step} = 0,
                   LOWER(DATE_FORMAT(${base_ts} + INTERVAL numbers.n ${interval_unit}, '${ts_format}')),
-                  '')
+                  IF(${label_function}(${base_ts} + INTERVAL numbers.n ${interval_unit}) % ${labels_step} = ${labels_step}/2,
+                    ' ', ''
+                  )
+                )
                 SEPARATOR '|'),
               '') AS x_axis_labels,
             IFNULL(
@@ -1469,21 +1472,21 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
 
     # '_' is used for missing (== NULL) values.
     column_values = [ """
-            GROUP_CONCAT(
-              IFNULL(
-                SUBSTRING(
-                  charts_api.simple_encoding,
-                  1+ROUND(
-                    61 *
-                    (%s - IFNULL(${least_value_clause}, 0))/(IFNULL(${greatest_value_clause}, 0) - IFNULL(${least_value_clause}, 0))
-                  )
-                , 1)
-              , '_')
-              ORDER BY timeseries_key ASC
-              SEPARATOR ''
-            ),
-            """ % (column_name) for column_name in chart_columns_list
-        ]
+        GROUP_CONCAT(
+          IFNULL(
+            SUBSTRING(
+              charts_api.simple_encoding,
+              1+ROUND(
+                61 *
+                (%s - IFNULL(${least_value_clause}, 0))/(IFNULL(${greatest_value_clause}, 0) - IFNULL(${least_value_clause}, 0))
+              )
+            , 1)
+          , '_')
+          ORDER BY timeseries_key ASC
+          SEPARATOR ''
+        ),
+        """ % (column_name) for column_name in chart_columns_list
+    ]
     concatenated_column_values = "',',".join(column_values)
 
     query = """
@@ -1492,7 +1495,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
             charts_api.service_url, '?cht=lc&chs=', charts_api.chart_width, 'x', charts_api.chart_height, '&chts=', chart_title_color, ',12&chtt=',
             chart_time_description, '&chf=c,s,', chart_bg_color,
             '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:', ${concatenated_column_values}
-            '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', x_axis_labels, '|&chxs=0,505050,10',
+            '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', x_axis_labels, '|&chxs=0,505050,10,0,lt',
             '&chg=', x_axis_step_size, ',25,1,2,', x_axis_offset, ',0',
             '&chxp=0,', x_axis_labels_positions
           ), ' ', '+') AS ${alias}
