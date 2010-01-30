@@ -381,6 +381,7 @@ def get_extra_variables():
         "hostname",
         "datadir",
         "tmpdir",
+        "version",
         ]
     return extra_variables
 
@@ -682,8 +683,8 @@ def create_metadata_table():
         REPLACE INTO %s.metadata
             (revision, build, mysql_version)
         VALUES
-            (%d, %d, VERSION())
-        """ % (database_name, revision_number, build_number)
+            (%d, %d, '%s')
+        """ % (database_name, revision_number, build_number, get_monitored_host_mysql_version())
     act_query(query)
 
 
@@ -750,9 +751,13 @@ def create_charts_api_table():
     act_query(query)
 
 
+def get_monitored_host_mysql_version():
+    version = get_row("SELECT VERSION() AS version")["version"]
+    return version
+
 def is_same_deploy():
     try:
-        query = "SELECT COUNT(*) AS same_deploy FROM %s.metadata WHERE revision = %d AND build = %d AND mysql_version = VERSION()" % (database_name, revision_number, build_number)
+        query = "SELECT COUNT(*) AS same_deploy FROM %s.metadata WHERE revision = %d AND build = %d AND mysql_version = '%s'" % (database_name, revision_number, build_number, get_monitored_host_mysql_version())
         same_deploy = get_row(query, write_conn)["same_deploy"]
         return (same_deploy > 0)
     except:
