@@ -396,22 +396,19 @@ def get_mountpoint_usage_percent(path):
     statvfs = os.statvfs(mountpoint)
     #mount_usage = int(100-100.0*statvfs.f_bavail/statvfs.f_blocks)
 
-    # The following calculation is takes from df.c (part of coreutils)
-    total = statvfs.f_blocks
-    available = statvfs.f_bavail
-    available_to_root = statvfs.f_bfree
-    #negate_available = False
+    # The following calculation follows df.c (part of coreutils)
+    # statvfs.f_blocks is total blocks
+    # statvfs.f_bavail is available blocks
+    # statvfs.f_bfree is blocks available to root
 
-    used = total - available_to_root
-    #negate_used = (total < available_to_root)
+    used_blocks = statvfs.f_blocks - statvfs.f_bfree
+    nonroot_total_blocks = used_blocks + statvfs.f_bavail
 
-    u100 = used * 100
-    nonroot_total = used + available
-    pct = u100 / nonroot_total
-    if u100 % nonroot_total != 0:
-        pct = pct+1
+    used_percent = 100*used_blocks/nonroot_total_blocks
+    if 100*used_blocks % nonroot_total_blocks != 0:
+        used_percent = used_percent+1
 
-    return pct
+    return used_percent
 
 
 def get_additional_status_variables():
@@ -670,7 +667,8 @@ def create_metadata_table():
         CREATE TABLE %s.metadata (
             revision SMALLINT UNSIGNED NOT NULL,
             build BIGINT UNSIGNED NOT NULL,
-            last_deploy TIMESTAMP NOT NULL
+            last_deploy TIMESTAMP NOT NULL,
+            mysql_version VARCHAR(255) CHARSET ascii NOT NULL
         )
         """ % database_name
 
@@ -682,9 +680,9 @@ def create_metadata_table():
 
     query = """
         REPLACE INTO %s.metadata
-            (revision, build)
+            (revision, build, mysql_version)
         VALUES
-            (%d, %d)
+            (%d, %d, VERSION())
         """ % (database_name, revision_number, build_number)
     act_query(query)
 
@@ -754,7 +752,7 @@ def create_charts_api_table():
 
 def is_same_deploy():
     try:
-        query = "SELECT COUNT(*) AS same_deploy FROM %s.metadata WHERE revision = %d AND build = %d" % (database_name, revision_number, build_number)
+        query = "SELECT COUNT(*) AS same_deploy FROM %s.metadata WHERE revision = %d AND build = %d AND mysql_version = VERSION()" % (database_name, revision_number, build_number)
         same_deploy = get_row(query, write_conn)["same_deploy"]
         return (same_deploy > 0)
     except:
@@ -1405,7 +1403,7 @@ def create_report_chart_labels_views():
               '') AS x_axis_labels_positions,
             CONCAT(IF (${stale_error_condition}, 'STALE DATA! ', 'Latest '), ${title_numeric_description}, ' ${title_unit_description}: ',
               DATE_FORMAT(ts_min, '${title_ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${title_ts_format}')) AS chart_time_description,
-            IF (${stale_error_condition}, 'ad5200', '303030') AS chart_title_color,
+            IF (${stale_error_condition}, '808080', '303030') AS chart_title_color,
             IF (${stale_error_condition}, 'fff88f', 'ffffff') AS chart_bg_color
           FROM
             ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.numbers
@@ -1628,7 +1626,36 @@ def create_report_html_view(charts_aliases):
     verbose("report html view created")
 
 
-def create_report_html_brief_view():
+
+def create_report_html_brief_view(report_charts):
+    charts_sections_list = [chart_section for (chart_section, charts_aliases) in report_charts]
+    chart_aliases_map = " | ".join(["""<a href="#%s">%s</a>""" % (chart_section, chart_section) for chart_section in charts_sections_list if chart_section])
+
+    sections_queries = []
+    for (chart_section, charts_aliases) in report_charts:
+        charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
+        charts_aliases_queries = []
+        for chart_alias in charts_aliases_list:
+            query = """
+                '<div class="chart">
+                    <h3>%s</h3>',
+                    IFNULL(CONCAT('<img src="', %s, '"/>'), 'N/A'),
+                '</div>',
+                """ % (chart_alias.replace("_", " "), chart_alias)
+            query = query.replace("${chart_alias}", chart_alias)
+            charts_aliases_queries.append(query)
+        charts_aliases_query = "".join(charts_aliases_queries)
+        section_query = """'
+            <a name="%s"></a>
+            <h2>%s</h2>
+            <div class="row">',
+                %s
+                '<div class="clear"></div>
+            </div>
+                ',
+            """ % (chart_section, chart_section, charts_aliases_query)
+        sections_queries.append(section_query)
+
     query = """
         CREATE
         OR REPLACE
@@ -1637,84 +1664,73 @@ def create_report_html_brief_view():
         SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_html_brief AS
           SELECT CONCAT('
-    <html>
-        <head>
-        <title>mycheckpoint brief report</title>
-        <meta http-equiv="refresh" content="600" />
-        <style type="text/css">
-            body {
-                background:#FFFFFF none repeat scroll 0% 0%;
-                color:#505050;
-                font-family:Verdana,Arial,Helvetica,sans-serif;
-                font-size:9pt;
-                line-height:1.5;
-            }
-            a {
-                color:#f26522;
-                text-decoration:none;
-            }
-            h2 {
-                font-weight:normal;
-                margin-top:20px;
-            }
-            .nobr {
-                white-space: nowrap;
-            }
-            div.row {
-                width: ${global_width};
-            }
-            div.chart {
-                float: left;
-                white-space: nowrap;
-                margin-right: 10px;
-                width:', charts_api.chart_width, ';
-            }
-            div.chart img {
-                border:0px none;
-                width: ', charts_api.chart_width, ';
-                height: ', charts_api.chart_height, ';
-            }
-            .clear {
-                clear:both;
-                height:1px;
-            }
-        </style>
-        </head>
-        <body>
-            Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
-                DATE_FORMAT(NOW(),'%b %D %Y, %H:%i'), '
-            <br/><br/>
-            <div class="row">
-                <div class="chart"><h2>Innodb read hit percent</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.innodb_read_hit_percent, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>Innodb I/O</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.innodb_io, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>MySQL I/O</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.bytes_io, '"/>'), 'N/A'), '</div>
-                <div class="clear"></div>
-            </div>
-
-            <div class="row">
-                <div class="chart"><h2>DML</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.DML, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>Temporary tables</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.tmp_tables, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>Seconds behind master</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.seconds_behind_master, '"/>'), 'N/A'), '</div>
-                <div class="clear"></div>
-            </div>
-
-            <div class="row">
-                <div class="chart"><h2>OS CPU utilization</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_cpu_utilization_percent, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>OS load average</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_loadavg, '"/>'), 'N/A'), '</div>
-                <div class="chart"><h2>OS Memory</h2>', IFNULL(CONCAT('<img src="', sv_report_chart_sample.os_memory, '"/>'), 'N/A'), '</div>
-                <div class="clear"></div>
-            </div>
-        </body>
-    </html>
+            <html>
+                <head>
+                <title>mycheckpoint brief report</title>
+                <meta http-equiv="refresh" content="600" />
+                <style type="text/css">
+                    body {
+                        background:#FFFFFF none repeat scroll 0% 0%;
+                        color:#505050;
+                        font-family:Verdana,Arial,Helvetica,sans-serif;
+                        font-size:9pt;
+                        line-height:1.5;
+                    }
+                    a {
+                        color:#f26522;
+                        text-decoration:none;
+                    }
+                    h2 {
+                        font-weight:normal;
+                        margin-top:20px;
+                    }
+                    h3 {
+                        font-weight:normal;
+                    }
+                    .nobr {
+                        white-space: nowrap;
+                    }
+                    div.row {
+                        width: ${global_width};
+                    }
+                    div.chart {
+                        float: left;
+                        white-space: nowrap;
+                        margin-right: 10px;
+                        width:', charts_api.chart_width, ';
+                    }
+                    div.chart img {
+                        border:0px none;
+                        width: ', charts_api.chart_width, ';
+                        height: ', charts_api.chart_height, ';
+                    }
+                    .clear {
+                        clear:both;
+                        height:1px;
+                    }
+                </style>
+                </head>
+                <body>
+                    Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                        DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
+                    <br/><br/>
+                    Navigate: ${chart_aliases_map}
+                    <br/>
+                    ',
+                    %s '
+                </body>
+            </html>
           ') AS html
           FROM
             ${database_name}.sv_report_chart_sample, ${database_name}.charts_api
-        """
+        """ % "".join(sections_queries)
     query = query.replace("${database_name}", database_name)
+    query = query.replace("${chart_aliases_map}", chart_aliases_map)
     query = query.replace("${global_width}", str(options.chart_width*3 + 30))
+
     act_query(query)
 
-    verbose("report html brief view created")
+    verbose("sv_report_html_brief created")
 
 
 
@@ -2213,7 +2229,17 @@ def create_status_variables_views():
         os_memory,
         os_mountpoints_usage_percent
         """)
-    create_report_html_brief_view()
+    create_report_html_brief_view([
+            ("InnoDB", "innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec"),
+            ("Questions", "DML, questions, tmp_tables"),
+            ("I/O and files", "bytes_io, opened_tables_psec, threads_created_psec"),
+            ("Caches", "table_cache_use, thread_cache_used_percent"),
+            ("Connections", "connections_psec, connections_usage"),
+            ("MyISAM", "myisam_key_buffer_used_percent, myisam_key_hit_ratio"),
+            ("Locks", "innodb_row_lock_waits_psec, table_locks_waited_psec"),
+            ("Vitals and OS", "seconds_behind_master, uptime_percent, os_memory"),
+            ("", "os_cpu_utilization_percent, os_loadavg, os_mountpoints_usage_percent"),
+        ])
 
 
 def disable_bin_log():
