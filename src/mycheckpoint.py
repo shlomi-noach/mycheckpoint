@@ -2230,14 +2230,11 @@ def create_status_variables_views():
         os_mountpoints_usage_percent
         """)
     create_report_html_brief_view([
-            ("InnoDB", "innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec"),
+            ("InnoDB & I/O", "innodb_read_hit_percent, innodb_io, bytes_io"),
             ("Questions", "DML, questions, tmp_tables"),
-            ("I/O and files", "bytes_io, opened_tables_psec, threads_created_psec"),
-            ("Caches", "table_cache_use, thread_cache_used_percent"),
-            ("Connections", "connections_psec, connections_usage"),
-            ("MyISAM", "myisam_key_buffer_used_percent, myisam_key_hit_ratio"),
-            ("Locks", "innodb_row_lock_waits_psec, table_locks_waited_psec"),
-            ("Vitals and OS", "seconds_behind_master, uptime_percent, os_memory"),
+            ("Resources", "connections_psec, threads_created_psec, opened_tables_psec"),
+            ("Caches", "myisam_key_hit_ratio, thread_cache_used_percent, table_cache_use"),
+            ("Vitals and OS", "seconds_behind_master, os_memory, table_locks_waited_psec"),
             ("", "os_cpu_utilization_percent, os_loadavg, os_mountpoints_usage_percent"),
         ])
 
