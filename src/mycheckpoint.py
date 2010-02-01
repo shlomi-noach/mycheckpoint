@@ -140,8 +140,7 @@ def table_exists(check_database_name, check_table_name):
     """
     See if the a given table exists:
     """
-    count = 0
-
+ 
     query = """
         SELECT COUNT(*) AS count
         FROM INFORMATION_SCHEMA.TABLES
@@ -644,7 +643,7 @@ def create_status_variables_table():
     try:
         act_query(query)
         table_created = True
-    except MySQLdb.Error, e:
+    except MySQLdb.Error:
         pass
 
     if table_created:
@@ -661,7 +660,7 @@ def create_metadata_table():
         """ % database_name
     try:
         act_query(query)
-    except MySQLdb.Error, e:
+    except MySQLdb.Error:
         exit_with_error("Cannot execute %s" % query )
 
     query = """
@@ -676,7 +675,7 @@ def create_metadata_table():
     try:
         act_query(query)
         verbose("metadata table created")
-    except MySQLdb.Error, e:
+    except MySQLdb.Error:
         exit_with_error("Cannot create table %s.metadata" % database_name)
 
     query = """
@@ -694,7 +693,7 @@ def create_numbers_table():
         """ % database_name
     try:
         act_query(query)
-    except MySQLdb.Error, e:
+    except MySQLdb.Error:
         exit_with_error("Cannot execute %s" % query )
 
     query = """
@@ -707,7 +706,7 @@ def create_numbers_table():
     try:
         act_query(query)
         verbose("numbers table created")
-    except MySQLdb.Error, e:
+    except MySQLdb.Error:
         exit_with_error("Cannot create table %s.numbers" % database_name)
 
     numbers_values = ",".join(["(%d)" % n for n in range(0,4096)])
@@ -724,7 +723,7 @@ def create_charts_api_table():
         """ % database_name
     try:
         act_query(query)
-    except MySQLdb.Error, e:
+    except MySQLdb.Error:
         exit_with_error("Cannot execute %s" % query )
 
     query = """
@@ -739,7 +738,7 @@ def create_charts_api_table():
     try:
         act_query(query)
         verbose("charts_api table created")
-    except MySQLdb.Error, e:
+    except MySQLdb.Error:
         exit_with_error("Cannot create table %s.charts_api" % database_name)
 
     query = """
@@ -1199,12 +1198,6 @@ def create_report_minmax_views():
     Generate min/max values view for the report views.
     These are used by the chart labels views and the chart views.
     """
-    global_variables, status_columns = get_variables_and_status_columns()
-
-    #all_columns = []
-    #all_columns.extend(["%s" % (column_name,) for column_name in status_columns])
-    #all_columns.extend(["%s_diff" % (column_name,) for column_name in status_columns])
-    #all_columns.extend(["%s_psec" % (column_name,) for column_name in status_columns])
 
     all_columns = custom_views_columns["report"]
 
@@ -1740,7 +1733,7 @@ def create_report_html_brief_view(report_charts):
 
 
 def create_status_variables_parameter_change_view():
-    global_variables, diff_columns = get_variables_and_status_columns()
+    global_variables, _diff_columns = get_variables_and_status_columns()
 
     global_variables_select_listing = ["""
         SELECT ${status_variables_table_alias}2.ts AS ts, '%s' AS variable_name, ${status_variables_table_alias}1.%s AS old_value, ${status_variables_table_alias}2.%s AS new_value
@@ -1897,7 +1890,6 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
 
 
 def create_status_variables_views():
-    global_variables, status_columns = get_variables_and_status_columns()
     # General status variables views:
     create_status_variables_latest_view()
     create_status_variables_diff_view()
@@ -2251,7 +2243,7 @@ def disable_bin_log():
         query = "SET SESSION SQL_LOG_BIN=0"
         act_query(query)
         verbose("binary logging disabled")
-    except Exception, err:
+    except Exception:
         exit_with_error("Failed to disable binary logging. Either grant the SUPER privilege or use --skip-disable-bin-log")
 
 
