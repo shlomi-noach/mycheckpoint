@@ -1538,7 +1538,7 @@ def create_report_html_view(charts_aliases):
         alias_img_tags_query = """
             '<div class="row">
                 <a name="${chart_alias}"></a>
-                <h2>${chart_alias}</h2>',
+                <h2>${chart_alias} <a href="#">[top]</a></h2>',
                 '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_sample.${chart_alias}, '"/>'), 'N/A'), '</div>',
                 '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_hour.${chart_alias}, '"/>'), 'N/A'), '</div>',
                 '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_day.${chart_alias}, '"/>'), 'N/A'), '</div>',
@@ -1578,6 +1578,10 @@ def create_report_html_view(charts_aliases):
             h2 {
                 font-weight:normal;
                 margin-top:20px;
+            }
+            h2 a {
+                font-weight:normal;
+                font-size: 60%%;
             }
             .nobr {
                 white-space: nowrap;
@@ -1645,7 +1649,7 @@ def create_report_html_brief_view(report_charts):
         charts_aliases_query = "".join(charts_aliases_queries)
         section_query = """'
             <a name="%s"></a>
-            <h2>%s</h2>
+            <h2>%s <a href="#">[top]</a></h2>
             <div class="row">',
                 %s
                 '<div class="clear"></div>
@@ -1681,6 +1685,10 @@ def create_report_html_brief_view(report_charts):
                     h2 {
                         font-weight:normal;
                         margin-top:20px;
+                    }
+                    h2 a {
+                        font-weight:normal;
+                        font-size: 60%%;
                     }
                     h3 {
                         font-weight:normal;
