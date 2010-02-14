@@ -77,7 +77,7 @@
 		<exec dir="deb-dist" executable="dpkg-deb">
 			<arg value="--build"/>
 			<arg value="mycheckpoint"/>
-			<arg value="mycheckpoint-${svn.revision}.deb"/>
+			<arg value="mycheckpoint-${svn.revision}-1.deb"/>
 		</exec>
 	</target>
 
