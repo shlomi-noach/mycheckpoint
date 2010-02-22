@@ -1315,6 +1315,11 @@ def create_report_chart_sample_timeseries_view():
         SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_chart_sample_timeseries AS
           SELECT
+            ts_min
+              - INTERVAL SECOND(ts_min) SECOND
+              - INTERVAL (MINUTE(ts_min) % 10) MINUTE
+              + INTERVAL (numbers.n*10) MINUTE
+              AS timeseries_ts,
             numbers.n AS timeseries_key,
             sv_report_sample_recent_aggregated.*
           FROM
@@ -1349,6 +1354,9 @@ def create_report_chart_hour_timeseries_view():
         SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_chart_hour_timeseries AS
           SELECT
+            ts_min
+              + INTERVAL numbers.n HOUR
+              AS timeseries_ts,
             numbers.n AS timeseries_key,
             sv_report_hour_recent.*
           FROM
@@ -1379,6 +1387,9 @@ def create_report_chart_day_timeseries_view():
         SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_chart_day_timeseries AS
           SELECT
+            ts_min
+              + INTERVAL numbers.n DAY
+              AS timeseries_ts,
             numbers.n AS timeseries_key,
             sv_report_day_recent.*
           FROM
