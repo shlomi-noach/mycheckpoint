@@ -1,0 +1,3 @@
+[mycheckpoint]
+smtp_host = localhost
+smtp_from = root@localhost
