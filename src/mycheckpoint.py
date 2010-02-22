@@ -17,6 +17,7 @@
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import ConfigParser
 import getpass
 import MySQLdb
 import os
@@ -25,6 +26,11 @@ import socket
 import traceback
 import warnings
 from optparse import OptionParser
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 
 
 def parse_options():
@@ -45,10 +51,14 @@ def parse_options():
     parser.add_option("", "--disable-bin-log", dest="disable_bin_log", action="store_true", default=False, help="Disable binary logging (binary logging enabled by default)")
     parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
-    parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", default=False, help="Monitor OS even if monitored host does is not 127.0.0.1 or localhost. Use when you are certain the monitored host is local")
+    parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", default=False, help="Monitor OS even if monitored host does does nto appear to be the local host. Use when you are certain the monitored host is local")
     parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400, min value: 150)")
     parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Google chart image height (default: 200, min value: 100)")
     parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
+    parser.add_option("", "--smtp-host", dest="smtp_host", default=None, help="SMTP mail server host name or IP")
+    parser.add_option("", "--smtp-from", dest="smtp_from", default=None, help="Address to use as mail sender")
+    parser.add_option("", "--smtp-to", dest="smtp_to", default=None, help="Comma delimited email addresses to send emails to")
+    parser.add_option("", "--email-brief-report", dest="email_brief_report", action="store_true", default=False, help="Send HTML brief report via mail")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     return parser.parse_args()
@@ -418,8 +428,8 @@ def get_additional_status_variables():
         "open_table_definitions",
         "opened_table_definitions",
     ]
-    # custom_status_variables = ["custom%02d" % (i+1) for i in range(32)]
-    # additional_status_variables.extend(custom_status_variables)
+    custom_status_variables = ["custom_%x" % i for i in range(16)]
+    additional_status_variables.extend(custom_status_variables)
     
     return additional_status_variables
 
@@ -752,6 +762,59 @@ def create_charts_api_table():
             (%d, %d, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', '%s')
         """ % (database_name, options.chart_width, options.chart_height, options.chart_service_url.replace("'", "''"))
     act_query(query)
+
+
+def create_alert_condition_table():
+    query = """
+        CREATE TABLE IF NOT EXISTS %s.alert_condition (
+            alert_condition_id INT UNSIGNED AUTO_INCREMENT,
+            enabled TINYINT NOT NULL DEFAULT 1,
+            condition_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL,
+            description VARCHAR(255) CHARSET utf8 COLLATE utf8_bin DEFAULT NULL,
+            error_level ENUM('debug', 'info', 'warning', 'error', 'critical') NOT NULL DEFAULT 'error',
+            alert_delay_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (alert_condition_id)
+        )
+        """ % database_name
+
+    try:
+        act_query(query)
+        verbose("alert_condition table created")
+    except MySQLdb.Error:
+        if options.debug:
+            traceback.print_exc()
+        exit_with_error("Cannot create table %s.alert_condition" % database_name)
+
+
+
+def create_alert_condition_query_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.alert_condition_query_view AS
+          SELECT
+            CONCAT(
+              'SELECT ',
+              GROUP_CONCAT(
+                CONCAT(condition_eval, ' AS condition_', alert_condition_id) 
+                SEPARATOR ' ,'),
+              ' FROM sv_report_sample
+              ORDER BY id DESC 
+              LIMIT 1;'
+            ) AS query
+          FROM
+            ${database_name}.alert_condition
+        """
+    query = query.replace("${database_name}", database_name)
+
+    try:
+        act_query(query)
+        verbose("alert_condition query view created")
+    except MySQLdb.Error:
+        exit_with_error("Cannot create view %s.alert_condition_query_view" % database_name)
 
 
 def get_monitored_host_mysql_version():
@@ -1652,6 +1715,9 @@ def create_report_html_brief_view(report_charts):
             charts_aliases_queries.append(query)
         charts_aliases_query = "".join(charts_aliases_queries)
         
+        chart_section_anchor = chart_section 
+        if not chart_section:
+            chart_section_anchor = "section_%d" % len(sections_queries)
         section_query = """'
             <a name="%s"></a>
             <h2>%s <a href="#">[top]</a></h2>
@@ -1661,7 +1727,7 @@ def create_report_html_brief_view(report_charts):
                 '<div class="clear"></div>
             </div>
                 ',
-            """ % (chart_section, chart_section, charts_aliases_query)
+            """ % (chart_section_anchor, chart_section, charts_aliases_query)
         sections_queries.append(section_query)
 
     query = """
@@ -1723,6 +1789,7 @@ def create_report_html_brief_view(report_charts):
                 </style>
                 </head>
                 <body>
+                    <a name=""></a>
                     Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
                         DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
                     <br/><br/>
@@ -2251,6 +2318,73 @@ def create_status_variables_views():
         ])
 
 
+def get_smtp_host():
+    if options.smtp_host:
+        return options.smtp_host
+    if config.has_option(config_scope, "smtp_host"):
+        return config.get(config_scope, "smtp_host")
+    return "localhost"
+
+
+def get_smtp_from():
+    if options.smtp_from:
+        return options.smtp_from
+    if config.has_option(config_scope, "smtp_from"):
+        return config.get(config_scope, "smtp_from")
+    return "mycheckpoint@localhost"
+
+
+def get_smtp_to():
+    if options.smtp_to:
+        return options.smtp_to
+    if config.has_option(config_scope, "smtp_to"):
+        return config.get(config_scope, "smtp_to")
+    return "mycheckpoint@localhost"
+
+
+def email_brief_report():
+    try:
+        smtp_to = get_smtp_to().replace(" ","")
+        smtp_from = get_smtp_from()
+        smtp_host = get_smtp_host()
+
+        # Create the container (outer) email message.
+        msg = MIMEMultipart()
+        msg["Subject"] = "mycheckpoint brief report: %s" % database_name
+        msg["From"] = smtp_from 
+        msg["To"] = smtp_to
+        
+        message_text_content = """Attached: mycheckpoint brief HTML report for database: %s
+    
+You are receiving this email from a mycheckpoint -- MySQL monitoring utility -- installation.
+Please consult your system or database administrator if you do not know why you got this mail.
+-------
+mycheckpoint home page: http://code.openark.org/forge/mycheckpoint
+            """ % database_name
+        msg.preamble = message_text_content
+        
+        query = "SELECT html FROM %s.sv_report_html_brief" % database_name
+        brief_report = get_row(query)["html"]
+        
+        attachment = MIMEText(brief_report, _subtype="html")
+        attachment.add_header("Content-Disposition", "attachment", filename="mycheckpoint_brief_report_%s.html" % database_name)
+        msg.attach(attachment)
+        
+        text_message = MIMEText(message_text_content)
+        msg.attach(text_message)
+    
+        verbose("Sending HTML brief report from %s to: %s via: %s" % (smtp_from, smtp_to, smtp_host))
+        # Send the email via our own SMTP server.
+        s = smtplib.SMTP(smtp_host)
+        s.sendmail(smtp_from, smtp_to, msg.as_string())
+        s.quit()
+        verbose("+ Sent")
+    except:
+        print_error("Failed sending email")
+        if options.debug:
+            traceback.print_exc()
+            
+
 def disable_bin_log():
     if not options.disable_bin_log:
         return
@@ -2299,6 +2433,8 @@ def deploy_schema():
     create_charts_api_table()
     if not create_status_variables_table():
         upgrade_status_variables_table()
+    create_alert_condition_table()
+    create_alert_condition_query_view()
     create_status_variables_views()
     verbose("Table and views deployed")
 
@@ -2328,8 +2464,12 @@ try:
         if not build_placeholder.isdigit():
             build_placeholder = "0"
         build_number = int(build_placeholder)
+        
+        config_scope = "mycheckpoint"
+        config = ConfigParser.ConfigParser()
+        config.read(["/etc/mycheckpoint/mycheckpoint.cnf"])
 
-        verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009 by Shlomi Noach" % (revision_number, build_number))
+        verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009-2010 by Shlomi Noach" % (revision_number, build_number))
 
         warnings.simplefilter("ignore", MySQLdb.Warning) 
         database_name = options.database
@@ -2357,11 +2497,16 @@ try:
 
         if should_deploy:
             deploy_schema()
-
-        if not "deploy" in args:
+            
+        if not args:
             collect_status_variables()
             purge_status_variables()
             verbose("Status variables checkpoint complete")
+        else:
+            verbose("Will not monitor the database")
+
+        if options.email_brief_report:
+            email_brief_report()
     except Exception, err:
         print err
         if options.debug:
