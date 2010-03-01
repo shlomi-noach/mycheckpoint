@@ -31,6 +31,23 @@
 		<tstamp description="To be used as build number"/>
 		<echo>revision: ${svn.revision}</echo>
 	</target>
+	
+	<target name="dygraphs">
+		<mkdir dir="build/dygraphs"/>
+		<mkdir dir="build/dygraphs/tmp"/>
+		<concat destfile="build/dygraphs/tmp/dygraphs-concat.js">
+			<filelist>
+				<file name="dygraphs/dygraph-canvas.js"/>
+				<file name="dygraphs/dygraph.js"/>
+				<file name="dygraphs/rgbcolor/rgbcolor.js"/>
+				<file name="dygraphs/strftime/strftime-min.js"/>
+			</filelist>
+		</concat>
+		<java dir="build/dygraphs/tmp" jar="dygraphs/yuicompressor-2.4.2.jar" fork="true" output="build/dygraphs/dygraph-combined.js">
+			<arg value="dygraphs-concat.js"/>
+		</java>
+		<delete dir="build/dygraphs/tmp"/>
+	</target>
 
 	<target name="scripts">
 		<mkdir dir="build/scripts"/>
