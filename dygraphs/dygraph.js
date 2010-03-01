@@ -65,7 +65,7 @@ Dygraph = function(div, data, opts) {
 };
 
 Dygraph.NAME = "Dygraph";
-Dygraph.VERSION = "1.2";
+Dygraph.VERSION = "1.2.0.1";
 Dygraph.__repr__ = function() {
   return "[" + this.NAME + " " + this.VERSION + "]";
 };
@@ -82,8 +82,8 @@ Dygraph.AXIS_LINE_WIDTH = 0.3;
 // Default attribute values.
 Dygraph.DEFAULT_ATTRS = {
   highlightCircleSize: 3,
-  pixelsPerXLabel: 60,
-  pixelsPerYLabel: 30,
+  pixelsPerXLabel: 40,
+  pixelsPerYLabel: 15,
 
   labelsDivWidth: 250,
   labelsDivStyles: {
@@ -93,13 +93,14 @@ Dygraph.DEFAULT_ATTRS = {
   labelsKMB: false,
   labelsKMG2: false,
 
-  strokeWidth: 1.0,
+  strokeWidth: 1.4,
 
   axisTickSize: 3,
-  axisLabelFontSize: 14,
+  axisLabelFontSize: 10,
   xAxisLabelWidth: 50,
-  yAxisLabelWidth: 50,
+  yAxisLabelWidth: 36,
   rightGap: 5,
+  includeZero: true,
 
   showRoller: false,
   xValueFormatter: Dygraph.dateString_,
@@ -116,6 +117,7 @@ Dygraph.DEFAULT_ATTRS = {
   customBars: false,
   fillGraph: false,
   fillAlpha: 0.15,
+  colors: ['#ff8c00', '#4682b4', '#9acd32', '#dc143c', '#9932cc'],
 
   stackedGraph: false,
   hideOverlayOnMouseOut: true
@@ -394,8 +396,8 @@ Dygraph.prototype.createInterface_ = function() {
     dygraph.mouseMove_(e);
   });
   Dygraph.addEvent(this.hidden_, 'mouseout', function(e) {
-    dygraph.mouseOut_(e);
-  });
+	    dygraph.mouseOut_(e);
+	  });
 
   // Create the grapher
   // TODO(danvk): why does the Layout need its own set of options?
@@ -473,37 +475,6 @@ Dygraph.prototype.createPlotKitCanvas_ = function(canvas) {
   return h;
 };
 
-// Taken from MochiKit.Color
-Dygraph.hsvToRGB = function (hue, saturation, value) {
-  var red;
-  var green;
-  var blue;
-  if (saturation === 0) {
-    red = value;
-    green = value;
-    blue = value;
-  } else {
-    var i = Math.floor(hue * 6);
-    var f = (hue * 6) - i;
-    var p = value * (1 - saturation);
-    var q = value * (1 - (saturation * f));
-    var t = value * (1 - (saturation * (1 - f)));
-    switch (i) {
-      case 1: red = q; green = value; blue = p; break;
-      case 2: red = p; green = value; blue = t; break;
-      case 3: red = p; green = q; blue = value; break;
-      case 4: red = t; green = p; blue = value; break;
-      case 5: red = value; green = p; blue = q; break;
-      case 6: // fall through
-      case 0: red = value; green = t; blue = p; break;
-    }
-  }
-  red = Math.floor(255 * red + 0.5);
-  green = Math.floor(255 * green + 0.5);
-  blue = Math.floor(255 * blue + 0.5);
-  return 'rgb(' + red + ',' + green + ',' + blue + ')';
-};
-
 
 /**
  * Generate a set of distinct colors for the data series. This is done with a
@@ -518,22 +489,11 @@ Dygraph.prototype.setColors_ = function() {
   var num = this.attr_("labels").length - 1;
   this.colors_ = [];
   var colors = this.attr_('colors');
-  if (!colors) {
-    var sat = this.attr_('colorSaturation') || 1.0;
-    var val = this.attr_('colorValue') || 0.5;
-    for (var i = 1; i <= num; i++) {
-      if (!this.visibility()[i-1]) continue;
-      // alternate colors for high contrast.
-      var idx = i - parseInt(i % 2 ? i / 2 : (i - num)/2, 10);
-      var hue = (1.0 * idx/ (1 + num));
-      this.colors_.push(Dygraph.hsvToRGB(hue, sat, val));
-    }
-  } else {
-    for (var i = 0; i < num; i++) {
-      if (!this.visibility()[i]) continue;
-      var colorStr = colors[i % colors.length];
-      this.colors_.push(colorStr);
-    }
+
+  for (var i = 0; i < num; i++) {
+    if (!this.visibility()[i]) continue;
+    var colorStr = colors[i % colors.length];
+    this.colors_.push(colorStr);
   }
 
   // TODO(danvk): update this w/r/t/ the new options system.
@@ -617,6 +577,37 @@ Dygraph.prototype.createStatusMessage_ = function(){
     this.attrs_.labelsDiv = div;
   }
 };
+
+
+/**
+ * Create the div that contains information on the selected point(s)
+ * This goes in the top right of the canvas, unless an external div has already
+ * been specified.
+ * @private
+ */
+Dygraph.prototype.drawLegend_ = function(){
+  if (this.attr_("labelsDiv")) {
+	  this.setColors_();
+	  var labels = this.attr_("labels");
+	  var clen = this.colors_.length;
+
+	  var startDate, endDate;
+	  var axisRange = this.xAxisRange();
+	  var replace = "<ul>";
+      replace += "<li>" +this.attr_('xValueFormatter')(axisRange[0], this) + " - " + this.attr_('xValueFormatter')(axisRange[1], this);
+	  for (var i = 1; i < labels.length; i++) {
+		    if (!this.visibility()[i - 1]) continue;
+	    var c = new RGBColor(this.colors_[(i-1)%clen]);
+	    replace += ' <li style="color: ' + c.toHex() + '">'
+	  		    + '<div style="display: inline">'
+	            + labels[i] + "</div> ";
+	  }
+	  replace += "</ul>";
+	  this.attr_("labelsDiv").innerHTML = replace;
+  }
+};
+
+
 
 /**
  * Create the text box to adjust the averaging period
@@ -935,19 +926,22 @@ Dygraph.prototype.mouseMove_ = function(event) {
     var canvasx = this.selPoints_[0].canvasx;
 
     // Set the status message to indicate the selected point(s)
-    var replace = this.attr_('xValueFormatter')(lastx, this) + ":";
+    var replace = "<ul>";
+    replace += '<li>'+this.attr_('xValueFormatter')(lastx, this);
     var clen = this.colors_.length;
     for (var i = 0; i < this.selPoints_.length; i++) {
-      if (!isOK(this.selPoints_[i].canvasy)) continue;
-      if (this.attr_("labelsSeparateLines")) {
-        replace += "<br/>";
-      }
+      var displayValue = "not available"; 
       var point = this.selPoints_[i];
+      if (isOK(this.selPoints_[i].canvasy))
+    	  displayValue = this.round_(point.yval, 2);
+
       var c = new RGBColor(this.colors_[i%clen]);
-      replace += " <b><font color='" + c.toHex() + "'>"
-              + point.name + "</font></b>:"
-              + this.round_(point.yval, 2);
+      replace += ' <li style="color: ' + c.toHex() + '">'
+      		  + '<div style="display: inline">'
+              + point.name + ": </div> "
+              + displayValue;
     }
+    replace += "</ul>";
     this.attr_("labelsDiv").innerHTML = replace;
 
     // Save last x position for callbacks.
@@ -979,9 +973,11 @@ Dygraph.prototype.mouseOut_ = function(event) {
     // Get rid of the overlay data
     var ctx = this.canvas_.getContext("2d");
     ctx.clearRect(0, 0, this.width_, this.height_);
-    this.attr_("labelsDiv").innerHTML = "";
+    //this.attr_("labelsDiv").innerHTML = "";
+    this.drawLegend_();
   }
 };
+
 
 Dygraph.zeropad = function(x) {
   if (x < 10) return "0" + x; else return "" + x;
@@ -1027,7 +1023,7 @@ Dygraph.dateString_ = function(date, self) {
   var frac = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
   if (frac) ret = " " + self.hmsString_(date);
 
-  return year + "/" + month + "/" + day + ret;
+  return year + "-" + month + "-" + day + ret;
 };
 
 /**
@@ -1088,15 +1084,16 @@ Dygraph.TEN_MINUTELY = 8;
 Dygraph.THIRTY_MINUTELY = 9;
 Dygraph.HOURLY = 10;
 Dygraph.TWO_HOURLY = 11;
-Dygraph.SIX_HOURLY = 12;
-Dygraph.DAILY = 13;
-Dygraph.WEEKLY = 14;
-Dygraph.MONTHLY = 15;
-Dygraph.QUARTERLY = 16;
-Dygraph.BIANNUAL = 17;
-Dygraph.ANNUAL = 18;
-Dygraph.DECADAL = 19;
-Dygraph.NUM_GRANULARITIES = 20;
+Dygraph.FOUR_HOURLY = 12;
+Dygraph.SIX_HOURLY = 13;
+Dygraph.DAILY = 14;
+Dygraph.WEEKLY = 15;
+Dygraph.MONTHLY = 16;
+Dygraph.QUARTERLY = 17;
+Dygraph.BIANNUAL = 18;
+Dygraph.ANNUAL = 19;
+Dygraph.DECADAL = 20;
+Dygraph.NUM_GRANULARITIES = 21;
 
 Dygraph.SHORT_SPACINGS = [];
 Dygraph.SHORT_SPACINGS[Dygraph.SECONDLY]        = 1000 * 1;
@@ -1111,6 +1108,7 @@ Dygraph.SHORT_SPACINGS[Dygraph.TEN_MINUTELY]    = 1000 * 60 * 10;
 Dygraph.SHORT_SPACINGS[Dygraph.THIRTY_MINUTELY] = 1000 * 60 * 30;
 Dygraph.SHORT_SPACINGS[Dygraph.HOURLY]          = 1000 * 3600;
 Dygraph.SHORT_SPACINGS[Dygraph.TWO_HOURLY]      = 1000 * 3600 * 2;
+Dygraph.SHORT_SPACINGS[Dygraph.FOUR_HOURLY]      = 1000 * 3600 * 4;
 Dygraph.SHORT_SPACINGS[Dygraph.SIX_HOURLY]      = 1000 * 3600 * 6;
 Dygraph.SHORT_SPACINGS[Dygraph.DAILY]           = 1000 * 86400;
 Dygraph.SHORT_SPACINGS[Dygraph.WEEKLY]          = 1000 * 604800;
@@ -1151,7 +1149,7 @@ Dygraph.prototype.GetXAxis = function(start_time, end_time, granularity) {
   if (granularity < Dygraph.MONTHLY) {
     // Generate one tick mark for every fixed interval of time.
     var spacing = Dygraph.SHORT_SPACINGS[granularity];
-    var format = '%d%b';  // e.g. "1Jan"
+    var format = '%b %d';  // e.g. "1Jan"
 
     // Find a time less than start_time which occurs on a "nice" time boundary
     // for this granularity.
@@ -1491,7 +1489,7 @@ Dygraph.prototype.drawGraph_ = function(data) {
   } else {
     // This affects the calculation of span, below.
     if (this.attr_("includeZero") && minY > 0) {
-      minY = 0;
+        minY = 0;
     }
 
     // Add some padding and round up to an integer to be human-friendly.
@@ -1524,9 +1522,7 @@ Dygraph.prototype.drawGraph_ = function(data) {
   this.canvas_.getContext('2d').clearRect(0, 0, this.canvas_.width,
                                          this.canvas_.height);
 
-  if (this.attr_("drawCallback") !== null) {
-    this.attr_("drawCallback")(this, is_initial_draw);
-  }
+  this.drawLegend_();
 };
 
 /**
@@ -1681,11 +1677,6 @@ Dygraph.dateParser = function(dateStr, self) {
       dateStrSlashed = dateStrSlashed.replace("-", "/");
     }
     d = Date.parse(dateStrSlashed);
-  } else if (dateStr.length == 8) {  // e.g. '20090712'
-    // TODO(danvk): remove support for this format. It's confusing.
-    dateStrSlashed = dateStr.substr(0,4) + "/" + dateStr.substr(4,2)
-                       + "/" + dateStr.substr(6,2);
-    d = Date.parse(dateStrSlashed);
   } else {
     // Any format that Date.parse will accept, e.g. "2009/07/12" or
     // "2009/07/12 12:34:56"
@@ -1709,9 +1700,6 @@ Dygraph.prototype.detectTypeFromString_ = function(str) {
   if (str.indexOf('-') >= 0 ||
       str.indexOf('/') >= 0 ||
       isNaN(parseFloat(str))) {
-    isDate = true;
-  } else if (str.length == 8 && str > '19700101' && str < '20371231') {
-    // TODO(danvk): remove support for this format.
     isDate = true;
   }
 
@@ -2110,6 +2098,54 @@ Dygraph.prototype.resize = function(width, height) {
 
   this.createInterface_();
   this.drawGraph_(this.rawData_);
+};
+
+
+/**
+ * Resizes the dygraph. If no parameters are specified, resizes to fill the
+ * containing div (which has presumably changed size since the dygraph was
+ * instantiated. If the width/height are specified, the div will be resized.
+ *
+ * This is far more efficient than destroying and re-instantiating a
+ * Dygraph, since it doesn't have to reparse the underlying data.
+ *
+ * @param {Number} width Width (in pixels)
+ * @param {Number} height Height (in pixels)
+ */
+Dygraph.prototype.toggleMaximize = function() {
+	var chartDiv = this.attr_("chartDiv");
+    if (this.maximized_)
+    {
+    	// Undo modal
+    	chartDiv.style.width = this.chartDivWidth_; 
+    	chartDiv.style.height = this.chartDivHeight_; 
+    	chartDiv.style.position = "static";
+    	chartDiv.style.backgroundColor = "transparent";
+    	chartDiv.style.padding = "0px";
+    	chartDiv.style.zIndex = "auto";
+    	document.body.style.overflow="visible";
+        this.resize(this.unmaximizedWidth_, this.unmaximizedHeight_);
+        this.maximized_ = false;
+    }
+    else
+    {
+    	// Do Modal
+    	this.chartDivWidth_ = chartDiv.style.width; 
+    	this.chartDivHeight_ = chartDiv.style.height; 
+    	this.unmaximizedWidth_ = this.width_; 
+    	this.unmaximizedHeight_ = this.height_; 
+    	chartDiv.style.position = "absolute";
+    	chartDiv.style.backgroundColor = "#ffffff";
+    	chartDiv.style.padding = "16px";
+    	chartDiv.style.zIndex = "32";
+    	chartDiv.style.width = (document.all ? document.body.clientWidth : window.innerWidth);
+    	chartDiv.style.height = (document.all ? document.body.clientHeight : window.innerHeight);
+        chartDiv.style.top = document.body.scrollTop;
+    	chartDiv.style.left = "0";
+    	document.body.style.overflow="hidden";
+        this.resize(this.width_*2, this.height_*2);
+        this.maximized_ = true;
+    }
 };
 
 /**
