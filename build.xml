@@ -40,11 +40,14 @@
 				<file name="dygraphs/dygraph-canvas.js"/>
 				<file name="dygraphs/dygraph.js"/>
 				<file name="dygraphs/rgbcolor/rgbcolor.js"/>
-				<file name="dygraphs/strftime/strftime-min.js"/>
+				<file name="dygraphs/strftime/strftime.js"/>
 			</filelist>
 		</concat>
-		<java dir="build/dygraphs/tmp" jar="dygraphs/yuicompressor-2.4.2.jar" fork="true" output="build/dygraphs/dygraph-combined.js">
-			<arg value="dygraphs-concat.js"/>
+		<java jar="dygraphs/yuicompressor-2.4.2.jar" fork="true" output="build/dygraphs/dygraph-combined.js">
+			<arg value="build/dygraphs/tmp/dygraphs-concat.js"/>
+		</java>
+		<java jar="dygraphs/yuicompressor-2.4.2.jar" fork="true" output="build/dygraphs/excanvas-min.js">
+			<arg value="dygraphs/excanvas.js"/>
 		</java>
 		<delete dir="build/dygraphs/tmp"/>
 	</target>
