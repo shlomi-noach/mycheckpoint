@@ -14,6 +14,6 @@ setup(
         "scripts/mycheckpoint",
         ],
     data_files=[
-            ("/etc/mycheckpoint", ["etc/mycheckpoint/mycheckpoint.cnf"])
+            ("/etc", ["etc/mycheckpoint.cnf"])
         ]
 )

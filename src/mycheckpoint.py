@@ -2981,7 +2981,10 @@ try:
             build_placeholder = "0"
         build_number = int(build_placeholder)
 
-        defaults_file_name = "/etc/mycheckpoint/mycheckpoint.cnf"
+        if options.defaults_file:
+            defaults_file_name = options.defaults_file
+        else:
+            defaults_file_name = "/etc/mycheckpoint.cnf"
         config_scope = "mycheckpoint"
         config = ConfigParser.ConfigParser()
         config.read([defaults_file_name])
