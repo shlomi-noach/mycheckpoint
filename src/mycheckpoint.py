@@ -29,12 +29,12 @@ from optparse import OptionParser
 
 import smtplib
 try:
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
+    MIMEText = __import__("email.mime.text", globals(), locals(), ["MIMEText"]).MIMEText
+    MIMEMultipart = __import__("email.mime.multipart", globals(), locals(), ["MIMEMultipart"]).MIMEMultipart
 except:
     try:
-        from email import MIMEText
-        from email import MIMEMultipart
+        MIMEText = __import__("email", globals(), locals(), ["MIMEText"]).MIMEText
+        MIMEMultipart = __import__("email", globals(), locals(), ["MIMEMultipart"]).MIMEMultipart
     except:
         pass
 
