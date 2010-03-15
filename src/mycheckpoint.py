@@ -28,13 +28,25 @@ import warnings
 from optparse import OptionParser
 
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+try:
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+except:
+    try:
+        from email import MIMEText
+        from email import MIMEMultipart
+    except:
+        pass
 
 
 
 def parse_options():
-    usage = "usage: mycheckpoint [options] [deploy]"
+    usage = """usage: mycheckpoint [options] [command [, command ...]]
+
+Available commands:
+  deploy
+  email_brief_report
+    """
     parser = OptionParser(usage=usage)
     parser.add_option("-u", "--user", dest="user", default="", help="MySQL user")
     parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL host. Written to by this application (default: localhost)")
@@ -52,13 +64,14 @@ def parse_options():
     parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
     parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
     parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", default=False, help="Monitor OS even if monitored host does does nto appear to be the local host. Use when you are certain the monitored host is local")
-    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Google chart image width (default: 400, min value: 150)")
-    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Google chart image height (default: 200, min value: 100)")
+    parser.add_option("", "--skip-alerts", dest="skip_alerts", action="store_true", default=False, help="Skip evaluating alert conditions as well as sending email notifications")
+    parser.add_option("", "--skip-emails", dest="skip_emails", action="store_true", default=False, help="Skip sending email notifications")
+    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Chart image width (default: 400, min value: 150)")
+    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Chart image height (default: 200, min value: 100)")
     parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
     parser.add_option("", "--smtp-host", dest="smtp_host", default=None, help="SMTP mail server host name or IP")
     parser.add_option("", "--smtp-from", dest="smtp_from", default=None, help="Address to use as mail sender")
     parser.add_option("", "--smtp-to", dest="smtp_to", default=None, help="Comma delimited email addresses to send emails to")
-    parser.add_option("", "--email-brief-report", dest="email_brief_report", action="store_true", default=False, help="Send HTML brief report via mail")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     return parser.parse_args()
@@ -103,20 +116,27 @@ def open_connections():
             unix_socket = options.monitored_socket)
     else:
         monitored_conn = MySQLdb.connect(
-            host = options.monitored_host,
             user = options.user,
             passwd = password,
+            host = options.monitored_host,
             port = options.monitored_port,
             unix_socket = options.monitored_socket)
 
     return monitored_conn, write_conn;
 
 
-def act_query(query):
+def init_connections():
+    query = """SET @@group_concat_max_len = GREATEST(@@group_concat_max_len, 65535)"""
+    act_query(query, monitored_conn)
+    act_query(query, write_conn)
+
+
+def act_query(query, connection=None):
     """
     Run the given query, commit changes
     """
-
+    if connection is None:
+        connection = write_conn
     connection = write_conn
     cursor = connection.cursor()
     num_affected_rows = cursor.execute(query)
@@ -147,22 +167,10 @@ def get_rows(query, connection=None):
     return rows
 
 
-def table_exists(check_database_name, check_table_name):
-    """
-    See if the a given table exists:
-    """
- 
-    query = """
-        SELECT COUNT(*) AS count
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA='%s'
-            AND TABLE_NAME='%s'
-        """ % (check_database_name, check_table_name)
-
+def get_last_insert_id():
+    query = "SELECT LAST_INSERT_ID() AS id"
     row = get_row(query, write_conn)
-    count = int(row['count'])
-
-    return count
+    return int(row["id"])
 
 
 def prompt_deploy_instructions():
@@ -538,7 +546,6 @@ def fetch_status_variables():
             verbose("OS CPU info recorded")
         except:
             verbose("Cannot read /proc/stat")
-            pass
 
         try:
             f = open("/proc/loadavg")
@@ -552,7 +559,6 @@ def fetch_status_variables():
             verbose("OS load average info recorded")
         except:
             verbose("Cannot read /proc/loadavg")
-            pass
 
         try:
             f = open("/proc/meminfo")
@@ -576,7 +582,6 @@ def fetch_status_variables():
             verbose("OS mem info recorded")
         except:
             verbose("Cannot read /proc/meminfo")
-            pass
 
         # Filesystems:
         try:
@@ -586,7 +591,6 @@ def fetch_status_variables():
             verbose("OS mountpoints info recorded")
         except:
             verbose("Cannot read mountpoints info")
-            pass
 
     else:
         verbose("Non-local monitoring; will not read OS data")
@@ -767,13 +771,14 @@ def create_charts_api_table():
 def create_alert_condition_table():
     query = """
         CREATE TABLE IF NOT EXISTS %s.alert_condition (
-            alert_condition_id INT UNSIGNED AUTO_INCREMENT,
-            enabled TINYINT NOT NULL DEFAULT 1,
-            condition_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL,
-            description VARCHAR(255) CHARSET utf8 COLLATE utf8_bin DEFAULT NULL,
-            error_level ENUM('debug', 'info', 'warning', 'error', 'critical') NOT NULL DEFAULT 'error',
-            alert_delay_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-            PRIMARY KEY (alert_condition_id)
+          alert_condition_id INT UNSIGNED AUTO_INCREMENT,
+          enabled BOOL NOT NULL DEFAULT 1,
+          condition_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL,
+          description VARCHAR(255) CHARSET utf8 COLLATE utf8_bin DEFAULT NULL,
+          error_level ENUM('debug', 'info', 'warning', 'error', 'critical') NOT NULL DEFAULT 'error',
+          alert_delay_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+          repetitive_alert BOOL NOT NULL DEFAULT 0,
+          PRIMARY KEY (alert_condition_id)
         )
         """ % database_name
 
@@ -785,6 +790,248 @@ def create_alert_condition_table():
             traceback.print_exc()
         exit_with_error("Cannot create table %s.alert_condition" % database_name)
 
+
+def create_alert_table():
+    query = """
+        CREATE TABLE IF NOT EXISTS %s.alert (
+          `alert_id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+          `alert_condition_id` INT(11) UNSIGNED NOT NULL,
+          `sv_report_sample_id` INT(11) DEFAULT NULL,
+          PRIMARY KEY (`alert_id`),
+          UNIQUE KEY `alert_condition_sv_report_sample` (`sv_report_sample_id`, `alert_condition_id`),
+          KEY `alert_condition_id` (`alert_condition_id`)
+        )
+        """ % database_name
+
+    try:
+        act_query(query)
+        verbose("alert table created")
+    except MySQLdb.Error:
+        if options.debug:
+            traceback.print_exc()
+        exit_with_error("Cannot create table %s.alert" % database_name)
+
+
+def create_alert_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.alert_view AS
+          SELECT
+            alert_condition.alert_condition_id,
+            sv_report_sample.id AS sv_report_sample_id,
+            TRIM(alert_condition.condition_eval) AS condition_eval,
+            TRIM(alert_condition.description) AS description,
+            alert_condition.error_level AS error_level,
+            sv_report_sample.ts AS ts
+          FROM
+            ${database_name}.alert
+            JOIN ${database_name}.alert_condition ON (alert_condition.alert_condition_id = alert.alert_condition_id)
+            JOIN ${database_name}.sv_report_sample ON (alert.sv_report_sample_id = sv_report_sample.id)
+          ORDER BY 
+            alert.sv_report_sample_id, alert.alert_condition_id
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("alert_view created")
+
+
+def create_alert_pending_table():
+    query = """
+        CREATE TABLE IF NOT EXISTS %s.alert_pending (
+          `alert_pending_id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+          `alert_condition_id` INT(11) UNSIGNED NOT NULL,
+          `sv_report_sample_id_start` INT(11) DEFAULT NULL,
+          `sv_report_sample_id_end` INT(11) DEFAULT NULL,
+          ts_notified DATETIME DEFAULT NULL,
+          PRIMARY KEY (`alert_pending_id`),
+          UNIQUE KEY (`alert_condition_id`)
+        )
+        """ % database_name
+
+    try:
+        act_query(query)
+        verbose("alert_pending table created")
+    except MySQLdb.Error:
+        if options.debug:
+            traceback.print_exc()
+        exit_with_error("Cannot create table %s.alert_pending" % database_name)
+
+
+def create_alert_pending_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.alert_pending_view AS
+          SELECT
+            alert_pending.alert_pending_id AS alert_pending_id,
+            alert_condition.alert_condition_id AS alert_condition_id,
+            TRIM(alert_condition.condition_eval) AS condition_eval,
+            TRIM(alert_condition.description) AS description,
+            alert_condition.error_level AS error_level,
+            alert_condition.alert_delay_minutes AS alert_delay_minutes,
+            sv_report_sample_start.ts AS ts_start,
+            sv_report_sample_end.ts AS ts_end,
+            (TIMESTAMPDIFF(SECOND, sv_report_sample_start.ts, sv_report_sample_end.ts)+3) DIV 60 AS elapsed_minutes, 
+            (TIMESTAMPDIFF(SECOND, sv_report_sample_start.ts, sv_report_sample_end.ts)+3) DIV 60 >= alert_delay_minutes AS in_error,
+            alert_pending.ts_notified IS NOT NULL AS is_notified,
+            alert_pending.ts_notified AS ts_notified,
+            alert_condition.repetitive_alert AS repetitive_alert 
+          FROM
+            ${database_name}.alert_pending
+            JOIN ${database_name}.alert_condition ON (alert_pending.alert_condition_id = alert_condition.alert_condition_id)
+            JOIN ${database_name}.sv_report_sample AS sv_report_sample_start ON (alert_pending.sv_report_sample_id_start = sv_report_sample_start.id)
+            JOIN ${database_name}.sv_report_sample AS sv_report_sample_end ON (alert_pending.sv_report_sample_id_end = sv_report_sample_end.id)
+          ORDER BY
+            in_error DESC,
+            error_level DESC,
+            elapsed_minutes DESC,
+            alert_condition_id ASC
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("alert_pending_view created")
+
+
+def create_alert_pending_html_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.alert_pending_html_view AS
+          SELECT
+            CONCAT('
+    <html>
+        <head>
+        <title>mycheckpoint pending alerts</title>
+        <meta http-equiv="refresh" content="600" />
+        <style type="text/css">
+            body {
+                background:#FFFFFF none repeat scroll 0% 0%;
+                color:#505050;
+                font-family:Verdana,Arial,Helvetica,sans-serif;
+                font-size:9pt;
+                line-height:1.5;
+            }
+            a {
+                color:#f26522;
+                text-decoration:none;
+            }
+            .nobr {
+                white-space: nowrap;
+            }
+            div.table {
+                display: table;
+                border: 1px solid #d0d0d0;
+            }
+            div.row {
+                display: table-row;
+            }
+            div.header {
+                font-weight: bold;
+            }
+            .italic {
+                font-style: italic;
+            }
+            div.row div {
+                display: table-cell;
+                border: 1px solid #d0d0d0;
+                margin: 3px;
+                padding: 3px;
+            }
+            .el_debug {
+                color: #000000;
+                background-color: #ffffff;
+            }
+            .el_info {
+                color: #ffffff;
+                background-color: #0000ff;
+            }
+            .el_warning {
+                color: #000000;
+                background-color: #ffff00;
+            }
+            .el_error {
+                color: #ffffff;
+                background-color: #ff0000;
+            }
+            .el_critical {
+                color: #ffffff;
+                background-color: #000000;
+            }
+        </style>
+        </head>
+        <body>
+            Pending alerts report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                DATE_FORMAT(NOW(),'%b %D %Y, %H:%i'), '
+            <br/><br/>
+            <div class="table">
+                <div class="row header">
+                  <div>Error level</div> 
+                  <div>Description</div> 
+                  <div>Alert start time</div> 
+                  <div>Elapsed minutes</div> 
+                  <div>Notification time</div>
+                </div> 
+                ',
+                GROUP_CONCAT(
+                  CONCAT(
+                    '<div class="row">',
+                      '<div class="el_', error_level, '">', error_level, '</div>', 
+                      '<div>', description, '</div>', 
+                      '<div>', ts_start, '</div>', 
+                      '<div>', elapsed_minutes, '</div>', 
+                      '<div', IF(ts_notified IS NULL, ' class="italic"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start+ INTERVAL alert_delay_minutes MINUTE)), '</div>', 
+                    '</div>')
+                  SEPARATOR '')
+                ,'
+            </div>
+        </body>
+    </html>
+            ') AS html
+          FROM
+            alert_pending_view
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("alert_pending_html_view created")
+
+
+def create_alert_email_message_items_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.alert_email_message_items_view AS
+          SELECT
+            alert_pending_id,
+            CONCAT(
+              UPPER(error_level), ': ', description, '
+    This ', error_level, ' alert is pending for ', elapsed_minutes, ' minutes, since ', ts_start              
+            ) AS message_item
+          FROM
+            ${database_name}.alert_pending_view
+          WHERE
+            in_error > 0
+            AND ((is_notified = 0) OR (repetitive_alert != 0))
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("alert_email_message_items_view created")
 
 
 def create_alert_condition_query_view():
@@ -801,12 +1048,14 @@ def create_alert_condition_query_view():
               GROUP_CONCAT(
                 CONCAT(condition_eval, ' AS condition_', alert_condition_id) 
                 SEPARATOR ' ,'),
-              ' FROM sv_report_sample
+              ' FROM ${database_name}.sv_report_sample
               ORDER BY id DESC 
               LIMIT 1;'
             ) AS query
           FROM
             ${database_name}.alert_condition
+          WHERE
+            enabled = 1
         """
     query = query.replace("${database_name}", database_name)
 
@@ -815,6 +1064,153 @@ def create_alert_condition_query_view():
         verbose("alert_condition query view created")
     except MySQLdb.Error:
         exit_with_error("Cannot create view %s.alert_condition_query_view" % database_name)
+
+
+def generate_alert_condition_query():
+    query = """
+            SELECT 
+              alert_condition_id, condition_eval 
+            FROM 
+              ${database_name}.alert_condition
+            WHERE
+              enabled = 1
+        """
+    query = query.replace("${database_name}", database_name)
+    rows = get_rows(query)
+    if not rows:
+        return (None, None)
+    
+    alert_condition_ids = [int(row["alert_condition_id"]) for row in rows]
+
+    query_conditions = ["%s AS condition_%d" % (row["condition_eval"], int(row["alert_condition_id"])) for row in rows]
+    query = """
+        SELECT
+          id, 
+          %s 
+        FROM
+          ${database_name}.sv_report_sample
+        ORDER BY 
+          id DESC
+        LIMIT 1
+      """ % ",".join(query_conditions)
+    query = query.replace("${database_name}", database_name)
+    return alert_condition_ids, query
+
+
+def write_alert(alert_condition_id, report_sample_id):
+    query = """
+        INSERT /*! IGNORE */ INTO 
+          ${database_name}.alert (alert_condition_id, sv_report_sample_id) 
+        VALUES 
+          (%d, %d)
+        """ % (alert_condition_id, report_sample_id)
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+
+def write_alert_pending(alert_condition_id, report_sample_id):
+    query = """
+        INSERT INTO 
+          ${database_name}.alert_pending (alert_condition_id, sv_report_sample_id_start, sv_report_sample_id_end) 
+        VALUES 
+          (%d, %d, %d)
+        ON DUPLICATE KEY UPDATE
+          sv_report_sample_id_end = %d
+        """ % (alert_condition_id, report_sample_id, report_sample_id, report_sample_id)
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+    
+    
+def remove_non_pending_alerts(report_sample_id):
+    query = """
+        DELETE FROM 
+            ${database_name}.alert_pending
+        WHERE
+          sv_report_sample_id_end < %d
+        """ % report_sample_id
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+def mark_notified_pending_alerts(notified_pending_alert_ids):    
+    if not notified_pending_alert_ids:
+        return
+
+    query = """
+        UPDATE 
+          ${database_name}.alert_pending
+        SET 
+          ts_notified = NOW()
+        WHERE 
+          alert_pending_id IN (%s)
+        """ % ",".join(["%d" % notified_pending_alert_id for notified_pending_alert_id in notified_pending_alert_ids])
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+
+def check_alerts():
+    if options.skip_alerts:
+        verbose("Skipping alerts")
+        return
+
+    alert_condition_ids, query = generate_alert_condition_query()
+    if not alert_condition_ids:
+        verbose("No alert conditions defined")
+        return
+    
+    row = get_row(query, write_conn)
+    report_sample_id = int(row["id"])
+    num_alerts = 0
+    
+    for alert_condition_id in alert_condition_ids:
+        condition_result = row["condition_%d" % alert_condition_id]
+        if condition_result is not None:
+            if int(condition_result) != 0:
+                write_alert(alert_condition_id, report_sample_id)
+                write_alert_pending(alert_condition_id, report_sample_id)
+                num_alerts += 1
+    remove_non_pending_alerts(report_sample_id)
+    verbose("Found %s alerts" % num_alerts)
+    
+    notified_pending_alert_ids = send_alert_email()
+    if notified_pending_alert_ids:
+        # Alerts which have been notified must be marked as such
+        mark_notified_pending_alerts(notified_pending_alert_ids)
+
+
+def send_alert_email():
+    """
+    Send an email including all never-sent pending alerts.
+    Returns the ids of pending alerts
+    """    
+    query = """SELECT message_item, alert_pending_id FROM ${database_name}.alert_email_message_items_view"""
+    query = query.replace("${database_name}", database_name)
+    
+    rows = get_rows(query, write_conn)
+    if not rows:
+        return None
+
+    if options.skip_emails:
+        verbose("--skip-emails requested. Not sending alert mail, although there are %d unnotified alerts" % len(rows))
+        return None
+
+    message_items = [row["message_item"] for row in rows]
+    alert_pending_ids = [row["alert_pending_id"] for row in rows]
+    
+    email_message = """
+Database alert: %s
+
+This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
+The following problems have been found:
+
+%s
+        """ % (database_name, database_name, "\n".join(message_items))
+    email_subject = "%s: mycheckpoint alert notification" % database_name
+    if send_email_message("alert notifications", email_subject, email_message):
+        return alert_pending_ids
+    else:
+        return None
 
 
 def get_monitored_host_mysql_version():
@@ -834,13 +1230,6 @@ def upgrade_status_variables_table():
 
     # I currently prefer SHOW COLUMNS over using INFORMATION_SCHEMA because of the time it takes
     # to access the INFORMATION_SCHEMA.COLUMNS table.
-    #
-    #    query = """
-    #        SELECT COLUMN_NAME
-    #        FROM INFORMATION_SCHEMA.COLUMNS
-    #        WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s'
-    #        """ % (database_name, table_name)
-    #    existing_columns = [row["COLUMN_NAME"] for row in get_rows(query, write_conn)]
     query = """
             SHOW COLUMNS FROM %s.%s
         """ % (database_name, table_name)
@@ -1229,7 +1618,6 @@ def create_report_recent_views():
     verbose("recent reports views created")
 
 
-
 def create_report_sample_recent_aggregated_view():
     all_columns = custom_views_columns["report"]
     columns_listing = ",\n".join(["AVG(%s) AS %s" % (column_name, column_name,) for column_name in all_columns])
@@ -1323,9 +1711,9 @@ def create_report_chart_sample_timeseries_view():
             numbers.n AS timeseries_key,
             sv_report_sample_recent_aggregated.*
           FROM
-            numbers
-            JOIN sv_report_sample_recent_minmax
-            LEFT JOIN sv_report_sample_recent_aggregated ON (
+            ${database_name}.numbers
+            JOIN ${database_name}.sv_report_sample_recent_minmax
+            LEFT JOIN ${database_name}.sv_report_sample_recent_aggregated ON (
               ts_min
                 - INTERVAL SECOND(ts_min) SECOND
                 - INTERVAL (MINUTE(ts_min) % 10) MINUTE
@@ -1360,9 +1748,9 @@ def create_report_chart_hour_timeseries_view():
             numbers.n AS timeseries_key,
             sv_report_hour_recent.*
           FROM
-            numbers
-            JOIN sv_report_hour_recent_minmax
-            LEFT JOIN sv_report_hour_recent ON (
+            ${database_name}.numbers
+            JOIN ${database_name}.sv_report_hour_recent_minmax
+            LEFT JOIN ${database_name}.sv_report_hour_recent ON (
               ts_min
                 + INTERVAL numbers.n HOUR
               = ts
@@ -1393,9 +1781,9 @@ def create_report_chart_day_timeseries_view():
             numbers.n AS timeseries_key,
             sv_report_day_recent.*
           FROM
-            numbers
-            JOIN sv_report_day_recent_minmax
-            LEFT JOIN sv_report_day_recent ON (
+            ${database_name}.numbers
+            JOIN ${database_name}.sv_report_day_recent_minmax
+            LEFT JOIN ${database_name}.sv_report_day_recent ON (
               ts_min
                 + INTERVAL numbers.n DAY
               = ts
@@ -1608,6 +1996,38 @@ def create_report_google_chart_views(charts_list):
     verbose("report charts views created")
 
 
+
+def create_report_dygraph_chart_views(charts_list):
+    for view_name_extension in ["sample", "hour", "day"]:
+        charts_queries = []
+        for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list:
+            non_breakable_chart_columns = chart_columns.replace(" ", "")
+            chart_columns_list = chart_columns.split(",")
+            chart_columns_query_clause = ", ',', ".join(["IFNULL(ROUND(%s, 2), '')" % chart_column for chart_column in chart_columns_list])
+            charts_queries.append(
+                "CONCAT('Date,%s\\\\n', GROUP_CONCAT(CONCAT(timeseries_ts, ',', %s, '\\\\n') ORDER BY timeseries_ts SEPARATOR '')) AS %s" % (non_breakable_chart_columns, chart_columns_query_clause, alias)
+            )
+            pass
+        charts_query = ",".join(charts_queries)
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = TEMPTABLE
+            DEFINER = CURRENT_USER
+            SQL SECURITY INVOKER
+            VIEW ${database_name}.sv_report_dygraph_${view_name_extension} AS
+              SELECT
+                %s
+              FROM
+                ${database_name}.sv_report_chart_${view_name_extension}_timeseries
+            """ % charts_query
+        query = query.replace("${database_name}", database_name)
+        query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(query)
+
+    verbose("dycharts views created")
+
+
 def create_report_html_view(charts_aliases):
     charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
 
@@ -1704,7 +2124,6 @@ def create_report_html_view(charts_aliases):
     act_query(query)
 
     verbose("report html view created")
-
 
 
 def create_report_html_brief_view(report_charts):
@@ -1822,6 +2241,152 @@ def create_report_html_brief_view(report_charts):
 
     verbose("sv_report_html_brief created")
 
+
+def create_report_html_brief_interactive_view(report_charts):
+    charts_sections_list = [chart_section for (chart_section, charts_aliases) in report_charts]
+    chart_aliases_navigation_map = " | ".join(["""<a href="#%s">%s</a>""" % (chart_section, chart_section) for chart_section in charts_sections_list if chart_section])
+
+    sections_queries = []
+    for (chart_section, charts_aliases) in report_charts:
+        charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
+        charts_aliases_queries = []
+        for chart_alias in charts_aliases_list:
+            query = """
+                '<div id = "chartDiv_${chart_alias}" class="chart">
+                  <div class="controls"><button onClick="g_${chart_alias}.toggleMaximize()">+/-</button><h4>%s</h4></div>
+                  <div id="graphDiv_${chart_alias}" class="graphdiv" style="width:', charts_api.chart_width, ';height:', charts_api.chart_height-40, '"></div>
+                  <div id="labelsDiv_${chart_alias}" class="legend"></div>
+                </div>
+                <script type="text/javascript">
+                    g_${chart_alias} = new Dygraph(
+                        document.getElementById("graphDiv_${chart_alias}"),
+                        "', IFNULL(${chart_alias}, ''), '",
+                        {
+                            chartDiv:  document.getElementById("chartDiv_${chart_alias}"),
+                            labelsDiv: document.getElementById("labelsDiv_${chart_alias}")
+                        }
+                    );
+                </script>',
+                """ % (chart_alias.replace("_", " "),)
+            query = query.replace("${chart_alias}", chart_alias)
+            charts_aliases_queries.append(query)
+        charts_aliases_query = "".join(charts_aliases_queries)
+        
+        chart_section_anchor = chart_section 
+        if not chart_section:
+            chart_section_anchor = "section_%d" % len(sections_queries)
+        section_query = """'
+            <a name="%s"></a>
+            <h2>%s <a href="#">[top]</a></h2>
+            
+            <div class="row">',
+                %s
+                '<div class="clear"></div>
+            </div>
+                ',
+            """ % (chart_section_anchor, chart_section, charts_aliases_query)
+        sections_queries.append(section_query)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_report_html_brief_interactive AS
+          SELECT CONCAT('
+            <html>
+                <head>
+                    <script type="text/javascript" src="mycheckpoint/build/dygraphs/dygraph-combined.js"></script>
+                    <title>mycheckpoint brief report</title>
+                    <meta http-equiv="refresh" content="600" />
+                    <style type="text/css">
+                    body {
+                        color:#505050;
+                        font-family: Verdana,Helvetica,Arial,sans-serif;
+                        font-size:9pt;
+                    }
+                    div.row {
+                        width: ${global_width};
+                    }
+                    div.chart {
+                        float: left;
+                        white-space: nowrap;
+                        margin-right: 10px;
+                        font-family: Helvetica,Verdana,Arial,sans-serif;
+                    }
+                    .clear {
+                        clear:both;
+                        height:1px;
+                    }
+                    div.chart {
+                        float: left;
+                    }
+                    a {
+                        color:#f26522;
+                        text-decoration:none;
+                    }
+                    h2 {
+                        font-weight:normal;
+                        margin-top:20px;
+                    }
+                    h2 a {
+                        font-weight:normal;
+                        font-size: 60%%;
+                    }
+                    h4 {
+                        font-family: Verdana,Helvetica,Arial,sans-serif;
+                        display: inline;
+                        margin-bottom: 0px;
+                        padding-left: 8px;
+                    }
+                    .controls {
+                        padding-left: 44px;
+                        margin-bottom: 4px;
+                    }
+                    .controls button {
+                        display: inline;
+                    }
+                    ul {
+                        font-size:9pt;
+                        margin: 0px;
+                        padding-left: 44px;
+                    }
+                    li:first-child { 
+                        list-style-type: none; 
+                        font-weight: bold;
+                    }
+                    li { 
+                        list-style-type: square; 
+                    }
+                    li div { 
+                        color: #404040;
+                        font-size:9pt;
+                    }
+                    </style>
+                </head>
+                <body>
+                    <a name=""></a>
+                    Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                        DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
+                    <br/><br/>
+                    Navigate: ${chart_aliases_navigation_map}
+                    <br/>
+                    ',
+                    %s '
+                </body>
+            </html>
+          ') AS html
+          FROM
+            ${database_name}.sv_report_dygraph_sample, ${database_name}.charts_api
+        """ % "".join(sections_queries)
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${chart_aliases_navigation_map}", chart_aliases_navigation_map)
+    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
+
+    act_query(query)
+
+    verbose("sv_report_html_brief_interactive created")
 
 
 def create_status_variables_parameter_change_view():
@@ -1989,121 +2554,6 @@ def create_status_variables_views():
     create_status_variables_hour_view()
     create_status_variables_day_view()
     create_status_variables_parameter_change_view()
-    #
-    # The following are all commented out for the time being. I first thought they can be very useful.
-    # However, the report views already cover the most interesting metrics; and these views make so much
-    # more mess, what with the sheer numbers.
-    # I will perhaps re-enable them in the furute, or supply with a --deploy-extended option or something.
-    #
-    #    create_status_variables_long_format_view()
-    #    create_status_variables_aggregated_view()
-    #    create_custom_views("dml", """
-    #            concurrent_insert,
-    #            com_select, com_insert, com_update, com_delete, com_replace,
-    #            com_commit,
-    #            questions, slow_queries
-    #        """,
-    #        """
-    #            ROUND(100*com_select_diff/NULLIF(questions_diff, 0), 2) AS com_select_percent,
-    #            ROUND(100*com_insert_diff/NULLIF(questions_diff, 0), 2) AS com_insert_percent,
-    #            ROUND(100*com_update_diff/NULLIF(questions_diff, 0), 2) AS com_update_percent,
-    #            ROUND(100*com_delete_diff/NULLIF(questions_diff, 0), 2) AS com_delete_percent,
-    #            ROUND(100*com_replace_diff/NULLIF(questions_diff, 0), 2) AS com_replace_percent,
-    #            ROUND(100*com_commit_diff/NULLIF(questions_diff, 0), 2) AS com_commit_percent,
-    #            ROUND(100*slow_queries_diff/NULLIF(questions_diff, 0), 2) AS slow_queries_percent
-    #        """)
-    #    com_commands = [column_name for column_name in status_columns if column_name.startswith("com_")]
-    #    create_custom_views("com", ",\n ".join(com_commands),
-    #            ",\n ".join(
-    #                ["ROUND(100*(%s)/NULLIF(questions_diff, 0), 2) AS %s_percent" % (column_name, column_name,) for column_name in com_commands])
-    #            )
-    #
-    #    create_custom_views("select", """
-    #            com_select,
-    #            select_scan, sort_merge_passes, sort_range, sort_rows, sort_scan
-    #        """,
-    #        """
-    #            ROUND(100*select_scan_diff/NULLIF(com_select_diff, 0), 2) AS select_scan_percent,
-    #            ROUND(100*select_full_join_diff/NULLIF(com_select_diff, 0), 2) AS select_full_join_percent,
-    #            ROUND(100*select_range_diff/NULLIF(com_select_diff, 0), 2) AS select_range_percent
-    #        """)
-    #    create_custom_views("tmp_tables", """
-    #            tmp_table_size, max_heap_table_size, created_tmp_tables, created_tmp_disk_tables
-    #        """,
-    #        """
-    #            ROUND(100*created_tmp_disk_tables/NULLIF(created_tmp_tables, 0), 2) AS created_disk_tmp_tables_percent
-    #        """)
-    #    create_custom_views("threads", """
-    #            max_delayed_threads, max_insert_delayed_threads, thread_cache_size, thread_stack,
-    #            delayed_insert_threads, slow_launch_threads, threads_cached, threads_connected, threads_created, threads_running
-    #        """)
-    #    create_custom_views("connections", """
-    #            max_connections,
-    #            connections, aborted_connects
-    #        """,
-    #        """
-    #            ROUND(100*aborted_connects_diff/NULLIF(connections_diff, 0), 2) AS aborted_connections_percent
-    #        """)
-    #    create_custom_views("table_cache", """
-    #            table_cache, table_open_cache, table_definition_cache,
-    #            open_tables, opened_tables
-    #        """,
-    #        """
-    #            ROUND(100*open_tables/NULLIF(table_cache, 0), 2) AS table_cache_50_use_percent,
-    #            ROUND(100*open_tables/NULLIF(table_open_cache, 0), 2) AS table_cache_51_use_percent
-    #        """)
-    #    create_custom_views("innodb_io", """
-    #            innodb_buffer_pool_size, innodb_page_size,
-    #            innodb_buffer_pool_write_requests, innodb_buffer_pool_pages_flushed,
-    #            innodb_buffer_pool_read_requests, innodb_buffer_pool_reads,
-    #            innodb_log_write_requests, innodb_log_writes,
-    #            innodb_os_log_written,
-    #            innodb_rows_read
-    #        """,
-    #        """
-    #            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-    #            ROUND(100 - (100*innodb_buffer_pool_reads/NULLIF(innodb_buffer_pool_read_requests, 0)), 2) AS innodb_read_hit_percent,
-    #            innodb_buffer_pool_pages_total * innodb_page_size AS innodb_buffer_pool_total_bytes,
-    #            (innodb_buffer_pool_pages_total - innodb_buffer_pool_pages_free) * innodb_page_size AS innodb_buffer_pool_used_bytes,
-    #            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent
-    #        """)
-    #    create_custom_views("innodb_io_summary", """
-    #            innodb_buffer_pool_size,
-    #            innodb_flush_log_at_trx_commit
-    #        """,
-    #        """
-    #            ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
-    #            ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
-    #            ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 2) AS innodb_buffer_pool_used_percent,
-    #            innodb_buffer_pool_reads_psec,
-    #            innodb_buffer_pool_pages_flushed_psec
-    #        """)
-    #    create_custom_views("myisam_io", """
-    #            key_buffer_size,
-    #            key_buffer_used,
-    #            key_read_requests, key_reads,
-    #            key_write_requests, key_writes,
-    #        """,
-    #        """
-    #            key_buffer_size - (key_blocks_unused * key_cache_block_size) AS key_buffer_usage,
-    #            ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 2) AS key_buffer_usage_percent,
-    #            ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 2) AS key_read_hit_percent,
-    #            ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 2) AS key_write_hit_percent
-    #        """)
-    #    create_custom_views("locks", """
-    #            innodb_lock_wait_timeout,
-    #            table_locks_waited, table_locks_immediate
-    #        """,
-    #        """
-    #            ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 2) AS table_lock_waited_percent,
-    #            innodb_row_lock_waits_psec, innodb_row_lock_current_waits
-    #        """)
-    #    create_custom_views("replication", """
-    #            max_binlog_size, sync_binlog,
-    #            max_relay_log_size, relay_log_space_limit,
-    #            master_status_position,  master_status_file_number,
-    #            Read_Master_Log_Pos, Relay_Log_Pos, Exec_Master_Log_Pos, Relay_Log_Space, Seconds_Behind_Master,
-    #        """)
 
     # Report views:
     create_custom_views("report", "", """
@@ -2125,6 +2575,16 @@ def create_status_variables_views():
             bytes_received_psec/1024/1024 AS mega_bytes_received_psec,
 
             key_buffer_size,
+            key_reads_diff,
+            key_read_requests_diff,
+            key_writes_diff,
+            key_write_requests_diff,
+            key_reads_psec,
+            key_read_requests_psec,
+            key_writes_psec,
+            key_write_requests_psec,
+            key_read_requests_psec - key_reads_psec AS key_read_hits_psec, 
+            key_write_requests_psec - key_writes_psec AS key_write_hits_psec, 
             ROUND(100 - 100*(key_blocks_unused * key_cache_block_size)/NULLIF(key_buffer_size, 0), 1) AS key_buffer_used_percent,
             ROUND(100 - 100*key_reads_diff/NULLIF(key_read_requests_diff, 0), 1) AS key_read_hit_percent,
             ROUND(100 - 100*key_writes_diff/NULLIF(key_write_requests_diff, 0), 1) AS key_write_hit_percent,
@@ -2224,7 +2684,7 @@ def create_status_variables_views():
     create_report_chart_hour_timeseries_view()
     create_report_chart_day_timeseries_view()
     create_report_chart_labels_views()
-    create_report_google_chart_views([
+    report_chart_views = [
         ("uptime_percent", "uptime_percent", True, True),
 
         ("innodb_read_hit_percent", "innodb_read_hit_percent", False, False),
@@ -2236,7 +2696,7 @@ def create_status_variables_views():
         ("mega_bytes_sent_psec, mega_bytes_received_psec", "bytes_io", True, False),
 
         ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True, True),
-        ("key_read_hit_percent, key_write_hit_percent", "myisam_key_hit_ratio", True, True),
+        ("key_read_requests_psec, key_reads_psec, key_read_hits_psec, key_write_hits_psec, key_write_requests_psec, key_writes_psec", "myisam_key_hit_ratio", True, True),
 
         ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False),
         ("queries_psec, questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False),
@@ -2251,7 +2711,7 @@ def create_status_variables_views():
         ("connections_psec, aborted_connects_psec", "connections_psec", True, False),
         ("max_connections, threads_connected", "connections_usage", True, False),
 
-        ("thread_cache_size, threads_cached", "thread_cache_use", True, True),
+        ("thread_cache_size, threads_cached", "thread_cache_use", True, False),
         ("threads_created_psec", "threads_created_psec", True, False),
 
         ("relay_log_space_limit_mb, relay_log_space_mb", "relay_log_used_mb", True, False),
@@ -2264,7 +2724,9 @@ def create_status_variables_views():
         ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
 
         ("os_root_mountpoint_usage_percent, os_datadir_mountpoint_usage_percent, os_tmpdir_mountpoint_usage_percent", "os_mountpoints_usage_percent", True, True),
-        ])
+        ]
+    create_report_dygraph_chart_views(report_chart_views)
+    create_report_google_chart_views(report_chart_views)
     create_report_google_chart_24_7_view([
         "innodb_read_hit_percent",
         "innodb_buffer_pool_reads_psec",
@@ -2319,14 +2781,16 @@ def create_status_variables_views():
         os_memory,
         os_mountpoints_usage_percent
         """)
-    create_report_html_brief_view([
+    brief_html_view_charts = [
             ("InnoDB & I/O", "innodb_read_hit_percent, innodb_io, bytes_io"),
             ("Questions", "DML, questions, tmp_tables"),
             ("Resources", "connections_psec, threads_created_psec, opened_tables_psec"),
             ("Caches", "myisam_key_hit_ratio, thread_cache_use, table_cache_use"),
             ("Vitals and OS", "seconds_behind_master, os_memory, table_locks_waited_psec"),
             ("", "os_cpu_utilization_percent, os_loadavg, os_mountpoints_usage_percent"),
-        ])
+        ]
+    create_report_html_brief_view(brief_html_view_charts)
+    #create_report_html_brief_interactive_view(brief_html_view_charts)
 
 
 def get_smtp_host():
@@ -2353,7 +2817,7 @@ def get_smtp_to():
     return "mycheckpoint@localhost"
 
 
-def email_brief_report():
+def send_email_message(description, subject, message, attachment=None):
     try:
         smtp_to = get_smtp_to().replace(" ","")
         smtp_from = get_smtp_from()
@@ -2361,39 +2825,52 @@ def email_brief_report():
 
         # Create the container (outer) email message.
         msg = MIMEMultipart()
-        msg["Subject"] = "mycheckpoint brief report: %s" % database_name
+        msg["Subject"] = subject
         msg["From"] = smtp_from 
         msg["To"] = smtp_to
-        
-        message_text_content = """Attached: mycheckpoint brief HTML report for database: %s
+
+        message_suffix = """
     
 You are receiving this email from a mycheckpoint -- MySQL monitoring utility -- installation.
 Please consult your system or database administrator if you do not know why you got this mail.
 -------
 mycheckpoint home page: http://code.openark.org/forge/mycheckpoint
-            """ % database_name
-        msg.preamble = message_text_content
+            """
+        message = message + message_suffix
+        msg.preamble = message
         
-        query = "SELECT html FROM %s.sv_report_html_brief" % database_name
-        brief_report = get_row(query)["html"]
+        if attachment:
+            msg.attach(attachment)
         
-        attachment = MIMEText(brief_report, _subtype="html")
-        attachment.add_header("Content-Disposition", "attachment", filename="mycheckpoint_brief_report_%s.html" % database_name)
-        msg.attach(attachment)
-        
-        text_message = MIMEText(message_text_content)
+        text_message = MIMEText(message)
         msg.attach(text_message)
     
-        verbose("Sending HTML brief report from %s to: %s via: %s" % (smtp_from, smtp_to, smtp_host))
+        verbose("Sending %s message from %s to: %s via: %s" % (description, smtp_from, smtp_to, smtp_host))
         # Send the email via our own SMTP server.
         s = smtplib.SMTP(smtp_host)
         s.sendmail(smtp_from, smtp_to, msg.as_string())
         s.quit()
         verbose("+ Sent")
+        return True
     except:
         print_error("Failed sending email")
         if options.debug:
             traceback.print_exc()
+        return False
+
+
+def email_brief_report():
+    subject = "mycheckpoint brief report: %s" % database_name
+
+    message = """Attached: mycheckpoint brief HTML report for database: %s""" % database_name
+        
+    query = "SELECT html FROM %s.sv_report_html_brief" % database_name
+    brief_report = get_row(query)["html"]
+    
+    attachment = MIMEText(brief_report, _subtype="html")
+    attachment.add_header("Content-Disposition", "attachment", filename="mycheckpoint_brief_report_%s.html" % database_name)
+
+    send_email_message("HTML brief report", subject, message, attachment)        
             
 
 def disable_bin_log():
@@ -2437,6 +2914,28 @@ def purge_status_variables():
     num_affected_rows = act_query(query)
     if num_affected_rows:
         verbose("Old entries purged")
+    return num_affected_rows
+
+
+def purge_alert():
+    """
+    Since we support all storage engines, we define no foreign keys.
+    After purging old records from status_variables, alert rows must be purged as well.
+    """
+    disable_bin_log()
+
+    query = """
+      DELETE 
+        FROM ${database_name}.alert 
+      WHERE 
+        sv_report_sample_id < 
+          (SELECT MIN(id) FROM ${database_name}.sv_report_sample)"""
+    query = query.replace("${database_name}", database_name)
+    num_affected_rows = act_query(query)
+    if num_affected_rows:
+        verbose("Old alert entries purged")
+    return num_affected_rows
+
 
 def deploy_schema():
     create_metadata_table()
@@ -2445,6 +2944,12 @@ def deploy_schema():
     if not create_status_variables_table():
         upgrade_status_variables_table()
     create_alert_condition_table()
+    create_alert_table()
+    create_alert_pending_table()
+    create_alert_view()
+    create_alert_pending_view()
+    create_alert_pending_html_view()
+    create_alert_email_message_items_view()
     create_alert_condition_query_view()
     create_status_variables_views()
     verbose("Table and views deployed")
@@ -2475,10 +2980,11 @@ try:
         if not build_placeholder.isdigit():
             build_placeholder = "0"
         build_number = int(build_placeholder)
-        
+
+        defaults_file_name = "/etc/mycheckpoint/mycheckpoint.cnf"
         config_scope = "mycheckpoint"
         config = ConfigParser.ConfigParser()
-        config.read(["/etc/mycheckpoint/mycheckpoint.cnf"])
+        config.read([defaults_file_name])
 
         verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009-2010 by Shlomi Noach" % (revision_number, build_number))
 
@@ -2491,33 +2997,49 @@ try:
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
 
+        # Sanity:
         if not database_name:
             exit_with_error("No database specified. Specify with -d or --database")
         if options.purge_days < 1:
             exit_with_error("purge-days must be at least 1")
 
-        monitored_conn, write_conn = open_connections()
-
+        # Read arguments
         should_deploy = False
-        if "deploy" in args:
-            verbose("Deploy requested. Will deploy")
-            should_deploy = True
-        elif not is_same_deploy():
-            verbose("Non matching deployed revision. Will auto-deploy")
-            should_deploy = True
+        should_email_brief_report = False
+        for arg in args:
+            if arg == "deploy":
+                verbose("Deploy requested. Will deploy")
+                should_deploy = True
+            elif arg == "email_brief_report":
+                should_email_brief_report = True
+            else:
+                exit_with_error("Unknown command: %s" % arg)
+
+        # Open connections. From this point and on, database access is possible
+        monitored_conn, write_conn = open_connections()
+        init_connections()
+
+        if not should_deploy:
+            if not is_same_deploy():
+                verbose("Non matching deployed revision. Will auto-deploy")
+                should_deploy = True
 
         if should_deploy:
             deploy_schema()
             
+        # Only take record if no arguments provided (no "command")
         if not args:
             collect_status_variables()
-            purge_status_variables()
+            if purge_status_variables():
+                purge_alert()
+            check_alerts()
             verbose("Status variables checkpoint complete")
         else:
             verbose("Will not monitor the database")
-
-        if options.email_brief_report:
+            
+        if should_email_brief_report:
             email_brief_report()
+
     except Exception, err:
         print err
         if options.debug:
