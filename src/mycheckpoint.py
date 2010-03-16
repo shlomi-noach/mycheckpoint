@@ -82,7 +82,7 @@ def verbose(message):
         print "-- %s" % message
 
 def print_error(message):
-    print "-- ERROR: %s" % message
+    sys.stderr.write("-- ERROR: %s\n" % message)
 
 
 def open_connections():
@@ -509,7 +509,7 @@ def fetch_status_variables():
             verbose("Master and slave status recorded")
         except:
             # An exception can be thrown if the user does not have enough privileges:
-            verbose("Cannot show master & slave status. Skipping")
+            print_error("Cannot show master & slave status. Skipping")
             pass
 
     # OS (linux) load average
@@ -545,7 +545,7 @@ def fetch_status_variables():
             status_dict["os_cpu_idle"] = int(os_cpu_idle)
             verbose("OS CPU info recorded")
         except:
-            verbose("Cannot read /proc/stat")
+            verbose("Cannot read /proc/stat. Skipping")
 
         try:
             f = open("/proc/loadavg")
@@ -558,7 +558,7 @@ def fetch_status_variables():
             status_dict["os_loadavg_millis"] = loadavg_millis
             verbose("OS load average info recorded")
         except:
-            verbose("Cannot read /proc/loadavg")
+            verbose("Cannot read /proc/loadavg. Skipping")
 
         try:
             f = open("/proc/meminfo")
@@ -581,7 +581,7 @@ def fetch_status_variables():
                     status_dict["os_swap_free_kb"] = param_value
             verbose("OS mem info recorded")
         except:
-            verbose("Cannot read /proc/meminfo")
+            verbose("Cannot read /proc/meminfo. Skipping")
 
         # Filesystems:
         try:
@@ -590,7 +590,7 @@ def fetch_status_variables():
             status_dict["os_tmpdir_mountpoint_usage_percent"] = get_mountpoint_usage_percent(extra_dict["tmpdir"])
             verbose("OS mountpoints info recorded")
         except:
-            verbose("Cannot read mountpoints info")
+            verbose("Cannot read mountpoints info. Skipping")
 
     else:
         verbose("Non-local monitoring; will not read OS data")
@@ -2872,6 +2872,28 @@ def email_brief_report():
 
     send_email_message("HTML brief report", subject, message, attachment)        
             
+            
+def email_cannot_access_database_message():
+    """
+    Send an email notifying that the database cannot be reached
+    """    
+    if options.skip_emails:
+        verbose("--skip-emails requested. Database cannot be reached; but this will not be emailed")
+        return None
+
+    email_message = """
+Database alert: %s
+
+This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
+
+mycheckpoint cannot access your database. Please check:
+- Is the service running?
+- Are there too many connections?
+- Is there a network problem?
+        """ % (database_name, database_name,)
+    email_subject = "%s: mycheckpoint cannot access database" % database_name
+    send_email_message("cannot access", email_subject, email_message)
+                
 
 def disable_bin_log():
     if not options.disable_bin_log:
@@ -3044,6 +3066,9 @@ try:
             email_brief_report()
 
     except Exception, err:
+        if not monitored_conn:
+            print_error("Cannot connect to database")
+            email_cannot_access_database_message()
         print err
         if options.debug:
             traceback.print_exc()
