@@ -63,10 +63,6 @@
 		<replace file="build/scripts/mycheckpoint" token="revision.placeholder" value="${svn.revision}"/>
 		<replace file="build/scripts/mycheckpoint" token="build.placeholder" value="${DSTAMP}${TSTAMP}"/>
 
-		<mkdir dir="build/etc"/>
-		<copy todir="build/etc">
-			<fileset dir="etc/"/>
-		</copy>
 	</target>
 
 	<target name="python-module" depends="revnumber, scripts">
@@ -88,7 +84,6 @@
 
 	<target name="deb" depends="revnumber, scripts">
 		<mkdir dir="${debian.distribution.dir}/mycheckpoint/usr/bin"/>
-		<mkdir dir="${debian.distribution.dir}/mycheckpoint/etc"/>
 		<mkdir dir="${debian.distribution.dir}/mycheckpoint/DEBIAN"/>
 		<copy todir="${debian.distribution.dir}/mycheckpoint/DEBIAN">
 			<fileset dir="deb-dist-cfg/control"/>
@@ -96,9 +91,6 @@
 		<replace file="${debian.distribution.dir}/mycheckpoint/DEBIAN/control" token="revision.placeholder" value="${svn.revision}"/>
 		<copy todir="${debian.distribution.dir}/mycheckpoint/usr/bin">
 			<fileset dir="build/scripts"/>
-		</copy>
-		<copy todir="${debian.distribution.dir}/mycheckpoint/etc">
-			<fileset dir="build/etc"/>
 		</copy>
 		<chmod perm="755">
 			<fileset dir="${debian.distribution.dir}/mycheckpoint/usr/bin"/>

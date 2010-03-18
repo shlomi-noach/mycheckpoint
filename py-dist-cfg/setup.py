@@ -12,8 +12,5 @@ setup(
     requires=["MySQLdb"],
     scripts=[
         "scripts/mycheckpoint",
-        ],
-    data_files=[
-            ("/etc", ["etc/mycheckpoint.cnf"])
         ]
 )
