@@ -998,9 +998,16 @@ def create_alert_pending_html_view():
                         '<div>', IF(repetitive_alert, 'Yes', '-'), '</div>', 
                       '</div>')
                     SEPARATOR ''), 
-                  'No pending alerts found')
+                  '')
                 ,'
             </div>
+            ',
+            IF(GROUP_CONCAT(alert_pending_id) IS NULL, 
+              '<br/>
+              <div>
+                There are no pending alerts
+              </div>', 
+              '') ,'
         </body>
     </html>
             ') AS html
