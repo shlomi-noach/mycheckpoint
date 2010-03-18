@@ -1604,10 +1604,9 @@ def create_report_google_chart_24_7_view(charts_list):
 
 def create_report_html_24_7_view(report_columns):
     row_queries = []
-    current_row_chart_queries = []
     while report_columns:
+        current_row_chart_queries = []
         current_row_report_columns = report_columns[0:3]
-        print current_row_report_columns
         report_columns = report_columns[3:] 
 
         for report_column in current_row_report_columns:
