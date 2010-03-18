@@ -66,6 +66,7 @@ Available commands:
     parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", default=False, help="Monitor OS even if monitored host does does nto appear to be the local host. Use when you are certain the monitored host is local")
     parser.add_option("", "--skip-alerts", dest="skip_alerts", action="store_true", default=False, help="Skip evaluating alert conditions as well as sending email notifications")
     parser.add_option("", "--skip-emails", dest="skip_emails", action="store_true", default=False, help="Skip sending email notifications")
+    parser.add_option("", "--force-emails", dest="force_emails", action="store_true", default=False, help="Force sending email notifications even if there's nothing wrong")
     parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Chart image width (default: 400, min value: 150)")
     parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Chart image height (default: 200, min value: 100)")
     parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
@@ -982,6 +983,7 @@ def create_alert_pending_html_view():
                   <div>Alert start time</div> 
                   <div>Elapsed minutes</div> 
                   <div>Notification time</div>
+                  <div>Repeating notification</div>
                 </div> 
                 ',
                 GROUP_CONCAT(
@@ -992,6 +994,7 @@ def create_alert_pending_html_view():
                       '<div>', ts_start, '</div>', 
                       '<div>', elapsed_minutes, '</div>', 
                       '<div', IF(ts_notified IS NULL, ' class="italic"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start+ INTERVAL alert_delay_minutes MINUTE)), '</div>', 
+                      '<div>', IF(repetitive_alert, 'Yes', '-'), '</div>', 
                     '</div>')
                   SEPARATOR '')
                 ,'
@@ -1188,12 +1191,26 @@ def send_alert_email():
     query = query.replace("${database_name}", database_name)
     
     rows = get_rows(query, write_conn)
-    if not rows:
-        return None
-
-    if options.skip_emails:
+    if options.skip_emails and rows:
         verbose("--skip-emails requested. Not sending alert mail, although there are %d unnotified alerts" % len(rows))
         return None
+
+    if not rows:
+        # No problems to report
+        if not options.force_emails:
+            return None
+        # Force an OK email
+    
+        email_message = """
+Database OK: %s
+
+This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
+All seems to be well.
+                """ % (database_name, database_name,)
+        email_subject = "%s: mycheckpoint OK notification" % database_name
+        send_email_message("alert notifications", email_subject, email_message)
+        return None
+        
 
     message_items = [row["message_item"] for row in rows]
     alert_pending_ids = [row["alert_pending_id"] for row in rows]
@@ -1426,6 +1443,7 @@ OS:
     CPU utilization: ', IFNULL(os_cpu_utilization_percent, 'N/A'), '%
     Memory: ', IFNULL(os_mem_used_mb, 'N/A'), 'MB used out of ', IFNULL(os_mem_total_mb, 'N/A'), 'MB (Active: ', IFNULL(os_mem_active_mb, 'N/A'), 'MB)
     Swap: ', IFNULL(os_swap_used_mb, 'N/A'), 'MB used out of ', IFNULL(os_swap_total_mb, 'N/A'), 'MB
+    Mountpoints usage: root ', os_root_mountpoint_usage_percent, '%, datadir ', os_datadir_mountpoint_usage_percent, '%, tmpdir ', os_tmpdir_mountpoint_usage_percent, '%
 
 InnoDB:
     innodb_buffer_pool_size: ', innodb_buffer_pool_size, ' bytes (', ROUND(innodb_buffer_pool_size/(1024*1024), 1), 'MB). Used: ',
@@ -1580,6 +1598,97 @@ def create_report_google_chart_24_7_view(charts_list):
     act_query(query)
 
     verbose("report 24/7 chart view created")
+
+
+def create_report_html_24_7_view(report_columns):
+    row_queries = []
+    current_row_chart_queries = []
+    while report_columns:
+        current_row_report_columns = report_columns[0:3]
+        report_columns = report_columns[3:] 
+
+        for report_column in current_row_report_columns:
+            query = """
+                '<div class="chart">
+                    <h3>%s</h3>',
+                    IFNULL(CONCAT('<img src="', %s, '"/>'), 'N/A'),
+                '</div>',
+                """ % (report_column.replace("_", " "), report_column)
+            query = query.replace("${report_column}", report_column)
+            current_row_chart_queries.append(query)
+
+        row_query = """'
+            
+            <div class="row">',
+                %s
+                '<div class="clear"></div>
+            </div>
+                ',
+            """ % ("".join(current_row_chart_queries))
+        row_queries.append(row_query)
+
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_report_html_24_7 AS
+          SELECT CONCAT('
+            <html>
+                <head>
+                <title>mycheckpoint brief report</title>
+                <meta http-equiv="refresh" content="600" />
+                <style type="text/css">
+                    body {
+                        background:#FFFFFF none repeat scroll 0% 0%;
+                        color:#505050;
+                        font-family:Verdana,Arial,Helvetica,sans-serif;
+                        font-size:9pt;
+                        line-height:1.5;
+                    }
+                    a {
+                        color:#f26522;
+                        text-decoration:none;
+                    }
+                    h3 {
+                        font-weight:normal;
+                    }
+                    div.row {
+                        width: ${global_width};
+                    }
+                    div.chart {
+                        float: left;
+                        white-space: nowrap;
+                        margin-right: 10px;
+                        width:', charts_api.chart_width, ';
+                    }
+                    div.chart img {
+                        border:0px none;
+                        width: ', charts_api.chart_width, ';
+                        height: ', charts_api.chart_height, ';
+                    }
+                </style>
+                </head>
+                <body>
+                    <a name=""></a>
+                    24/7 report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                        DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
+                    <br/><br/>
+                    ',
+                    %s '
+                </body>
+            </html>
+          ') AS html
+          FROM
+            ${database_name}.sv_report_chart_24_7, ${database_name}.charts_api
+        """ % "".join(row_queries)
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
+
+    act_query(query)
+
+    verbose("sv_report_html_24_7 created")
 
 
 def create_report_recent_views():
@@ -2000,7 +2109,7 @@ def create_report_google_chart_views(charts_list):
 def create_report_dygraph_chart_views(charts_list):
     for view_name_extension in ["sample", "hour", "day"]:
         charts_queries = []
-        for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list:
+        for (chart_columns, alias, _scale_from_0, _scale_to_100) in charts_list:
             non_breakable_chart_columns = chart_columns.replace(" ", "")
             chart_columns_list = chart_columns.split(",")
             chart_columns_query_clause = ", ',', ".join(["IFNULL(ROUND(%s, 2), '')" % chart_column for chart_column in chart_columns_list])
@@ -2644,6 +2753,7 @@ def create_status_variables_views():
             threads_created_psec,
             threads_connected,
             ROUND(100*threads_connected/NULLIF(max_connections, 0), 1) AS threads_connected_used_percent,
+            threads_running,
 
             master_status_file_number,
             master_status_position,
@@ -2727,7 +2837,7 @@ def create_status_variables_views():
         ]
     create_report_dygraph_chart_views(report_chart_views)
     create_report_google_chart_views(report_chart_views)
-    create_report_google_chart_24_7_view([
+    report_24_7_columns = [
         "innodb_read_hit_percent",
         "innodb_buffer_pool_reads_psec",
         "innodb_buffer_pool_pages_flushed_psec",
@@ -2761,9 +2871,11 @@ def create_status_variables_views():
         "os_mem_used_mb",
         "os_mem_active_mb",
         "os_swap_used_mb",
-        ])
+        ]
+    create_report_google_chart_24_7_view(report_24_7_columns)
 
     # Report HTML views:
+    create_report_html_24_7_view(report_24_7_columns)
     create_report_html_view("""
         innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_used_percent,
         myisam_key_buffer_used_percent, myisam_key_hit_ratio,
@@ -2968,12 +3080,13 @@ def deploy_schema():
     create_alert_condition_table()
     create_alert_table()
     create_alert_pending_table()
+    create_status_variables_views()
+    # Some of the following depend on sv_report_chart_sample
     create_alert_view()
     create_alert_pending_view()
     create_alert_pending_html_view()
     create_alert_email_message_items_view()
     create_alert_condition_query_view()
-    create_status_variables_views()
     verbose("Table and views deployed")
 
 
@@ -3007,6 +3120,7 @@ try:
             defaults_file_name = options.defaults_file
         else:
             defaults_file_name = "/etc/mycheckpoint.cnf"
+            verbose("Will assume %s as defaults file" % defaults_file_name)
         config_scope = "mycheckpoint"
         config = ConfigParser.ConfigParser()
         config.read([defaults_file_name])
@@ -3027,7 +3141,8 @@ try:
             exit_with_error("No database specified. Specify with -d or --database")
         if options.purge_days < 1:
             exit_with_error("purge-days must be at least 1")
-
+        verbose("database is %s" % database_name)
+        
         # Read arguments
         should_deploy = False
         should_email_brief_report = False
