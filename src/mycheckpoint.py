@@ -1638,7 +1638,7 @@ def create_report_html_24_7_view(report_columns):
           SELECT CONCAT('
             <html>
                 <head>
-                <title>mycheckpoint brief report</title>
+                <title>mycheckpoint 24/7 report</title>
                 <meta http-equiv="refresh" content="600" />
                 <style type="text/css">
                     body {
