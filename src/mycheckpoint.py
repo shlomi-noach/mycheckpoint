@@ -33,8 +33,8 @@ try:
     MIMEMultipart = __import__("email.mime.multipart", globals(), locals(), ["MIMEMultipart"]).MIMEMultipart
 except:
     try:
-        MIMEText = __import__("email", globals(), locals(), ["MIMEText"]).MIMEText
-        MIMEMultipart = __import__("email", globals(), locals(), ["MIMEMultipart"]).MIMEMultipart
+        MIMEText = __import__("email.MIMEText", globals(), locals(), ["MIMEText"]).MIMEText
+        MIMEMultipart = __import__("email.MIMEMultipart", globals(), locals(), ["MIMEMultipart"]).MIMEMultipart
     except:
         pass
 
