@@ -986,17 +986,19 @@ def create_alert_pending_html_view():
                   <div>Repeating notification</div>
                 </div> 
                 ',
-                GROUP_CONCAT(
-                  CONCAT(
-                    '<div class="row">',
-                      '<div class="el_', error_level, '">', error_level, '</div>', 
-                      '<div>', description, '</div>', 
-                      '<div>', ts_start, '</div>', 
-                      '<div>', elapsed_minutes, '</div>', 
-                      '<div', IF(ts_notified IS NULL, ' class="italic"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start+ INTERVAL alert_delay_minutes MINUTE)), '</div>', 
-                      '<div>', IF(repetitive_alert, 'Yes', '-'), '</div>', 
-                    '</div>')
-                  SEPARATOR '')
+                IFNULL(
+                  GROUP_CONCAT(
+                    CONCAT(
+                      '<div class="row">',
+                        '<div class="el_', error_level, '">', error_level, '</div>', 
+                        '<div>', description, '</div>', 
+                        '<div>', ts_start, '</div>', 
+                        '<div>', elapsed_minutes, '</div>', 
+                        '<div', IF(ts_notified IS NULL, ' class="italic"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start+ INTERVAL alert_delay_minutes MINUTE)), '</div>', 
+                        '<div>', IF(repetitive_alert, 'Yes', '-'), '</div>', 
+                      '</div>')
+                    SEPARATOR ''), 
+                  'No pending alerts found')
                 ,'
             </div>
         </body>
@@ -1605,6 +1607,7 @@ def create_report_html_24_7_view(report_columns):
     current_row_chart_queries = []
     while report_columns:
         current_row_report_columns = report_columns[0:3]
+        print current_row_report_columns
         report_columns = report_columns[3:] 
 
         for report_column in current_row_report_columns:
@@ -1614,7 +1617,6 @@ def create_report_html_24_7_view(report_columns):
                     IFNULL(CONCAT('<img src="', %s, '"/>'), 'N/A'),
                 '</div>',
                 """ % (report_column.replace("_", " "), report_column)
-            query = query.replace("${report_column}", report_column)
             current_row_chart_queries.append(query)
 
         row_query = """'
