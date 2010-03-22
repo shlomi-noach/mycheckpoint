@@ -1046,7 +1046,7 @@ def create_alert_email_message_items_view():
             ${database_name}.alert_pending_view
           WHERE
             in_error > 0
-            AND ((is_notified = 0) OR (repetitive_alert != 0))
+            AND ((is_notified = 0) OR (repetitive_alert != 0) OR (resolved = 1))
     """
     query = query.replace("${database_name}", database_name)
     act_query(query)
