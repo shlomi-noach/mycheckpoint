@@ -2814,7 +2814,7 @@ def create_status_variables_views():
         ("mega_bytes_sent_psec, mega_bytes_received_psec", "bytes_io", True, False),
 
         ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True, True),
-        ("key_read_requests_psec, key_reads_psec, key_read_hits_psec, key_write_hits_psec, key_write_requests_psec, key_writes_psec", "myisam_key_hit_ratio", True, True),
+        ("key_read_requests_psec, key_reads_psec, key_write_requests_psec, key_writes_psec", "myisam_key_hit", True, False),
 
         ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False),
         ("queries_psec, questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False),
@@ -2886,7 +2886,7 @@ def create_status_variables_views():
     create_report_html_24_7_view(report_24_7_columns)
     create_report_html_view("""
         innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_used_percent,
-        myisam_key_buffer_used_percent, myisam_key_hit_ratio,
+        myisam_key_buffer_used_percent, myisam_key_hit,
         bytes_io,
         DML, questions,
         tmp_tables,
@@ -2905,7 +2905,7 @@ def create_status_variables_views():
             ("InnoDB & I/O", "innodb_read_hit_percent, innodb_io, bytes_io"),
             ("Questions", "DML, questions, tmp_tables"),
             ("Resources", "connections_psec, threads_created_psec, opened_tables_psec"),
-            ("Caches", "myisam_key_hit_ratio, thread_cache_use, table_cache_use"),
+            ("Caches", "myisam_key_hit, thread_cache_use, table_cache_use"),
             ("Vitals and OS", "seconds_behind_master, os_memory, table_locks_waited_psec"),
             ("", "os_cpu_utilization_percent, os_loadavg, os_mountpoints_usage_percent"),
         ]
