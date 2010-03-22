@@ -844,11 +844,12 @@ def create_alert_view():
 def create_alert_pending_table():
     query = """
         CREATE TABLE IF NOT EXISTS %s.alert_pending (
-          `alert_pending_id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
-          `alert_condition_id` INT(11) UNSIGNED NOT NULL,
-          `sv_report_sample_id_start` INT(11) DEFAULT NULL,
-          `sv_report_sample_id_end` INT(11) DEFAULT NULL,
+          alert_pending_id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+          alert_condition_id INT(11) UNSIGNED NOT NULL,
+          sv_report_sample_id_start INT(11) DEFAULT NULL,
+          sv_report_sample_id_end INT(11) DEFAULT NULL,
           ts_notified DATETIME DEFAULT NULL,
+          resolved BOOL NOT NULL DEFAULT 0,
           PRIMARY KEY (`alert_pending_id`),
           UNIQUE KEY (`alert_condition_id`)
         )
@@ -884,6 +885,7 @@ def create_alert_pending_view():
             (TIMESTAMPDIFF(SECOND, sv_report_sample_start.ts, sv_report_sample_end.ts)+3) DIV 60 >= alert_delay_minutes AS in_error,
             alert_pending.ts_notified IS NOT NULL AS is_notified,
             alert_pending.ts_notified AS ts_notified,
+            alert_pending.resolved AS resolved,
             alert_condition.repetitive_alert AS repetitive_alert 
           FROM
             ${database_name}.alert_pending
@@ -891,6 +893,7 @@ def create_alert_pending_view():
             JOIN ${database_name}.sv_report_sample AS sv_report_sample_start ON (alert_pending.sv_report_sample_id_start = sv_report_sample_start.id)
             JOIN ${database_name}.sv_report_sample AS sv_report_sample_end ON (alert_pending.sv_report_sample_id_end = sv_report_sample_end.id)
           ORDER BY
+            resolved ASC,
             in_error DESC,
             error_level DESC,
             elapsed_minutes DESC,
@@ -1030,9 +1033,14 @@ def create_alert_email_message_items_view():
         VIEW ${database_name}.alert_email_message_items_view AS
           SELECT
             alert_pending_id,
-            CONCAT(
-              UPPER(error_level), ': ', description, '
+            IF(
+              resolved,
+              CONCAT(
+                'Resolved: ', description, ' (pending id: ', alert_pending_id, ')'),
+              CONCAT(
+                UPPER(error_level), ': ', description, ' (pending id: ', alert_pending_id, ')
     This ', error_level, ' alert is pending for ', elapsed_minutes, ' minutes, since ', ts_start              
+              )
             ) AS message_item
           FROM
             ${database_name}.alert_pending_view
@@ -1134,13 +1142,26 @@ def write_alert_pending(alert_condition_id, report_sample_id):
     act_query(query)
     
     
-def remove_non_pending_alerts(report_sample_id):
+def mark_resolved_alerts(report_sample_id):
+    query = """
+        UPDATE 
+            ${database_name}.alert_pending
+        SET
+          resolved = 1
+        WHERE
+          sv_report_sample_id_end < %d
+        """ % report_sample_id
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+    
+    
+def remove_resolved_alerts():
     query = """
         DELETE FROM 
             ${database_name}.alert_pending
         WHERE
-          sv_report_sample_id_end < %d
-        """ % report_sample_id
+          resolved = 1
+        """
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
@@ -1182,13 +1203,14 @@ def check_alerts():
                 write_alert(alert_condition_id, report_sample_id)
                 write_alert_pending(alert_condition_id, report_sample_id)
                 num_alerts += 1
-    remove_non_pending_alerts(report_sample_id)
+    mark_resolved_alerts(report_sample_id)
     verbose("Found %s alerts" % num_alerts)
     
     notified_pending_alert_ids = send_alert_email()
     if notified_pending_alert_ids:
         # Alerts which have been notified must be marked as such
         mark_notified_pending_alerts(notified_pending_alert_ids)
+        remove_resolved_alerts()
 
 
 def send_alert_email():
@@ -1205,11 +1227,10 @@ def send_alert_email():
         return None
 
     if not rows:
-        # No problems to report
+        # No problems / resolved problems to report
         if not options.force_emails:
             return None
-        # Force an OK email
-    
+        # Force an OK email    
         email_message = """
 Database OK: %s
 
@@ -1224,6 +1245,15 @@ All seems to be well.
     message_items = [row["message_item"] for row in rows]
     alert_pending_ids = [row["alert_pending_id"] for row in rows]
     
+    resolved_item_found = False
+    email_rows = []
+    for message_item in message_items:
+        if message_item.find("Resolved:") == 0:
+            if not resolved_item_found:
+                resolved_item_found = True
+                email_rows.append("---")
+        email_rows.append(message_item)
+        
     email_message = """
 Database alert: %s
 
@@ -1231,7 +1261,7 @@ This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
 The following problems have been found:
 
 %s
-        """ % (database_name, database_name, "\n".join(message_items))
+        """ % (database_name, database_name, "\n".join(email_rows))
     email_subject = "%s: mycheckpoint alert notification" % database_name
     if send_email_message("alert notifications", email_subject, email_message):
         return alert_pending_ids
