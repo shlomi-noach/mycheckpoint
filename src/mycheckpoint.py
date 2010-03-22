@@ -3036,7 +3036,10 @@ Database alert: %s
 
 This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
 
-mycheckpoint cannot access your database. Please check:
+*****************************************
+mycheckpoint cannot access your database.
+*****************************************
+Please check:
 - Is the service running?
 - Are there too many connections?
 - Is there a network problem?
