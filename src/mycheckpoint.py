@@ -1016,6 +1016,8 @@ def create_alert_pending_html_view():
             ') AS html
           FROM
             alert_pending_view
+          WHERE
+            resolved = 0
     """
     query = query.replace("${database_name}", database_name)
     act_query(query)
@@ -1210,7 +1212,7 @@ def check_alerts():
     if notified_pending_alert_ids:
         # Alerts which have been notified must be marked as such
         mark_notified_pending_alerts(notified_pending_alert_ids)
-        remove_resolved_alerts()
+    remove_resolved_alerts()
 
 
 def send_alert_email():
