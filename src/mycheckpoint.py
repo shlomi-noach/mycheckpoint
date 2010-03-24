@@ -1038,10 +1038,13 @@ def create_alert_email_message_items_view():
             IF(
               resolved,
               CONCAT(
-                'Resolved: ', description, ' (pending id: ', alert_pending_id, ')'),
+                'Resolved: ', description, '
+    Pending id: ', alert_pending_id, ', condition id: ', alert_condition_id
+              ),
               CONCAT(
-                UPPER(error_level), ': ', description, ' (pending id: ', alert_pending_id, ')
-    This ', error_level, ' alert is pending for ', elapsed_minutes, ' minutes, since ', ts_start              
+                UPPER(error_level), ': ', description, '
+    This ', error_level, ' alert is pending for ', elapsed_minutes, ' minutes, since ', ts_start, '
+    Pending id: ', alert_pending_id, ', condition id: ', alert_condition_id
               )
             ) AS message_item
           FROM
@@ -1222,7 +1225,15 @@ def send_alert_email():
     Send an email including all never-sent pending alerts.
     Returns the ids of pending alerts
     """    
-    query = """SELECT message_item, alert_pending_id FROM ${database_name}.alert_email_message_items_view"""
+    query = """
+      SELECT 
+        alert_email_message_items_view.message_item, 
+        alert_email_message_items_view.alert_pending_id, 
+        alert_pending.resolved
+      FROM 
+        ${database_name}.alert_email_message_items_view
+        JOIN alert_pending USING (alert_pending_id)
+        """
     query = query.replace("${database_name}", database_name)
     
     rows = get_rows(query, write_conn)
@@ -1246,16 +1257,19 @@ All seems to be well.
         return None
         
 
-    message_items = [row["message_item"] for row in rows]
+    message_items = [(row["message_item"], int(row["resolved"])) for row in rows]
     alert_pending_ids = [row["alert_pending_id"] for row in rows]
     
-    resolved_item_found = False
+    num_resolved_items = 0
+    num_non_resolved_items = 0
     email_rows = []
-    for message_item in message_items:
-        if message_item.find("Resolved:") == 0:
-            if not resolved_item_found:
-                resolved_item_found = True
+    for (message_item, resolved) in message_items:
+        if resolved:
+            if num_resolved_items == 0:
                 email_rows.append("---")
+            num_resolved_items = num_resolved_items+1
+        else:
+            num_non_resolved_items = num_non_resolved_items+1
         email_rows.append(message_item)
         
     email_message = """
@@ -1265,7 +1279,7 @@ This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
 The following problems have been found:
 
 %s
-        """ % (database_name, database_name, "\n".join(email_rows))
+        """ % (database_name, database_name, "\n\n".join(email_rows))
     email_subject = "%s: mycheckpoint alert notification" % database_name
     if send_email_message("alert notifications", email_subject, email_message):
         return alert_pending_ids
