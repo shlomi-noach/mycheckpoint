@@ -2965,15 +2965,15 @@ def get_smtp_from():
 
 def get_smtp_to():
     if options.smtp_to:
-        return options.smtp_to
+        return options.smtp_to.replace(" ","")
     if config.has_option(config_scope, "smtp_to"):
-        return config.get(config_scope, "smtp_to")
+        return config.get(config_scope, "smtp_to").replace(" ","")
     return "mycheckpoint@localhost"
 
 
 def send_email_message(description, subject, message, attachment=None):
     try:
-        smtp_to = get_smtp_to().replace(" ","")
+        smtp_to = get_smtp_to()
         smtp_from = get_smtp_from()
         smtp_host = get_smtp_host()
 
@@ -3002,7 +3002,7 @@ mycheckpoint home page: http://code.openark.org/forge/mycheckpoint
         verbose("Sending %s message from %s to: %s via: %s" % (description, smtp_from, smtp_to, smtp_host))
         # Send the email via our own SMTP server.
         s = smtplib.SMTP(smtp_host)
-        s.sendmail(smtp_from, smtp_to, msg.as_string())
+        s.sendmail(smtp_from, smtp_to.split(","), msg.as_string())
         s.quit()
         verbose("+ Sent")
         return True
