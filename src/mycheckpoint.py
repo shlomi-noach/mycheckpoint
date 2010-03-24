@@ -437,7 +437,7 @@ def get_additional_status_variables():
         "open_table_definitions",
         "opened_table_definitions",
     ]
-    custom_status_variables = ["custom_%x" % i for i in range(16)]
+    custom_status_variables = ["custom_%d" % i for i in range(16)]
     additional_status_variables.extend(custom_status_variables)
     
     return additional_status_variables
@@ -1154,7 +1154,8 @@ def mark_resolved_alerts(report_sample_id):
           sv_report_sample_id_end < %d
         """ % report_sample_id
     query = query.replace("${database_name}", database_name)
-    act_query(query)
+    num_affected_rows = act_query(query)
+    verbose("Marked %d pending alerts as resolved" % num_affected_rows)
     
     
 def remove_resolved_alerts():
@@ -1165,7 +1166,8 @@ def remove_resolved_alerts():
           resolved = 1
         """
     query = query.replace("${database_name}", database_name)
-    act_query(query)
+    num_affected_rows = act_query(query)
+    verbose("Deleted %d resolved pending alerts" % num_affected_rows)
 
 
 def mark_notified_pending_alerts(notified_pending_alert_ids):    
@@ -1205,8 +1207,8 @@ def check_alerts():
                 write_alert(alert_condition_id, report_sample_id)
                 write_alert_pending(alert_condition_id, report_sample_id)
                 num_alerts += 1
-    mark_resolved_alerts(report_sample_id)
     verbose("Found %s alerts" % num_alerts)
+    mark_resolved_alerts(report_sample_id)
     
     notified_pending_alert_ids = send_alert_email()
     if notified_pending_alert_ids:
