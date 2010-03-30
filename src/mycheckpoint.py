@@ -437,7 +437,7 @@ def get_additional_status_variables():
         "open_table_definitions",
         "opened_table_definitions",
     ]
-    custom_status_variables = ["custom_%d" % i for i in range(16)]
+    custom_status_variables = ["custom_%d" % i for i in range(num_custom_columns)]
     additional_status_variables.extend(custom_status_variables)
     
     return additional_status_variables
@@ -2040,6 +2040,8 @@ def create_report_chart_labels_views():
             ${base_ts} + INTERVAL numbers.n ${interval_unit} >= ts_min
             AND ${base_ts} + INTERVAL numbers.n ${interval_unit} <= ts_max
             AND numbers.n <= ${labels_limit}
+          GROUP BY
+            sv_report_${view_name_extension}_recent_minmax.ts_min
         """
     query = query.replace("${database_name}", database_name)
 
@@ -3025,6 +3027,12 @@ mycheckpoint home page: http://code.openark.org/forge/mycheckpoint
         if options.debug:
             traceback.print_exc()
         return False
+    
+    
+def get_html_brief_report():    
+    query = "SELECT html FROM %s.sv_report_html_brief" % database_name
+    brief_report = get_row(query)["html"]
+    return brief_report
 
 
 def email_brief_report():
@@ -3032,8 +3040,7 @@ def email_brief_report():
 
     message = """Attached: mycheckpoint brief HTML report for database: %s""" % database_name
         
-    query = "SELECT html FROM %s.sv_report_html_brief" % database_name
-    brief_report = get_row(query)["html"]
+    brief_report = get_html_brief_report()
     
     attachment = MIMEText(brief_report, _subtype="html")
     attachment.add_header("Content-Disposition", "attachment", filename="mycheckpoint_brief_report_%s.html" % database_name)
@@ -3194,6 +3201,7 @@ try:
         custom_views_columns = {}
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
+        num_custom_columns = 18
 
         # Sanity:
         if not database_name:
