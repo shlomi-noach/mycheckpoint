@@ -23,6 +23,7 @@ import MySQLdb
 import os
 import sys
 import socket
+import time
 import traceback
 import warnings
 from optparse import OptionParser
@@ -82,8 +83,10 @@ def verbose(message):
     if options.verbose:
         print "-- %s" % message
 
+
 def print_error(message):
     sys.stderr.write("-- ERROR: %s\n" % message)
+    return None
 
 
 def open_connections():
@@ -127,7 +130,7 @@ def open_connections():
 
 
 def init_connections():
-    query = """SET @@group_concat_max_len = GREATEST(@@group_concat_max_len, 65535)"""
+    query = """SET @@group_concat_max_len = GREATEST(@@group_concat_max_len, @@max_allowed_packet)"""
     act_query(query, monitored_conn)
     act_query(query, write_conn)
 
@@ -431,14 +434,33 @@ def get_mountpoint_usage_percent(path):
     return used_percent
 
 
+def get_custom_status_variables():
+    custom_status_variables = ["custom_%d" % i for i in range(num_custom_columns)]
+    return custom_status_variables
+
+
+def get_custom_time_status_variables():
+    custom_time_status_variables = ["custom_%d_time" % i for i in range(num_custom_columns)]
+    return custom_time_status_variables
+
+
 def get_additional_status_variables():
     additional_status_variables = [
         "queries",
         "open_table_definitions",
         "opened_table_definitions",
+        "innodb_buffer_pool_pages_free", 
+        "innodb_buffer_pool_pages_total", 
+        "innodb_buffer_pool_reads", 
+        "innodb_buffer_pool_read_requests", 
+        "innodb_buffer_pool_reads", 
+        "innodb_buffer_pool_pages_flushed", 
+        "innodb_os_log_written", 
+        "innodb_row_lock_waits", 
+        "innodb_row_lock_current_waits", 
     ]
-    custom_status_variables = ["custom_%d" % i for i in range(num_custom_columns)]
-    additional_status_variables.extend(custom_status_variables)
+    additional_status_variables.extend(get_custom_status_variables())
+    additional_status_variables.extend(get_custom_time_status_variables())
     
     return additional_status_variables
 
@@ -767,6 +789,90 @@ def create_charts_api_table():
             (%d, %d, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', '%s')
         """ % (database_name, options.chart_width, options.chart_height, options.chart_service_url.replace("'", "''"))
     act_query(query)
+
+
+def create_custom_query_table():
+    query = """
+        CREATE TABLE IF NOT EXISTS %s.custom_query (
+          custom_query_id INT UNSIGNED,
+          enabled BOOL NOT NULL DEFAULT 1,
+          query_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL,
+          description VARCHAR(255) CHARSET utf8 COLLATE utf8_bin DEFAULT NULL,
+          chart_type ENUM('value', 'value_psec', 'time') NOT NULL DEFAULT 'value',
+          PRIMARY KEY (custom_query_id)
+        )
+        """ % database_name
+
+    try:
+        act_query(query)
+        verbose("custom_query table created")
+    except MySQLdb.Error:
+        if options.debug:
+            traceback.print_exc()
+        exit_with_error("Cannot create table %s.custom_query" % database_name)
+
+
+def execute_custom_query(custom_query_id, query_eval):
+    if custom_query_id not in range(num_custom_columns):
+        return print_error("custom_query row with custom_query_id=%d is invalid. Supported custom queries range is 0-%d. Will not evaluate" % (custom_query_id, num_custom_columns-1))
+        
+    start_time = time.time()
+    rows = get_rows(query_eval)
+    end_time = time.time()
+    
+    query_error_message = "Custom query is expected to produce a single (int) column, single row result. custom_query_id=%d" % custom_query_id
+    if len(rows) != 1:
+        return print_error(query_error_message)
+        
+    row = rows[0]
+    if len(row) != 1:
+        return print_error(query_error_message)
+    
+    # Expect an integer value:
+    custom_value = None
+    try:
+        custom_value = int(row.values()[0])
+    except ValueError:
+        return print_error(query_error_message)
+    
+    # We measure time in milliseconds
+    query_time = int(1000*(end_time - start_time))
+    return custom_value, query_time
+
+
+def collect_custom_data():
+    verbose("Collecting custom data")
+    num_custom_columns
+    query = """
+            SELECT 
+              * 
+            FROM 
+              ${database_name}.custom_query
+            WHERE
+              enabled = 1
+        """
+    query = query.replace("${database_name}", database_name)
+    custom_updates = []
+    for custom_query in get_rows(query):
+        custom_query_id = int(custom_query["custom_query_id"])
+        query_eval = custom_query["query_eval"]
+        description = custom_query["description"]
+        verbose("Custom query: %s" % description)
+        custom_query_result = execute_custom_query(custom_query_id, query_eval)
+        if custom_query_result is not None:
+            custom_value, query_time = custom_query_result
+            custom_updates.append("custom_%d = %d, custom_%d_time = %d" % (custom_query_id, custom_value, custom_query_id, query_time,))
+    if custom_updates:
+        query = """
+            UPDATE 
+              %s.%s 
+            SET %s
+            WHERE 
+              id = %d""" % (
+            database_name, table_name, 
+            ",".join(custom_updates), 
+            get_last_insert_id())
+        print query 
 
 
 def create_alert_condition_table():
@@ -3143,6 +3249,7 @@ def deploy_schema():
     create_charts_api_table()
     if not create_status_variables_table():
         upgrade_status_variables_table()
+    #create_custom_query_table()
     create_alert_condition_table()
     create_alert_table()
     create_alert_pending_table()
@@ -3239,6 +3346,7 @@ try:
             collect_status_variables()
             if purge_status_variables():
                 purge_alert()
+            #collect_custom_data()
             check_alerts()
             verbose("Status variables checkpoint complete")
         else:
