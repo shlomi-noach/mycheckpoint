@@ -68,6 +68,7 @@ Available commands:
     parser.add_option("", "--skip-alerts", dest="skip_alerts", action="store_true", default=False, help="Skip evaluating alert conditions as well as sending email notifications")
     parser.add_option("", "--skip-emails", dest="skip_emails", action="store_true", default=False, help="Skip sending email notifications")
     parser.add_option("", "--force-emails", dest="force_emails", action="store_true", default=False, help="Force sending email notifications even if there's nothing wrong")
+    parser.add_option("", "--skip-custom", dest="skip_custom", action="store_true", default=False, help="Skip custom query execution and evaluation")
     parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Chart image width (default: 400, min value: 150)")
     parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Chart image height (default: 200, min value: 100)")
     parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
@@ -847,6 +848,10 @@ def execute_custom_query(custom_query_id, query_eval):
 
 
 def collect_custom_data():
+    if options.skip_custom:
+        verbose("Skipping custom queries")
+        return
+
     verbose("Collecting custom data")
     num_custom_columns
     query = """
@@ -878,7 +883,7 @@ def collect_custom_data():
             database_name, table_name, 
             ",".join(custom_updates), 
             get_last_insert_id())
-        print query 
+        act_query(query) 
 
 
 def create_alert_condition_table():
@@ -1694,7 +1699,7 @@ def create_report_24_7_view():
     Generate a 24/7 report view
     """
 
-    all_columns = custom_views_columns["report"]
+    all_columns = report_columns
     columns_listing = ",\n".join(["AVG(%s) AS %s" % (column_name, column_name,) for column_name in all_columns])
 
     query = """
@@ -1896,7 +1901,7 @@ def create_report_recent_views():
 
 
 def create_report_sample_recent_aggregated_view():
-    all_columns = custom_views_columns["report"]
+    all_columns = report_columns
     columns_listing = ",\n".join(["AVG(%s) AS %s" % (column_name, column_name,) for column_name in all_columns])
     query = """
         CREATE
@@ -1931,7 +1936,7 @@ def create_report_minmax_views():
     These are used by the chart labels views and the chart views.
     """
 
-    all_columns = custom_views_columns["report"]
+    all_columns = report_columns
 
     min_columns_listing = ",\n".join(["MIN(%s) AS %s_min" % (column_name, column_name,) for column_name in all_columns])
     max_columns_listing = ",\n".join(["MAX(%s) AS %s_max" % (column_name, column_name,) for column_name in all_columns])
@@ -2307,6 +2312,74 @@ def create_report_dygraph_chart_views(charts_list):
     verbose("dycharts views created")
 
 
+def create_custom_google_charts_views():
+    chart_type_extensions = {
+            "value": "",
+            "value_psec": "_psec",
+            "time": "_time",
+        }
+    case_clauses = []
+    for i in range(num_custom_columns):
+        for chart_type in ["value", "value_psec", "time"]:
+            case_clauses.append("WHEN '%d,%s' THEN custom_%d%s" % (i, chart_type, i, chart_type_extensions[chart_type]))
+    for view_name_extension in ["sample", "hour", "day"]:
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = TEMPTABLE
+            DEFINER = CURRENT_USER
+            SQL SECURITY INVOKER
+            VIEW ${database_name}.sv_custom_chart_${view_name_extension} AS
+              SELECT
+                custom_query.*,
+                CASE CONCAT(custom_query_id, ',', chart_type)
+                    %s
+                    ELSE NULL
+                END AS chart
+              FROM
+                ${database_name}.custom_query, ${database_name}.sv_report_chart_${view_name_extension}
+              ORDER BY
+                chart_order ASC, custom_query_id ASC
+            """ % "\n".join(case_clauses)
+        query = query.replace("${database_name}", database_name)
+        query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(query)
+
+    verbose("custom chart views created")
+
+
+def create_custom_google_charts_flattened_views():
+    """
+    We flatten the sv_custom_chart_* views into one row. This will be useful when generating HTML view.
+    """
+    custom_clauses = []
+    for i in range(num_custom_columns):
+        custom_clause = """
+            MAX(IF(custom_query_id=%d AND enabled, chart, NULL)) AS custom_%d_chart,
+            MAX(IF(custom_query_id=%d, description, NULL)) AS custom_%d_description
+            """ % (i, i, i, i,)
+        custom_clauses.append(custom_clause)
+        
+    for view_name_extension in ["sample", "hour", "day"]:
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = TEMPTABLE
+            DEFINER = CURRENT_USER
+            SQL SECURITY INVOKER
+            VIEW ${database_name}.sv_custom_chart_flattened_${view_name_extension} AS
+              SELECT
+                %s
+              FROM
+                ${database_name}.sv_custom_chart_${view_name_extension}
+            """ % ", ".join(custom_clauses)
+        query = query.replace("${database_name}", database_name)
+        query = query.replace("${view_name_extension}", view_name_extension)
+        act_query(query)
+
+    verbose("custom chart flattened views created")
+
+
 def create_report_html_view(charts_aliases):
     charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
 
@@ -2668,6 +2741,99 @@ def create_report_html_brief_interactive_view(report_charts):
     verbose("sv_report_html_brief_interactive created")
 
 
+def create_custom_html_brief_view():
+
+    custom_charts_queries = []
+    for i in range(num_custom_columns):
+        custom_chart_query = """
+            '<div class="chart">
+                <h3>', IFNULL(custom_%d_description, 'N/A'), '</h3>',
+                IFNULL(
+                  CONCAT('<img src="', custom_%d_chart, '"/>'), 
+                  '<div class="img_dummy">Chart N/A</div>'),
+            '</div>',
+            """ % (i, i)
+        custom_charts_queries.append(custom_chart_query)
+        
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.sv_custom_html_brief AS
+          SELECT CONCAT('
+            <html>
+                <head>
+                <title>mycheckpoint brief report</title>
+                <meta http-equiv="refresh" content="600" />
+                <style type="text/css">
+                    body {
+                        background:#FFFFFF none repeat scroll 0% 0%;
+                        color:#505050;
+                        font-family:Verdana,Arial,Helvetica,sans-serif;
+                        font-size:9pt;
+                        line-height:1.5;
+                    }
+                    a {
+                        color:#f26522;
+                        text-decoration:none;
+                    }
+                    h2 {
+                        font-weight:normal;
+                        margin-top:20px;
+                    }
+                    h2 a {
+                        font-weight:normal;
+                        font-size: 60%%;
+                    }
+                    h3 {
+                        font-weight:normal;
+                    }
+                    .nobr {
+                        white-space: nowrap;
+                    }
+                    div.row {
+                        width: ${global_width};
+                    }
+                    div.chart {
+                        float: left;
+                        white-space: nowrap;
+                        margin-right: 10px;
+                        width:', charts_api.chart_width, ';
+                    }
+                    .img_dummy, div.chart img {
+                        border:0px none;
+                        width: ', charts_api.chart_width, ';
+                        height: ', charts_api.chart_height, ';
+                    }
+                    .clear {
+                        clear:both;
+                        height:1px;
+                    }
+                </style>
+                </head>
+                <body>
+                    <a name=""></a>
+                    Custom report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                        DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
+                    <br/><br/>
+                    ',
+                    %s '
+                </body>
+            </html>
+          ') AS html
+          FROM
+            ${database_name}.sv_custom_chart_flattened_sample, ${database_name}.charts_api
+        """ % "".join(custom_charts_queries)
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
+
+    act_query(query)
+
+    verbose("sv_custom_html_brief created")
+
+
 def create_status_variables_parameter_change_view():
     global_variables, _diff_columns = get_variables_and_status_columns()
 
@@ -2775,30 +2941,16 @@ def create_status_variables_aggregated_view():
     act_query(query)
 
 
-def create_custom_views(view_base_name, view_columns, custom_columns = ""):
-    global_variables, status_variables = get_variables_and_status_columns()
-
-    view_columns_list = [column_name.strip() for column_name in view_columns.lower().split(",")]
-    all_columns_listing = []
-    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in global_variables])
-    all_columns_listing.extend([column_name for column_name in view_columns_list if column_name in status_variables])
-    all_columns_listing.extend([" %s_diff" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
-    all_columns_listing.extend(["%s_psec" % (column_name,) for column_name in view_columns_list if column_name in status_variables])
-    columns_listing = ",\n".join(all_columns_listing)
-    if custom_columns:
-        if view_columns:
-            columns_listing = columns_listing + ",\n "
-        columns_listing = columns_listing + custom_columns
-
+def create_report_views(columns_listing):
     # This is currently an ugly patch (first one in this code...)
-    # We need to know which custom columns have been created in the "report" views, so that we can later build the
+    # We need to know which columns have been created in the "report" views, so that we can later build the
     # sv_report_minmax_* views.
-    # So we parse the custom columns. We expect one column per line; we allow for aliasing (" as ")
+    # So we parse the columns. We expect one column per line; we allow for aliasing (" as ")
     # We then store the columns for later use.
-    custom_columns_names_list = [column_name for column_name in custom_columns.lower().split("\n")]
-    custom_columns_names_list = [column_name.split(" as ")[-1].replace(",","").strip() for column_name in custom_columns_names_list]
-    custom_columns_names_list = [column_name for column_name in custom_columns_names_list if column_name]
-    custom_views_columns[view_base_name] = custom_columns_names_list
+    columns_names_list = [column_name for column_name in columns_listing.lower().split("\n")]
+    columns_names_list = [column_name.split(" as ")[-1].replace(",","").strip() for column_name in columns_names_list]
+    columns_names_list = [column_name for column_name in columns_names_list if column_name]
+    report_columns.extend(columns_names_list)
 
     query = """
         CREATE
@@ -2806,7 +2958,7 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
         ALGORITHM = MERGE
         DEFINER = CURRENT_USER
         SQL SECURITY INVOKER
-        VIEW ${database_name}.sv_%s_${view_name_extension} AS
+        VIEW ${database_name}.sv_report_${view_name_extension} AS
           SELECT
             id,
             ts,
@@ -2814,15 +2966,14 @@ def create_custom_views(view_base_name, view_columns, custom_columns = ""):
             %s
           FROM
             ${database_name}.sv_${view_name_extension}
-    """ % (view_base_name,
-           columns_listing)
+    """ % columns_listing
     query = query.replace("${database_name}", database_name)
 
     for view_name_extension in ["sample", "hour", "day"]:
         custom_query = query.replace("${view_name_extension}", view_name_extension)
         act_query(custom_query)
 
-    verbose("%s custom views created" % view_base_name)
+    verbose("report views created")
 
 
 def create_status_variables_views():
@@ -2835,7 +2986,7 @@ def create_status_variables_views():
     create_status_variables_parameter_change_view()
 
     # Report views:
-    create_custom_views("report", "", """
+    create_report_views("""
             uptime,
             LEAST(100, ROUND(100*uptime_diff/NULLIF(ts_diff_seconds, 0), 1)) AS uptime_percent,
 
@@ -3061,6 +3212,8 @@ def create_status_variables_views():
         ]
     create_report_google_chart_24_7_view(report_24_7_columns)
 
+    create_custom_google_charts_views()
+    create_custom_google_charts_flattened_views()
     # Report HTML views:
     create_report_html_24_7_view(report_24_7_columns)
     create_report_html_view("""
@@ -3089,6 +3242,7 @@ def create_status_variables_views():
             ("", "os_cpu_utilization_percent, os_loadavg, os_mountpoints_usage_percent"),
         ]
     create_report_html_brief_view(brief_html_view_charts)
+    create_custom_html_brief_view()
     #create_report_html_brief_interactive_view(brief_html_view_charts)
 
 
@@ -3328,7 +3482,7 @@ try:
         table_name = "status_variables"
         status_dict = {}
         extra_dict = {}
-        custom_views_columns = {}
+        report_columns = []
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
         num_custom_columns = 18
