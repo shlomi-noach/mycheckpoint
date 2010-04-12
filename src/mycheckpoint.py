@@ -444,6 +444,11 @@ def get_custom_time_status_variables():
     return custom_time_status_variables
 
 
+def get_custom_status_variables_psec():
+    custom_status_variables_psec = ["custom_%d_psec" % i for i in range(num_custom_columns)]
+    return custom_status_variables_psec
+
+
 def get_additional_status_variables():
     additional_status_variables = [
         "queries",
@@ -799,6 +804,7 @@ def create_custom_query_table():
           query_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL,
           description VARCHAR(255) CHARSET utf8 COLLATE utf8_bin DEFAULT NULL,
           chart_type ENUM('value', 'value_psec', 'time') NOT NULL DEFAULT 'value',
+          chart_order TINYINT(4) NOT NULL DEFAULT '0',
           PRIMARY KEY (custom_query_id)
         )
         """ % database_name
@@ -2945,8 +2951,16 @@ def create_status_variables_views():
 
             os_root_mountpoint_usage_percent,
             os_datadir_mountpoint_usage_percent,
-            os_tmpdir_mountpoint_usage_percent
-        """)
+            os_tmpdir_mountpoint_usage_percent,
+            %s,
+            %s,
+            %s
+        """ % (
+               ",\n".join(get_custom_status_variables()), 
+               ",\n".join(get_custom_status_variables_psec()),  
+               ",\n".join(get_custom_time_status_variables()),
+               )
+        )
     create_report_24_7_view()
     create_report_recent_views()
     create_report_sample_recent_aggregated_view()
@@ -2999,6 +3013,15 @@ def create_status_variables_views():
 
         ("os_root_mountpoint_usage_percent, os_datadir_mountpoint_usage_percent, os_tmpdir_mountpoint_usage_percent", "os_mountpoints_usage_percent", True, True),
         ]
+    report_chart_views.extend([
+        (custom_variable, custom_variable, True, False) for custom_variable in get_custom_status_variables()
+        ])
+    report_chart_views.extend([
+        (custom_variable, custom_variable, True, False) for custom_variable in get_custom_time_status_variables()
+        ])
+    report_chart_views.extend([
+        (custom_variable, custom_variable, True, False) for custom_variable in get_custom_status_variables_psec()
+        ])
     create_report_dygraph_chart_views(report_chart_views)
     create_report_google_chart_views(report_chart_views)
     report_24_7_columns = [
@@ -3249,7 +3272,7 @@ def deploy_schema():
     create_charts_api_table()
     if not create_status_variables_table():
         upgrade_status_variables_table()
-    #create_custom_query_table()
+    create_custom_query_table()
     create_alert_condition_table()
     create_alert_table()
     create_alert_pending_table()
@@ -3346,7 +3369,7 @@ try:
             collect_status_variables()
             if purge_status_variables():
                 purge_alert()
-            #collect_custom_data()
+            collect_custom_data()
             check_alerts()
             verbose("Status variables checkpoint complete")
         else:
