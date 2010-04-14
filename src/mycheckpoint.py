@@ -1469,7 +1469,7 @@ def create_status_variables_diff_view():
     diff_signed_columns_listing = ",\n".join([" ${status_variables_table_alias}2.%s - ${status_variables_table_alias}1.%s AS %s_diff" % (column_name, column_name, column_name, ) for column_name in status_columns if is_signed_column(column_name)])
     # When either sv1's or sv2's variable is NULL, the IF condition fails and we do the "-" math, leading again to NULL. 
     # I *want* the diff to be NULL. This makes more sense than choosing sv2's value.
-    diff_unsigned_columns_listing = ",\n".join([" IF(${status_variables_table_alias}2.%s < ${status_variables_table_alias}1.%s, ${status_variables_table_alias}2.%s) AS %s_diff, ${status_variables_table_alias}2.%s - ${status_variables_table_alias}1.%s" % (column_name, column_name, column_name, column_name, column_name, column_name, ) for column_name in status_columns if not is_signed_column(column_name)])
+    diff_unsigned_columns_listing = ",\n".join([" IF(${status_variables_table_alias}2.%s < ${status_variables_table_alias}1.%s, ${status_variables_table_alias}2.%s, ${status_variables_table_alias}2.%s - ${status_variables_table_alias}1.%s) AS %s_diff" % (column_name, column_name, column_name, column_name, column_name, column_name, ) for column_name in status_columns if not is_signed_column(column_name)])
 
     query = """
         CREATE
