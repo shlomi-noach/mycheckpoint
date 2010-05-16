@@ -886,6 +886,37 @@ def collect_custom_data():
         act_query(query) 
 
 
+def get_processlist_summary():
+    query = "SHOW PROCESSLIST"
+    num_sleeping_processes = 0
+    printed_rows = []
+    # Get processes in descending time order:
+    sorted_rows = sorted(get_rows(query), key=lambda row: int(row["Time"]), reverse=True)
+    for row in sorted_rows:
+        command = row["Command"]
+        if command == "Sleep":
+            num_sleeping_processes = num_sleeping_processes+1
+        else:
+            for column_name in row.keys():
+                if row[column_name] is None:
+                    row[column_name] = "NULL"
+            printed_row = """
+     Id: %s
+   User: %s
+   Host: %s
+     db: %s
+Command: %s
+   Time: %s
+  State: %s
+   Info: %s
+-------""" % (
+                row["Id"], row["User"], row["Host"], row["db"], row["Command"], row["Time"], row["State"], row["Info"], 
+            )
+            printed_rows.append(printed_row)
+    printed_rows.append("Sleeping: %d processes" % num_sleeping_processes)
+    return "\n".join(printed_rows)            
+    
+    
 def create_alert_condition_table():
     query = """
         CREATE TABLE IF NOT EXISTS %s.alert_condition (
@@ -1383,12 +1414,18 @@ All seems to be well.
     for (message_item, resolved) in message_items:
         if resolved:
             if num_resolved_items == 0:
-                email_rows.append("---")
+                email_rows.append("-------")
             num_resolved_items = num_resolved_items+1
         else:
             num_non_resolved_items = num_non_resolved_items+1
         email_rows.append(message_item)
-        
+  
+    try:
+        processlist_summary = get_processlist_summary()
+    except:
+        processlist_summary = ""
+        print_error("Unable to get PROCESSLIST. Check for GRANTs")
+    
     email_message = """
 Database alert: %s
 
@@ -1396,7 +1433,11 @@ This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
 The following problems have been found:
 
 %s
-        """ % (database_name, database_name, "\n\n".join(email_rows))
+
+-------
+PROCESSLIST summary:
+%s
+        """ % (database_name, database_name, "\n\n".join(email_rows), processlist_summary)
     email_subject = "%s: mycheckpoint alert notification" % database_name
     if send_email_message("alert notifications", email_subject, email_message):
         return alert_pending_ids
@@ -3630,7 +3671,7 @@ try:
             
         if should_email_brief_report:
             email_brief_report()
-
+        
     except Exception, err:
         if not monitored_conn:
             print_error("Cannot connect to database")
