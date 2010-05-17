@@ -1420,11 +1420,17 @@ All seems to be well.
             num_non_resolved_items = num_non_resolved_items+1
         email_rows.append(message_item)
   
-    try:
-        processlist_summary = get_processlist_summary()
-    except:
-        processlist_summary = ""
-        print_error("Unable to get PROCESSLIST. Check for GRANTs")
+    processlist_clause = ""
+    if num_non_resolved_items > 0:
+        try:
+            processlist_summary = get_processlist_summary()
+            processlist_clause = """
+-------
+PROCESSLIST summary:
+%s
+                """ % (processlist_summary)
+        except:
+            print_error("Unable to get PROCESSLIST. Check for GRANTs")
     
     email_message = """
 Database alert: %s
@@ -1434,10 +1440,8 @@ The following problems have been found:
 
 %s
 
--------
-PROCESSLIST summary:
 %s
-        """ % (database_name, database_name, "\n\n".join(email_rows), processlist_summary)
+        """ % (database_name, database_name, "\n\n".join(email_rows), processlist_clause)
     email_subject = "%s: mycheckpoint alert notification" % database_name
     if send_email_message("alert notifications", email_subject, email_message):
         return alert_pending_ids
