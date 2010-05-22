@@ -178,6 +178,12 @@ def get_last_insert_id():
     return int(row["id"])
 
 
+def get_current_timestamp():
+    query = "SELECT CURRENT_TIMESTAMP() AS current_ts"
+    row = get_row(query, write_conn)
+    return row["current_ts"]
+
+
 def prompt_deploy_instructions():
     print "--"
     print "-- Make sure `%s` schema exists, e.g." % database_name
@@ -1433,7 +1439,7 @@ PROCESSLIST summary:
             print_error("Unable to get PROCESSLIST. Check for GRANTs")
     
     email_message = """
-Database alert: %s
+Database alert: %s, generated on %s
 
 This is an alert mail sent by mycheckpoint, monitoring your %s MySQL database.
 The following problems have been found:
@@ -1441,7 +1447,7 @@ The following problems have been found:
 %s
 
 %s
-        """ % (database_name, database_name, "\n\n".join(email_rows), processlist_clause)
+        """ % (database_name, get_current_timestamp(), database_name, "\n\n".join(email_rows), processlist_clause)
     email_subject = "%s: mycheckpoint alert notification" % database_name
     if send_email_message("alert notifications", email_subject, email_message):
         return alert_pending_ids
