@@ -29,7 +29,7 @@
         "->": "arrow"
     };
     Raphael.fn.g.shim = {stroke: "none", fill: "#000", "fill-opacity": 0};
-    Raphael.fn.g.txtattr = {font: "12px Arial, sans-serif"};
+    Raphael.fn.g.txtattr = {stroke: "none", fill: "#606060", font: "Arial, sans-serif", "font-size": 11};
     Raphael.fn.g.colors = [];
     var hues = [.6, .2, .05, .1333, .75, 0];
     for (var i = 0; i < 10; i++) {
@@ -380,11 +380,12 @@
         var f = round((from - (i > 0 ? 0 : .5)) * Math.pow(10, i)) / Math.pow(10, i);
         return {from: f, to: t, power: i};
     };
-    Raphael.fn.g.axis = function (x, y, length, from, to, steps, orientation, labels, type, dashsize) {
+    Raphael.fn.g.axis = function (x, y, length, from, to, steps, orientation, labels, type, dashsize, grid_length, tick_x_points) {
         dashsize = dashsize == null ? 2 : dashsize;
         type = type || "t";
         steps = steps || 10;
         var path = type == "|" || type == " " ? ["M", x + .5, y, "l", 0, .001] : orientation == 1 || orientation == 3 ? ["M", x + .5, y, "l", 0, -length] : ["M", x, y + .5, "l", length, 0],
+	    path_grid = "",
             ends = this.g.snapEnds(from, to, steps),
             f = ends.from,
             t = ends.to,
@@ -396,9 +397,14 @@
             rnd = i > 0 ? i : 0;
             dx = length / steps;
         if (+orientation == 1 || +orientation == 3) {
+	    // y-axis
             var Y = y,
                 addon = (orientation - 1 ? 1 : -1) * (dashsize + 3 + !!(orientation - 1));
             while (Y >= y - length) {
+		if (grid_length)
+		{
+		    path_grid = path_grid.concat(["M", x , Y + .5, "l", grid_length, 0]);
+		}
                 type != "-" && type != " " && (path = path.concat(["M", x - (type == "+" || type == "|" ? dashsize : !(orientation - 1) * dashsize * 2), Y + .5, "l", dashsize * 2 + 1, 0]));
                 text.push(this.text(x + addon, Y, (labels && labels[j++]) || (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr).attr({"text-anchor": orientation - 1 ? "start" : "end"}));
                 label += d;
@@ -409,6 +415,7 @@
                 text.push(this.text(x + addon, y - length, (labels && labels[j]) || (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr).attr({"text-anchor": orientation - 1 ? "start" : "end"}));
             }
         } else {
+	    // x-axis
             var X = x,
                 label = f,
                 rnd = i > 0 ? i : 0,
@@ -417,8 +424,21 @@
                 txt = 0,
                 prev = 0;
             while (X <= x + length) {
-                type != "-" && type != " " && (path = path.concat(["M", X + .5, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, dashsize * 2 + 1]));
-                text.push(txt = this.text(X, y + addon, (labels && labels[j++]) || (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr));
+		var tick_xpos = X + .5;
+		if (tick_x_points && labels)
+		    tick_xpos = tick_x_points[j];
+		var show_tick = true;
+		if (tick_xpos <= x)
+		    show_tick = false;
+		if (labels && !labels[j])
+		    show_tick = false;
+		if (grid_length && show_tick)
+		{
+		    path_grid = path_grid.concat(["M", tick_xpos, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, -grid_length]);
+		}
+		if (show_tick)
+                    type != "-" && type != " " && (path = path.concat(["M", tick_xpos, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, dashsize * 2 + 1]));
+                text.push(txt = this.text(tick_xpos, y + addon, labels ? labels[j++] : (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr));
                 var bb = txt.getBBox();
                 if (prev >= bb.x - 5) {
                     text.pop(text.length - 1).remove();
@@ -430,10 +450,11 @@
             }
             if (Math.round(X - dx - x - length)) {
                 type != "-" && type != " " && (path = path.concat(["M", x + length + .5, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, dashsize * 2 + 1]));
-                text.push(this.text(x + length, y + addon, (labels && labels[j]) || (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr));
+                text.push(this.text(x + length, y + addon, labels ? labels[j] : (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr));
             }
         }
-        var res = this.path(path);
+	this.path(path_grid).attr({"stroke": "#303030", "stroke-width": 0.7, "stroke-dasharray": ". "});
+        var res = this.path(path).attr({"stroke": "#b0b0b0"});
         res.text = text;
         res.all = this.set([res, text]);
         res.remove = function () {

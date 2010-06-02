@@ -4,7 +4,7 @@
  * Copyright (c) 2009 Dmitry Baranovskiy (http://g.raphaeljs.com)
  * Licensed under the MIT (http://www.opensource.org/licenses/mit-license.php) license.
  */
-Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts) {
+Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, labelsx) {
     function shrink(values, dim) {
         var k = values.length / dim,
             j = 0,
@@ -31,6 +31,19 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts) 
     if (!this.raphael.is(valuesy[0], "array")) {
         valuesy = [valuesy];
     }
+    function normalize_array(array, min_zero, max_100)
+    {
+	result = []
+	for (var i = 0; i < array.length; i++) {
+	    if (array[i] != null)
+		result.push(array[i]);
+	}
+	if (min_zero)
+	    result.push(0);
+	if (max_100)
+	    result.push(100);
+	return result;
+    }
     var allx = Array.prototype.concat.apply([], valuesx),
         ally = Array.prototype.concat.apply([], valuesy),
         xdim = this.g.snapEnds(Math.min.apply(Math, allx), Math.max.apply(Math, allx), valuesx[0].length - 1),
@@ -38,13 +51,16 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts) 
         maxx = xdim.to,
         gutter = opts.gutter || 10,
         kx = (width - gutter * 2) / (maxx - minx),
-        ydim = this.g.snapEnds(Math.min.apply(Math, ally), Math.max.apply(Math, ally), valuesy[0].length - 1),
+	ally_normalized = normalize_array(ally, opts.min_zero, opts.max_100);
+        ydim = this.g.snapEnds(Math.min.apply(Math, ally_normalized), Math.max.apply(Math, ally_normalized), valuesy[0].length - 1),
         miny = ydim.from,
         maxy = ydim.to,
         ky = (height - gutter * 2) / (maxy - miny),
         len = Math.max(valuesx[0].length, valuesy[0].length),
         symbol = opts.symbol || "",
         colors = opts.colors || Raphael.fn.g.colors,
+	colors = ["#ff8c00", "#4682b4", "#9acd32", "#dc143c", "#9932cc", "#ffd700", "#191970", "#7fffd4", "#808080", "#dda0dd"];
+
         that = this,
         columns = null,
         dots = null,
@@ -68,13 +84,6 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts) 
         }
     }
     var axis = this.set();
-    if (opts.axis) {
-        var ax = (opts.axis + "").split(/[,\s]+/);
-        +ax[0] && axis.push(this.g.axis(x + gutter, y + gutter, width - 2 * gutter, minx, maxx, opts.axisxstep || Math.floor((width - 2 * gutter) / 20), 2));
-        +ax[1] && axis.push(this.g.axis(x + width - gutter, y + height - gutter, height - 2 * gutter, miny, maxy, opts.axisystep || Math.floor((height - 2 * gutter) / 20), 3));
-        +ax[2] && axis.push(this.g.axis(x + gutter, y + height - gutter, width - 2 * gutter, minx, maxx, opts.axisxstep || Math.floor((width - 2 * gutter) / 20), 0));
-        +ax[3] && axis.push(this.g.axis(x + gutter, y + height - gutter, height - 2 * gutter, miny, maxy, opts.axisystep || Math.floor((height - 2 * gutter) / 20), 1));
-    }
     var lines = this.set(),
         symbols = this.set(),
         line;
@@ -91,17 +100,35 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts) 
         var sym = this.raphael.is(symbol, "array") ? symbol[i] : symbol,
             symset = this.set();
         path = [];
+	xpoints = [];
+	var current_value_is_null = false;
+	var last_value_is_null = false;
         for (var j = 0, jj = valuesy[i].length; j < jj; j++) {
+	    current_value_is_null = (valuesy[i][j] == null);
             var X = x + gutter + ((valuesx[i] || valuesx[0])[j] - minx) * kx;
             var Y = y + height - gutter - (valuesy[i][j] - miny) * ky;
-            (Raphael.is(sym, "array") ? sym[j] : sym) && symset.push(this.g[Raphael.fn.g.markers[this.raphael.is(sym, "array") ? sym[j] : sym]](X, Y, (opts.width || 2) * 3).attr({fill: colors[i], stroke: "none"}));
-            path = path.concat([j ? "L" : "M", X, Y]);
+	    xpoints.push(X);
+	    if (!current_value_is_null)
+	    {
+                (Raphael.is(sym, "array") ? sym[j] : sym) && symset.push(this.g[Raphael.fn.g.markers[this.raphael.is(sym, "array") ? sym[j] : sym]](X, Y, (opts.width || 2) * 3).attr({fill: colors[i], stroke: "none"}));
+	    }
+	    var should_draw_line = j && !last_value_is_null;
+	    if (!current_value_is_null)
+                path = path.concat([should_draw_line ? "L" : "M", X, Y]);
+	    last_value_is_null = current_value_is_null;
         }
         symbols.push(symset);
         if (opts.shade) {
             shades[i].attr({path: path.concat(["L", X, y + height - gutter, "L",  x + gutter + ((valuesx[i] || valuesx[0])[0] - minx) * kx, y + height - gutter, "z"]).join(",")});
         }
         !opts.nostroke && line.attr({path: path.join(",")});
+    }
+    if (opts.axis) {
+        var ax = (opts.axis + "").split(/[,\s]+/);
+	// Bottom x-axis
+        +ax[2] && axis.push(this.g.axis(x + gutter, y + height - gutter, width - 2 * gutter, minx, maxx, (labelsx? labelsx.length-1 : Math.floor((width - 2 * gutter) / 20)), 0, labelsx, "t", 2, height - 2 * gutter, xpoints));
+	// Left y-axis
+        +ax[3] && axis.push(this.g.axis(x + gutter, y + height - gutter, height - 2 * gutter, miny, maxy, opts.axisystep || Math.floor((height - 2 * gutter) / 20), 1, null, "t", 2, width - 2 * gutter, null));
     }
     function createColumns(f) {
         // unite Xs together
@@ -170,6 +197,10 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts) 
     chart.shades = shades;
     chart.symbols = symbols;
     chart.axis = axis;
+    chart.chart_height = height;
+    chart.y_pos = y;
+    chart.x_pos = x;
+    chart.colors = colors;
     chart.hoverColumn = function (fin, fout) {
         !columns && createColumns();
         columns.mouseover(fin).mouseout(fout);
@@ -214,4 +245,29 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts) 
         return this;
     };
     return chart;
+};
+
+Raphael.fn.g.auto_linechart = function (raphael, x, y, width, height, valuesx, valuesy, opts, labelsx) {
+	var chart = this.g.linechart(x, y, width, height, valuesx, valuesy, opts, labelsx).hoverColumn(function () {
+	    this.tags = raphael.set();
+	    this.legends = raphael.set();
+	    this.symbols = raphael.set();
+	    this.legend_y_pos = chart.y_pos + chart.chart_height + 20;
+	    this.legend_x_pos = chart.x_pos;
+	    this.colors = chart.colors;
+	    for (var i = 0, ii = this.y.length; i < ii; i++) {
+		if (this.values[i] != null)
+		{
+		   this.tags.push(raphael.g.tag(this.x, this.y[i], ""+this.values[i], 160, 10).insertBefore(this).attr([{fill: this.colors[i]}, {fill: "#fff"}]));
+		   //this.symbols.push(raphael.g["disc"](this.x, this.y[i], 4).attr({fill: this.colors[i], stroke: "none"}));
+           //(Raphael.is(sym, "array") ? sym[j] : sym) && symset.push(this.g["plus"](X, Y, (opts.width || 2) * 3).attr({fill: colors[i], stroke: "none"}));
+		}
+		raphael.rect(this.legend_x_pos, this.legend_y_pos+(i*16)-5, 10, 10).attr({stroke: "none", fill: this.colors[i]})
+		this.legends.push(raphael.g.text(this.legend_x_pos+20, this.legend_y_pos+(i*16), "innodb_buffer_pool_hits_"+(this.values[i] != null ? this.values[i] : "N/A")).attr({"text-anchor": "start"}).attr(raphael.g.txtattr));
+	    }
+	}, function () {
+	    this.tags && this.tags.remove();
+	    this.legends && this.legends.remove();
+	    this.symbols && this.symbols.remove();
+	});
 };
