@@ -8,7 +8,7 @@ Depends: python-mysqldb
 Installed-Size: 140
 Maintainer: Shlomi Noach [shlomi@code.openark.org]
 Description: Monitoring for MySQL
- Lightweight, SQL oriented monitoring for MySQL
+ Lightweight, SQL oriented monitoring solution for MySQL
  Requires MySQL 5.0 or greater.
  See http://code.openark.org/forge/mycheckpoint
  Released under the BSD license

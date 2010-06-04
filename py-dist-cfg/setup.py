@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name="mycheckpoint",
-    description= "Lightweight, SQL oriented monitoring for MySQL",
+    description= "Lightweight, SQL oriented monitoring solution for MySQL",
     platforms= ["Linux", "Un*x", "Python"],
     license= "BSD",
     author="Shlomi Noach",

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 #
-# mycheckpoint: Lightweight, SQL oriented monitoring for MySQL
+# mycheckpoint: Lightweight, SQL oriented monitoring solution for MySQL
 #
 # Released under the BSD license
 #
@@ -1783,6 +1783,7 @@ def create_report_24_7_view():
 def generate_google_chart_24_7_query(chart_column):
 
     chart_color = "4682b4"
+    chart_color = "7ec97e,e6e862,c45b5b"
 
     query = """
           REPLACE(
@@ -1797,7 +1798,7 @@ def generate_google_chart_24_7_query(chart_column):
                 ))
             ),
             '&chxt=x,y&chxl=0:|00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|16|17|18|19|20|21|22|23|1:|Mon|Tue|Wed|Thu|Fri|Sat|Sun',
-            '&chm=o,${chart_color},0,-1,18,0'
+            '&chm=o&chco=${chart_color}'
           ), ' ', '+') AS ${chart_column}
         """
     query = query.replace("${chart_column}", chart_column)

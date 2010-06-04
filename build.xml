@@ -51,6 +51,21 @@
 		</java>
 		<delete dir="build/dygraphs/tmp"/>
 	</target>
+	<target name="graphael">
+		<mkdir dir="build/graphael"/>
+		<mkdir dir="build/graphael/tmp"/>
+		<concat destfile="build/graphael/tmp/graphael-concat.js">
+			<filelist>
+				<file name="graphael/raphael.js"/>
+				<file name="graphael/g.raphael.js"/>
+				<file name="graphael/g.line.js"/>
+			</filelist>
+		</concat>
+		<java jar="graphael/yuicompressor-2.4.2.jar" fork="true" output="build/graphael/graphael-combined.js">
+			<arg value="build/graphael/tmp/graphael-concat.js"/>
+		</java>
+		<delete dir="build/graphael/tmp"/>
+	</target>
 
 	<target name="scripts">
 		<mkdir dir="build/scripts"/>

@@ -4,7 +4,7 @@
  * Copyright (c) 2009 Dmitry Baranovskiy (http://g.raphaeljs.com)
  * Licensed under the MIT (http://www.opensource.org/licenses/mit-license.php) license.
  */
-Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, labelsx) {
+Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, title, series, labelsx) {
     function shrink(values, dim) {
         var k = values.length / dim,
             j = 0,
@@ -46,13 +46,13 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
     }
     var allx = Array.prototype.concat.apply([], valuesx),
         ally = Array.prototype.concat.apply([], valuesy),
-        xdim = this.g.snapEnds(Math.min.apply(Math, allx), Math.max.apply(Math, allx), valuesx[0].length - 1),
+        xdim = this.g.snapEnds(Math.min.apply(Math, allx), Math.max.apply(Math, allx), valuesx[0].length - 1, true),
         minx = xdim.from,
         maxx = xdim.to,
         gutter = opts.gutter || 10,
         kx = (width - gutter * 2) / (maxx - minx),
 	ally_normalized = normalize_array(ally, opts.min_zero, opts.max_100);
-        ydim = this.g.snapEnds(Math.min.apply(Math, ally_normalized), Math.max.apply(Math, ally_normalized), valuesy[0].length - 1),
+        ydim = this.g.snapEnds(Math.min.apply(Math, ally_normalized), Math.max.apply(Math, ally_normalized), valuesy[0].length - 1, true),
         miny = ydim.from,
         maxy = ydim.to,
         ky = (height - gutter * 2) / (maxy - miny),
@@ -91,7 +91,7 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
         if (!opts.nostroke) {
             lines.push(line = this.path().attr({
                 stroke: colors[i],
-                "stroke-width": opts.width || 2,
+                "stroke-width": opts.width || 1.7,
                 "stroke-linejoin": "round",
                 "stroke-linecap": "round",
                 "stroke-dasharray": opts.dash || ""
@@ -110,11 +110,11 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
 	    xpoints.push(X);
 	    if (!current_value_is_null)
 	    {
-                (Raphael.is(sym, "array") ? sym[j] : sym) && symset.push(this.g[Raphael.fn.g.markers[this.raphael.is(sym, "array") ? sym[j] : sym]](X, Y, (opts.width || 2) * 3).attr({fill: colors[i], stroke: "none"}));
+	    	(Raphael.is(sym, "array") ? sym[j] : sym) && symset.push(this.g[Raphael.fn.g.markers[this.raphael.is(sym, "array") ? sym[j] : sym]](X, Y, (opts.width || 2) * 3).attr({fill: colors[i], stroke: "none"}));
 	    }
 	    var should_draw_line = j && !last_value_is_null;
 	    if (!current_value_is_null)
-                path = path.concat([should_draw_line ? "L" : "M", X, Y]);
+	    	path = path.concat([should_draw_line ? "L" : "M", X, Y]);
 	    last_value_is_null = current_value_is_null;
         }
         symbols.push(symset);
@@ -130,13 +130,16 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
 	// Left y-axis
         +ax[3] && axis.push(this.g.axis(x + gutter, y + height - gutter, height - 2 * gutter, miny, maxy, opts.axisystep || Math.floor((height - 2 * gutter) / 20), 1, null, "t", 2, width - 2 * gutter, null));
     }
+    function numeric_sort_function(a, b) {
+    	return (a - b) //causes an array to be sorted numerically and ascending
+    }
     function createColumns(f) {
         // unite Xs together
         var Xs = [];
         for (var i = 0, ii = valuesx.length; i < ii; i++) {
             Xs = Xs.concat(valuesx[i]);
         }
-        Xs.sort();
+        Xs.sort(numeric_sort_function);
         // remove duplicates
         var Xs2 = [],
             xs = [];
@@ -192,12 +195,28 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
         }
         !f && (dots = cvrs);
     }
+    // create legend 
+    	if (series)
+    	{
+		    var legend_y_pos = y + height + 20;
+		    var legend_x_pos = x;
+		    for (var i = 0; i < series.length; i++) {
+				this.rect(legend_x_pos, legend_y_pos+(i*16)-5, 10, 10).attr({stroke: "none", fill: colors[i]})
+				//this.legends.push(raphael.g.text(this.legend_x_pos+20, this.legend_y_pos+(i*16), "innodb_buffer_pool_hits_"+(this.values[i] != null ? this.values[i] : "N/A")).attr({"text-anchor": "start"}).attr(raphael.g.txtattr));
+				this.g.text(legend_x_pos+20, legend_y_pos+(i*16), series[i]).attr(this.g.txtattr).attr({"text-anchor": "start"});
+		    }
+    	}
+	if(title)
+	{
+		this.g.text(x + width/2, y-6, title).attr(this.g.txtattr);
+	}
     chart.push(lines, shades, symbols, axis, columns, dots);
     chart.lines = lines;
     chart.shades = shades;
     chart.symbols = symbols;
     chart.axis = axis;
     chart.chart_height = height;
+    chart.chart_width = width;
     chart.y_pos = y;
     chart.x_pos = x;
     chart.colors = colors;
@@ -247,8 +266,8 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
     return chart;
 };
 
-Raphael.fn.g.auto_linechart = function (raphael, x, y, width, height, valuesx, valuesy, opts, labelsx) {
-	var chart = this.g.linechart(x, y, width, height, valuesx, valuesy, opts, labelsx).hoverColumn(function () {
+Raphael.fn.g.auto_linechart = function (raphael, x, y, width, height, valuesx, valuesy, opts, title, series, labelsx) {
+	var chart = this.g.linechart(x, y, width, height, valuesx, valuesy, opts, title, series, labelsx).hoverColumn(function () {
 	    this.tags = raphael.set();
 	    this.legends = raphael.set();
 	    this.symbols = raphael.set();
@@ -258,12 +277,9 @@ Raphael.fn.g.auto_linechart = function (raphael, x, y, width, height, valuesx, v
 	    for (var i = 0, ii = this.y.length; i < ii; i++) {
 		if (this.values[i] != null)
 		{
-		   this.tags.push(raphael.g.tag(this.x, this.y[i], ""+this.values[i], 160, 10).insertBefore(this).attr([{fill: this.colors[i]}, {fill: "#fff"}]));
-		   //this.symbols.push(raphael.g["disc"](this.x, this.y[i], 4).attr({fill: this.colors[i], stroke: "none"}));
-           //(Raphael.is(sym, "array") ? sym[j] : sym) && symset.push(this.g["plus"](X, Y, (opts.width || 2) * 3).attr({fill: colors[i], stroke: "none"}));
+		   this.symbols.push(raphael.g["disc"](this.x, this.y[i], 4).attr({fill: this.colors[i], stroke: "none"}));
 		}
-		raphael.rect(this.legend_x_pos, this.legend_y_pos+(i*16)-5, 10, 10).attr({stroke: "none", fill: this.colors[i]})
-		this.legends.push(raphael.g.text(this.legend_x_pos+20, this.legend_y_pos+(i*16), "innodb_buffer_pool_hits_"+(this.values[i] != null ? this.values[i] : "N/A")).attr({"text-anchor": "start"}).attr(raphael.g.txtattr));
+		this.tags.push(raphael.g.tag(this.legend_x_pos+chart.chart_width-8, this.legend_y_pos+(i*16), ""+(this.values[i] == null ? "N/A" : this.values[i]), 180, 6).insertBefore(this).attr([{fill: this.colors[i]}, {fill: "#fff"}]));
 	    }
 	}, function () {
 	    this.tags && this.tags.remove();

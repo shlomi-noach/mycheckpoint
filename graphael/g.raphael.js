@@ -29,7 +29,7 @@
         "->": "arrow"
     };
     Raphael.fn.g.shim = {stroke: "none", fill: "#000", "fill-opacity": 0};
-    Raphael.fn.g.txtattr = {stroke: "none", fill: "#606060", font: "Arial, sans-serif", "font-size": 11};
+    Raphael.fn.g.txtattr = {stroke: "none", fill: "#606060", font: "verdana, helvetica, arial, sans-serif", "font-size": 11};
     Raphael.fn.g.colors = [];
     var hues = [.6, .2, .05, .1333, .75, 0];
     for (var i = 0; i < 10; i++) {
@@ -346,12 +346,36 @@
         return "hsb(" + [Math.min((1 - value / total) * .4, 1), s || .75, b || .75] + ")";
     };
 
-    Raphael.fn.g.snapEnds = function (from, to, steps) {
-        var f = from,
-            t = to;
-        if (f == t) {
-            return {from: f, to: t, power: 0};
+    Raphael.fn.g.snapEnds = function (from, to, steps, modifyValues) {
+        var f = from;
+        var t = to;
+	    if (f == t) {
+	        return {from: f, to: t, power: 0};
+	    }
+
+	    round_steps_basis = [1, 2, 5];
+        step_size = null;
+        d_pow = 0;
+        // Find appropriate step for ticks: d is said step; rnd is number of digits to round to for display
+        for (power = -3; power < 10 && !step_size; ++power) {
+        	for (i = 0 ; i < round_steps_basis.length && !step_size; ++i)
+        	{
+        		round_step = round_steps_basis[i] * Math.pow(10, power);
+            	if ((t - f)/round_step < steps*1) {
+            		step_size = round_step;
+            		d_pow = power;
+            	}
+        	}
         }
+        start_f = step_size*Math.floor(f/step_size);;
+        if (modifyValues)
+        {
+	       	f = start_f;
+	       	t = step_size*Math.ceil(t/step_size);
+        }
+       	//alert("from "+from+" to "+to+" f "+f+" t "+t+" step "+step_size);
+        return {from: f, to: t, power: -d_pow, step: step_size, start_with: start_f};
+
         function round(a) {
             return Math.abs(a - .5) < .25 ? Math.floor(a) + .5 : Math.round(a);
         }
@@ -378,41 +402,59 @@
             t = round((to + .5) * Math.pow(10, i)) / Math.pow(10, i);
         }
         var f = round((from - (i > 0 ? 0 : .5)) * Math.pow(10, i)) / Math.pow(10, i);
-        return {from: f, to: t, power: i};
+        
+        // We next want to find the first value which is greater than "ends.from", 
+        // and which is a round value.
+        {
+        	//adjusted_f = (d_pow >= 0 ? f : f*Math.pow(10, d_pow));
+        	f = step_size*Math.floor(f/step_size);
+        	// f = adjusted_f - (adjusted_f % d) - d;
+        	//alert(" f "+f + " adj "+adjusted_f+" res "+result_val+" d "+d);
+        }
+        {
+        	//adjusted_t = (d_pow >= 0 ? t : t*Math.pow(10, d_pow));
+        	t = step_size*Math.ceil(t/step_size);
+        	// t = adjusted_t - (adjusted_t % d) + d;
+        	//alert(" f "+f + " adj "+adjusted_f+" res "+result_val+" d "+d);
+        }
+        //alert(" f "+f+" t "+t+" step_size "+step_size);
+
+        return {from: f, to: t, power: -d_pow, step: step_size};
     };
     Raphael.fn.g.axis = function (x, y, length, from, to, steps, orientation, labels, type, dashsize, grid_length, tick_x_points) {
         dashsize = dashsize == null ? 2 : dashsize;
         type = type || "t";
         steps = steps || 10;
         var path = type == "|" || type == " " ? ["M", x + .5, y, "l", 0, .001] : orientation == 1 || orientation == 3 ? ["M", x + .5, y, "l", 0, -length] : ["M", x, y + .5, "l", length, 0],
-	    path_grid = "",
-            ends = this.g.snapEnds(from, to, steps),
+        	path_grid = "",
+            ends = this.g.snapEnds(from, to, steps, false),
             f = ends.from,
             t = ends.to,
+            label = ends.start_with,
             i = ends.power,
             j = 0,
+            d = ends.step,
             text = this.set();
-        d = (t - f) / steps;
-        var label = f,
+        var 
             rnd = i > 0 ? i : 0;
-            dx = length / steps;
+            dx = length*d/(t-f);
         if (+orientation == 1 || +orientation == 3) {
 	    // y-axis
-            var Y = y,
+           var Y = y,
                 addon = (orientation - 1 ? 1 : -1) * (dashsize + 3 + !!(orientation - 1));
             while (Y >= y - length) {
-		if (grid_length)
-		{
-		    path_grid = path_grid.concat(["M", x , Y + .5, "l", grid_length, 0]);
-		}
+				if (grid_length)
+				{
+				    path_grid = path_grid.concat(["M", x , Y + .5, "l", grid_length, 0]);
+				}
                 type != "-" && type != " " && (path = path.concat(["M", x - (type == "+" || type == "|" ? dashsize : !(orientation - 1) * dashsize * 2), Y + .5, "l", dashsize * 2 + 1, 0]));
-                text.push(this.text(x + addon, Y, (labels && labels[j++]) || (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr).attr({"text-anchor": orientation - 1 ? "start" : "end"}));
+                text.push(this.text(x + addon, Y, (labels && labels[j++]) || ((+label).toFixed(rnd))).attr(this.g.txtattr).attr({"text-anchor": orientation - 1 ? "start" : "end"}));
                 label += d;
                 Y -= dx;
             }
             if (Math.round(Y + dx - (y - length))) {
                 type != "-" && type != " " && (path = path.concat(["M", x - (type == "+" || type == "|" ? dashsize : !(orientation - 1) * dashsize * 2), y - length + .5, "l", dashsize * 2 + 1, 0]));
-                text.push(this.text(x + addon, y - length, (labels && labels[j]) || (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr).attr({"text-anchor": orientation - 1 ? "start" : "end"}));
+                //text.push(this.text(x + addon, y - length, (labels && labels[j]) || ((+label).toFixed(rnd))).attr(this.g.txtattr).attr({"text-anchor": orientation - 1 ? "start" : "end"}));
             }
         } else {
 	    // x-axis
@@ -424,19 +466,17 @@
                 txt = 0,
                 prev = 0;
             while (X <= x + length) {
-		var tick_xpos = X + .5;
-		if (tick_x_points && labels)
-		    tick_xpos = tick_x_points[j];
-		var show_tick = true;
-		if (tick_xpos <= x)
-		    show_tick = false;
-		if (labels && !labels[j])
-		    show_tick = false;
-		if (grid_length && show_tick)
-		{
-		    path_grid = path_grid.concat(["M", tick_xpos, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, -grid_length]);
-		}
-		if (show_tick)
+				var tick_xpos = X + .5;
+				if (tick_x_points && labels)
+				    tick_xpos = tick_x_points[j];
+				var show_tick = true;
+				if (labels && !labels[j])
+				    show_tick = false;
+				if (grid_length && show_tick && (tick_xpos > x))
+				{
+				    path_grid = path_grid.concat(["M", tick_xpos, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, -grid_length]);
+				}
+				if (show_tick)
                     type != "-" && type != " " && (path = path.concat(["M", tick_xpos, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, dashsize * 2 + 1]));
                 text.push(txt = this.text(tick_xpos, y + addon, labels ? labels[j++] : (Math.round(label) == label ? label : +label.toFixed(rnd))).attr(this.g.txtattr));
                 var bb = txt.getBBox();
