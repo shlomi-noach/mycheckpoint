@@ -448,7 +448,7 @@ def get_custom_query_ids():
     """
     global custom_query_ids
     if custom_query_ids is None:
-        query = """SELECT custom_query_id FROM custom_query ORDER BY chart_order, custom_query_id""" 
+        query = """SELECT custom_query_id FROM %s.custom_query ORDER BY chart_order, custom_query_id""" % database_name 
         rows = get_rows(query)
         custom_query_ids = [int(row["custom_query_id"]) for row in rows]
     return custom_query_ids
