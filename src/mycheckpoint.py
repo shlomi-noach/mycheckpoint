@@ -21,6 +21,7 @@ import ConfigParser
 import getpass
 import MySQLdb
 import os
+import re
 import sys
 import socket
 import time
@@ -441,18 +442,30 @@ def get_mountpoint_usage_percent(path):
     return used_percent
 
 
+def get_custom_query_ids():
+    """
+    Returns the ordered ids
+    """
+    global custom_query_ids
+    if custom_query_ids is None:
+        query = """SELECT custom_query_id FROM custom_query ORDER BY chart_order, custom_query_id""" 
+        rows = get_rows(query)
+        custom_query_ids = [int(row["custom_query_id"]) for row in rows]
+    return custom_query_ids
+
+
 def get_custom_status_variables():
-    custom_status_variables = ["custom_%d" % i for i in range(num_custom_columns)]
+    custom_status_variables = ["custom_%d" % i for i in get_custom_query_ids()]
     return custom_status_variables
 
 
 def get_custom_time_status_variables():
-    custom_time_status_variables = ["custom_%d_time" % i for i in range(num_custom_columns)]
+    custom_time_status_variables = ["custom_%d_time" % i for i in get_custom_query_ids()]
     return custom_time_status_variables
 
 
 def get_custom_status_variables_psec():
-    custom_status_variables_psec = ["custom_%d_psec" % i for i in range(num_custom_columns)]
+    custom_status_variables_psec = ["custom_%d_psec" % i for i in get_custom_query_ids()]
     return custom_status_variables_psec
 
 
@@ -721,7 +734,8 @@ def create_metadata_table():
             revision SMALLINT UNSIGNED NOT NULL,
             build BIGINT UNSIGNED NOT NULL,
             last_deploy TIMESTAMP NOT NULL,
-            mysql_version VARCHAR(255) CHARSET ascii NOT NULL
+            mysql_version VARCHAR(255) CHARSET ascii NOT NULL,
+            custom_queries VARCHAR(4096) CHARSET ascii NOT NULL
         )
         """ % database_name
 
@@ -733,9 +747,9 @@ def create_metadata_table():
 
     query = """
         REPLACE INTO %s.metadata
-            (revision, build, mysql_version)
+            (revision, build, mysql_version, custom_queries)
         VALUES
-            (%d, %d, '%s')
+            (%d, %d, '%s', '')
         """ % (database_name, revision_number, build_number, get_monitored_host_mysql_version())
     act_query(query)
 
@@ -823,12 +837,13 @@ def create_custom_query_table():
         if options.debug:
             traceback.print_exc()
         exit_with_error("Cannot create table %s.custom_query" % database_name)
+    
+    query = """UPDATE metadata SET custom_queries = (SELECT GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ',') FROM custom_query) 
+    """
+    act_query(query)
 
 
 def execute_custom_query(custom_query_id, query_eval):
-    if custom_query_id not in range(num_custom_columns):
-        return print_error("custom_query row with custom_query_id=%d is invalid. Supported custom queries range is 0-%d. Will not evaluate" % (custom_query_id, num_custom_columns-1))
-        
     start_time = time.time()
     rows = get_rows(query_eval)
     end_time = time.time()
@@ -859,7 +874,7 @@ def collect_custom_data():
         return
 
     verbose("Collecting custom data")
-    num_custom_columns
+    
     query = """
             SELECT 
               * 
@@ -1461,13 +1476,27 @@ def get_monitored_host_mysql_version():
 
 def is_same_deploy():
     try:
-        query = "SELECT COUNT(*) AS same_deploy FROM %s.metadata WHERE revision = %d AND build = %d AND mysql_version = '%s'" % (database_name, revision_number, build_number, get_monitored_host_mysql_version())
+        query = """SELECT COUNT(*) AS same_deploy 
+            FROM %s.metadata 
+            WHERE 
+              revision = %d 
+              AND build = %d 
+              AND mysql_version = '%s'
+              AND custom_queries = (SELECT GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ',') FROM custom_query)
+              """ % (database_name, revision_number, build_number, get_monitored_host_mysql_version())
         same_deploy = get_row(query, write_conn)["same_deploy"]
         return (same_deploy > 0)
     except:
         return False
 
+def column_name_relates_to_custom_query(column_name):
+    if re.match("^custom_[\\d]+$", column_name):
+        return True
+    if re.match("^custom_[\\d]+_time$", column_name):
+        return True
+    return False
 
+    
 def upgrade_status_variables_table():
 
     # I currently prefer SHOW COLUMNS over using INFORMATION_SCHEMA because of the time it takes
@@ -1478,13 +1507,19 @@ def upgrade_status_variables_table():
     existing_columns = [row["Field"] for row in get_rows(query, write_conn)]
 
     new_columns = [column_name for column_name in get_status_variables_columns() if column_name not in existing_columns]
-
+    redundant_custom_columns = [column_name for column_name in existing_columns  if (column_name not in get_status_variables_columns() and column_name_relates_to_custom_query(column_name))]
+    alter_statements = []
+    
     if new_columns:
         verbose("Will add the following columns to %s: %s" % (table_name, ", ".join(new_columns)))
-        columns_listing = ",\n".join(["ADD COLUMN %s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in new_columns])
+        alter_statements.extend(["ADD COLUMN %s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in new_columns])
+    if redundant_custom_columns:
+        verbose("Will remove the following columns from %s: %s" % (table_name, ", ".join(redundant_custom_columns)))
+        alter_statements.extend(["DROP COLUMN %s" % column_name for column_name in redundant_custom_columns])
+    if alter_statements:
         query = """ALTER TABLE %s.%s
                 %s
-        """ % (database_name, table_name, columns_listing)
+        """ % (database_name, table_name, ",\n".join(alter_statements))
         act_query(query)
         verbose("status_variables table upgraded")
 
@@ -2373,7 +2408,7 @@ def create_custom_google_charts_views():
             "time": "_time",
         }
     case_clauses = []
-    for i in range(num_custom_columns):
+    for i in get_custom_query_ids():
         for chart_type in ["value", "value_psec", "time"]:
             case_clauses.append("WHEN '%d,%s' THEN custom_%d%s" % (i, chart_type, i, chart_type_extensions[chart_type]))
     for view_name_extension in ["sample", "hour", "day"]:
@@ -2407,7 +2442,7 @@ def create_custom_google_charts_flattened_views():
     We flatten the sv_custom_chart_* views into one row. This will be useful when generating HTML view.
     """
     custom_clauses = []
-    for i in range(num_custom_columns):
+    for i in get_custom_query_ids():
         custom_clause = """
             MAX(IF(custom_query_id=%d AND enabled, chart, NULL)) AS custom_%d_chart,
             MAX(IF(custom_query_id=%d, CONCAT(description, ' [', chart_type, ']'), NULL)) AS custom_%d_description
@@ -2798,7 +2833,7 @@ def create_report_html_brief_interactive_view(report_charts):
 def create_custom_html_view():
 
     custom_charts_queries = []
-    for i in range(num_custom_columns):
+    for i in get_custom_query_ids():
         custom_chart_query = """
             '<div class="row">
                 <a name="%d"></a>
@@ -2894,7 +2929,7 @@ def create_custom_html_view():
 def create_custom_html_brief_view():
 
     custom_charts_queries = []
-    for i in range(num_custom_columns):
+    for i in get_custom_query_ids():
         custom_chart_query = """
             '<div class="chart">
                 <h3>', IFNULL(custom_%d_description, 'N/A'), '</h3>',
@@ -3634,9 +3669,9 @@ try:
         status_dict = {}
         extra_dict = {}
         report_columns = []
+        custom_query_ids = None
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
-        num_custom_columns = 18
 
         # Sanity:
         if not database_name:
@@ -3682,7 +3717,7 @@ try:
             
         if should_email_brief_report:
             email_brief_report()
-        
+
     except Exception, err:
         if not monitored_conn:
             print_error("Cannot connect to database")
