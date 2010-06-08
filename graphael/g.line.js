@@ -205,9 +205,10 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
 		    var legend_y_pos = y + height + 20;
 		    var legend_x_pos = x;
 		    for (var i = 0; i < series.length; i++) {
-				this.rect(legend_x_pos, legend_y_pos+(i*16)-5, 10, 10).attr({stroke: "none", fill: colors[i]})
+				this.rect(legend_x_pos-6, legend_y_pos+(i*16)-5, 10, 10).attr({stroke: "none", fill: colors[i]})
+				//this.rect(legend_x_pos+width-8-60, legend_y_pos+(i*16)-8, 60, 16).attr({stroke: "none", fill: colors[i]})
 				//this.legends.push(raphael.g.text(this.legend_x_pos+20, this.legend_y_pos+(i*16), "innodb_buffer_pool_hits_"+(this.values[i] != null ? this.values[i] : "N/A")).attr({"text-anchor": "start"}).attr(raphael.g.txtattr));
-				this.g.text(legend_x_pos+20, legend_y_pos+(i*16), series[i]).attr(this.g.txtattr).attr({"text-anchor": "start"});
+				this.g.text(legend_x_pos+10, legend_y_pos+(i*16), series[i]).attr(this.g.txtattr).attr({"text-anchor": "start"});
 		    }
     	}
 	if(title)
@@ -284,7 +285,8 @@ Raphael.fn.g.auto_linechart = function (raphael, x, y, width, height, valuesx, v
 			{
 			   this.symbols.push(raphael.g["disc"](this.x, this.y[i], 4).attr({fill: this.colors[i], stroke: "none"}));
 			}
-			this.tags.push(raphael.g.tag(this.legend_x_pos+chart.chart_width-8, this.legend_y_pos+(i*16), ""+(this.values[i] == null ? "N/A" : this.values[i]), 180, 6).insertBefore(this).attr([{fill: this.colors[i]}, {fill: "#fff"}]));
+			//this.tags.push(raphael.g.tag(this.legend_x_pos+chart.chart_width-8, this.legend_y_pos+(i*16), ""+(this.values[i] == null ? "N/A" : this.values[i]), 180, 6).insertBefore(this).attr([{fill: this.colors[i]}, {fill: "#fff"}]));
+			this.tags.push(raphael.g.text(this.legend_x_pos+chart.chart_width-8, this.legend_y_pos+(i*16), ""+(this.values[i] == null ? "N/A" : this.values[i])).attr(raphael.g.txtattr).attr({"text-anchor": "end", "font-weight": "bold", fill: this.colors[i]}));
 		    }
 		}, function () {
 		    this.tags && this.tags.remove();
