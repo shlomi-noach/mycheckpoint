@@ -29,7 +29,7 @@
         "->": "arrow"
     };
     Raphael.fn.g.shim = {stroke: "none", fill: "#000", "fill-opacity": 0};
-    Raphael.fn.g.txtattr = {stroke: "none", fill: "#606060", font: "verdana, helvetica, arial, sans-serif", "font-size": 11};
+    Raphael.fn.g.txtattr = {stroke: "none", fill: "#505050", "font-family": "helvetica, verdana, helvetica, arial, sans-serif", "font-size": 12};
     Raphael.fn.g.colors = [];
     var hues = [.6, .2, .05, .1333, .75, 0];
     for (var i = 0; i < 10; i++) {
@@ -373,53 +373,7 @@
 	       	f = start_f;
 	       	t = step_size*Math.ceil(t/step_size);
         }
-       	//alert("from "+from+" to "+to+" f "+f+" t "+t+" step "+step_size);
         return {from: f, to: t, power: -d_pow, step: step_size, start_with: start_f};
-
-        function round(a) {
-            return Math.abs(a - .5) < .25 ? Math.floor(a) + .5 : Math.round(a);
-        }
-        var d = (t - f) / steps,
-            r = Math.floor(d),
-            R = r,
-            i = 0;
-        if (r) {
-            while (R) {
-                i--;
-                R = Math.floor(d * Math.pow(10, i)) / Math.pow(10, i);
-            }
-            i ++;
-        } else {
-            while (!r) {
-                i = i || 1;
-                r = Math.floor(d * Math.pow(10, i)) / Math.pow(10, i);
-                i++;
-            }
-            i && i--;
-        }
-        var t = round(to * Math.pow(10, i)) / Math.pow(10, i);
-        if (t < to) {
-            t = round((to + .5) * Math.pow(10, i)) / Math.pow(10, i);
-        }
-        var f = round((from - (i > 0 ? 0 : .5)) * Math.pow(10, i)) / Math.pow(10, i);
-        
-        // We next want to find the first value which is greater than "ends.from", 
-        // and which is a round value.
-        {
-        	//adjusted_f = (d_pow >= 0 ? f : f*Math.pow(10, d_pow));
-        	f = step_size*Math.floor(f/step_size);
-        	// f = adjusted_f - (adjusted_f % d) - d;
-        	//alert(" f "+f + " adj "+adjusted_f+" res "+result_val+" d "+d);
-        }
-        {
-        	//adjusted_t = (d_pow >= 0 ? t : t*Math.pow(10, d_pow));
-        	t = step_size*Math.ceil(t/step_size);
-        	// t = adjusted_t - (adjusted_t % d) + d;
-        	//alert(" f "+f + " adj "+adjusted_f+" res "+result_val+" d "+d);
-        }
-        //alert(" f "+f+" t "+t+" step_size "+step_size);
-
-        return {from: f, to: t, power: -d_pow, step: step_size};
     };
     Raphael.fn.g.axis = function (x, y, length, from, to, steps, orientation, labels, type, dashsize, grid_length, tick_x_points) {
         dashsize = dashsize == null ? 2 : dashsize;

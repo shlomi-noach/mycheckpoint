@@ -33,10 +33,10 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
     }
     function normalize_array(array, min_zero, max_100)
     {
-	result = []
-	for (var i = 0; i < array.length; i++) {
-	    if (array[i] != null)
-		result.push(array[i]);
+		result = []
+		for (var i = 0; i < array.length; i++) {
+		    if (array[i] != null)
+			result.push(array[i]);
 	}
 	if (min_zero)
 	    result.push(0);
@@ -44,22 +44,26 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
 	    result.push(100);
 	return result;
     }
-    var allx = Array.prototype.concat.apply([], valuesx),
+    var 
+    	gutter = opts.gutter || 10,
+    	xsteps = (labelsx? labelsx.length-1 : Math.floor((width - 2 * gutter) / 20)),
+    	ysteps = opts.axisystep || Math.floor((height - 2 * gutter) / 20),
+    	allx = Array.prototype.concat.apply([], valuesx),
         ally = Array.prototype.concat.apply([], valuesy),
-        xdim = this.g.snapEnds(Math.min.apply(Math, allx), Math.max.apply(Math, allx), valuesx[0].length - 1, true),
+        xdim = this.g.snapEnds(Math.min.apply(Math, allx), Math.max.apply(Math, allx), xsteps, true),
         minx = xdim.from,
         maxx = xdim.to,
         gutter = opts.gutter || 10,
         kx = (width - gutter * 2) / (maxx - minx),
-	ally_normalized = normalize_array(ally, opts.min_zero, opts.max_100);
-        ydim = this.g.snapEnds(Math.min.apply(Math, ally_normalized), Math.max.apply(Math, ally_normalized), valuesy[0].length - 1, true),
+        ally_normalized = normalize_array(ally, opts.min_zero, opts.max_100);
+        ydim = this.g.snapEnds(Math.min.apply(Math, ally_normalized), Math.max.apply(Math, ally_normalized), ysteps, true),
         miny = ydim.from,
         maxy = ydim.to,
         ky = (height - gutter * 2) / (maxy - miny),
         len = Math.max(valuesx[0].length, valuesy[0].length),
         symbol = opts.symbol || "",
         colors = opts.colors || Raphael.fn.g.colors,
-	colors = ["#ff8c00", "#4682b4", "#9acd32", "#dc143c", "#9932cc", "#ffd700", "#191970", "#7fffd4", "#808080", "#dda0dd"];
+        colors = ["#ff8c00", "#4682b4", "#9acd32", "#dc143c", "#9932cc", "#ffd700", "#191970", "#7fffd4", "#808080", "#dda0dd"];
 
         that = this,
         columns = null,
@@ -126,9 +130,9 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
     if (opts.axis) {
         var ax = (opts.axis + "").split(/[,\s]+/);
 	// Bottom x-axis
-        +ax[2] && axis.push(this.g.axis(x + gutter, y + height - gutter, width - 2 * gutter, minx, maxx, (labelsx? labelsx.length-1 : Math.floor((width - 2 * gutter) / 20)), 0, labelsx, "t", 2, height - 2 * gutter, xpoints));
+        +ax[2] && axis.push(this.g.axis(x + gutter, y + height - gutter, width - 2 * gutter, minx, maxx, xsteps, 0, labelsx, "t", 2, height - 2 * gutter, xpoints));
 	// Left y-axis
-        +ax[3] && axis.push(this.g.axis(x + gutter, y + height - gutter, height - 2 * gutter, miny, maxy, opts.axisystep || Math.floor((height - 2 * gutter) / 20), 1, null, "t", 2, width - 2 * gutter, null));
+        +ax[3] && axis.push(this.g.axis(x + gutter, y + height - gutter, height - 2 * gutter, miny, maxy, ysteps, 1, null, "t", 2, width - 2 * gutter, null));
     }
     function numeric_sort_function(a, b) {
     	return (a - b) //causes an array to be sorted numerically and ascending
@@ -267,23 +271,24 @@ Raphael.fn.g.linechart = function (x, y, width, height, valuesx, valuesy, opts, 
 };
 
 Raphael.fn.g.auto_linechart = function (raphael, x, y, width, height, valuesx, valuesy, opts, title, series, labelsx) {
-	var chart = this.g.linechart(x, y, width, height, valuesx, valuesy, opts, title, series, labelsx).hoverColumn(function () {
-	    this.tags = raphael.set();
-	    this.legends = raphael.set();
-	    this.symbols = raphael.set();
-	    this.legend_y_pos = chart.y_pos + chart.chart_height + 20;
-	    this.legend_x_pos = chart.x_pos;
-	    this.colors = chart.colors;
-	    for (var i = 0, ii = this.y.length; i < ii; i++) {
-		if (this.values[i] != null)
-		{
-		   this.symbols.push(raphael.g["disc"](this.x, this.y[i], 4).attr({fill: this.colors[i], stroke: "none"}));
-		}
-		this.tags.push(raphael.g.tag(this.legend_x_pos+chart.chart_width-8, this.legend_y_pos+(i*16), ""+(this.values[i] == null ? "N/A" : this.values[i]), 180, 6).insertBefore(this).attr([{fill: this.colors[i]}, {fill: "#fff"}]));
-	    }
-	}, function () {
-	    this.tags && this.tags.remove();
-	    this.legends && this.legends.remove();
-	    this.symbols && this.symbols.remove();
-	});
+	var chart = this.g.linechart(x, y, width, height, valuesx, valuesy, opts, title, series, labelsx).hoverColumn(
+		function () {
+		    this.tags = raphael.set();
+		    this.legends = raphael.set();
+		    this.symbols = raphael.set();
+		    this.legend_y_pos = chart.y_pos + chart.chart_height + 20;
+		    this.legend_x_pos = chart.x_pos;
+		    this.colors = chart.colors;
+		    for (var i = 0, ii = this.y.length; i < ii; i++) {
+			if (this.values[i] != null)
+			{
+			   this.symbols.push(raphael.g["disc"](this.x, this.y[i], 4).attr({fill: this.colors[i], stroke: "none"}));
+			}
+			this.tags.push(raphael.g.tag(this.legend_x_pos+chart.chart_width-8, this.legend_y_pos+(i*16), ""+(this.values[i] == null ? "N/A" : this.values[i]), 180, 6).insertBefore(this).attr([{fill: this.colors[i]}, {fill: "#fff"}]));
+		    }
+		}, function () {
+		    this.tags && this.tags.remove();
+		    this.legends && this.legends.remove();
+		    this.symbols && this.symbols.remove();
+		});
 };
