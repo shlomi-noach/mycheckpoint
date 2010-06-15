@@ -426,7 +426,14 @@
 				var show_tick = true;
 				if (labels && !labels[j])
 				    show_tick = false;
-				if (grid_length && show_tick && (tick_xpos > x))
+				var showGrid = grid_length && show_tick && (tick_xpos > x);
+				// A label of "|" hints that the tick should NOT be displayed, but the grid SHOULD be.
+				if (labels && (labels[j] == '|'))
+				{
+					labels[j] = '';
+				    show_tick = false;
+				}
+				if (showGrid)
 				{
 				    path_grid = path_grid.concat(["M", tick_xpos, y - (type == "+" ? dashsize : !!orientation * dashsize * 2), "l", 0, -grid_length]);
 				}
