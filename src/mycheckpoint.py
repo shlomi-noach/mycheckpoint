@@ -2416,9 +2416,13 @@ def create_custom_google_charts_views():
             "time": "_time",
         }
     case_clauses = []
-    for i in get_custom_query_ids():
-        for chart_type in ["value", "value_psec", "time"]:
-            case_clauses.append("WHEN '%d,%s' THEN custom_%d%s" % (i, chart_type, i, chart_type_extensions[chart_type]))
+    if get_custom_query_ids():
+        for i in get_custom_query_ids():
+            for chart_type in ["value", "value_psec", "time"]:
+                case_clauses.append("WHEN '%d,%s' THEN custom_%d%s" % (i, chart_type, i, chart_type_extensions[chart_type]))
+    else:
+        # No point in this while view; just make a dummy statement
+        case_clauses.append("WHEN NULL THEN NULL");
     for view_name_extension in ["sample", "hour", "day"]:
         query = """
             CREATE
@@ -2450,13 +2454,17 @@ def create_custom_google_charts_flattened_views():
     We flatten the sv_custom_chart_* views into one row. This will be useful when generating HTML view.
     """
     custom_clauses = []
-    for i in get_custom_query_ids():
-        custom_clause = """
-            MAX(IF(custom_query_id=%d AND enabled, chart, NULL)) AS custom_%d_chart,
-            MAX(IF(custom_query_id=%d, description, NULL)) AS custom_%d_text_description,
-            MAX(IF(custom_query_id=%d, CONCAT(description, ' [', chart_type, ']'), NULL)) AS custom_%d_description
-            """ % (i, i, i, i, i, i,)
-        custom_clauses.append(custom_clause)
+    if get_custom_query_ids():
+        for i in get_custom_query_ids():
+            custom_clause = """
+                MAX(IF(custom_query_id=%d AND enabled, chart, NULL)) AS custom_%d_chart,
+                MAX(IF(custom_query_id=%d, description, NULL)) AS custom_%d_text_description,
+                MAX(IF(custom_query_id=%d, CONCAT(description, ' [', chart_type, ']'), NULL)) AS custom_%d_description
+                """ % (i, i, i, i, i, i,)
+            custom_clauses.append(custom_clause)
+    else:
+        # No point in this whole view. Add a dummy column
+        custom_clauses.append("NULL")
         
     for view_name_extension in ["sample", "hour", "day"]:
         query = """
@@ -3114,6 +3122,12 @@ def create_report_views(columns_listing):
     # sv_report_minmax_* views.
     # So we parse the columns. We expect one column per line; we allow for aliasing (" as ")
     # We then store the columns for later use.
+    
+    # Fix possible empty columns (due to no custom columns):
+    # (Convert consequtive commans into a single one, remove trailing comma)
+    columns_listing = re.sub(",([\\s]*,)+", ",", columns_listing)
+    columns_listing = re.sub(",[\\s]*$", "", columns_listing)
+    
     columns_names_list = [column_name for column_name in columns_listing.lower().split("\n")]
     columns_names_list = [column_name.split(" as ")[-1].replace(",","").strip() for column_name in columns_names_list]
     columns_names_list = [column_name for column_name in columns_names_list if column_name]
@@ -3205,7 +3219,18 @@ def create_status_variables_views():
             ROUND(100*com_commit_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_commit_percent,
             ROUND(100*slow_queries_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS slow_queries_percent,
             long_query_time,
+            innodb_rows_read_psec, 
+            innodb_rows_inserted_psec, 
+            innodb_rows_updated_psec, 
+            innodb_rows_deleted_psec,
 
+            handler_read_rnd_psec, 
+            handler_read_rnd_next_psec, 
+            handler_read_first_psec, 
+            handler_read_next_psec, 
+            handler_read_prev_psec, 
+            handler_read_key_psec,
+            
             select_scan_psec,
             select_full_join_psec,
             select_range_psec,
@@ -3306,8 +3331,10 @@ def create_status_variables_views():
 
         ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False),
         ("queries_psec, questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False),
+        ("innodb_rows_read_psec, innodb_rows_inserted_psec, innodb_rows_deleted_psec, innodb_rows_updated_psec", "innodb_rows", True, False),
 
         ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True, False),
+        ("handler_read_rnd_psec, handler_read_rnd_next_psec, handler_read_first_psec, handler_read_next_psec, handler_read_prev_psec, handler_read_key_psec", "read_patterns", True, False),
 
         ("table_locks_waited_psec", "table_locks_waited_psec", True, False),
 
@@ -3387,6 +3414,7 @@ def create_status_variables_views():
         myisam_key_buffer_used_percent, myisam_key_hit,
         bytes_io,
         DML, questions,
+        innodb_rows,
         tmp_tables,
         table_locks_waited_psec,
         table_cache_use, opened_tables_psec,
@@ -3401,7 +3429,8 @@ def create_status_variables_views():
         """)
     brief_html_view_charts = [
             ("InnoDB & I/O", "innodb_read_hit_percent, innodb_io, bytes_io"),
-            ("Questions", "DML, questions, tmp_tables"),
+            ("Questions", "DML, questions, innodb_rows"),
+            ("", "tmp_tables, read_patterns"),
             ("Resources", "connections_psec, threads_created_psec, opened_tables_psec"),
             ("Caches", "myisam_key_hit, thread_cache_use, table_cache_use"),
             ("Vitals and OS", "seconds_behind_master, connections_usage, os_memory"),
