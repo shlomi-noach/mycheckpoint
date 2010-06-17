@@ -874,7 +874,9 @@ def create_custom_query_table():
     query = """UPDATE ${database_name}.metadata 
         SET custom_queries = 
             (SELECT 
-                GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ',') 
+                IFNULL(
+                  GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ',')
+                  , '') 
             FROM ${database_name}.custom_query
             ) 
     """
@@ -1521,7 +1523,7 @@ def is_same_deploy():
               revision = %d 
               AND build = %d 
               AND mysql_version = '%s'
-              AND custom_queries = (SELECT GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ',') FROM ${database_name}.custom_query)
+              AND custom_queries = (SELECT IFNULL(GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ','), '') FROM ${database_name}.custom_query)
               """ % (revision_number, build_number, get_monitored_host_mysql_version())
         query = query.replace("${database_name}", database_name)
         same_deploy = get_row(query, write_conn)["same_deploy"]
