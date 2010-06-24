@@ -91,6 +91,16 @@ def print_error(message):
     return None
 
 
+def sorted(l):
+    """
+    In favor of Python 2.3 users. Be strong!
+    """
+    result = []
+    result.extend(l)
+    result.sort()
+    return result
+
+
 def open_connections():
     if options.defaults_file:
         write_conn = MySQLdb.connect(
@@ -3641,9 +3651,9 @@ def deploy_schema():
     create_metadata_table()
     create_numbers_table()
     create_charts_api_table()
+    create_custom_query_table()
     if not create_status_variables_table():
         upgrade_status_variables_table()
-    create_custom_query_table()
     create_alert_condition_table()
     create_alert_table()
     create_alert_pending_table()
