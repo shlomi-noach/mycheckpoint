@@ -70,8 +70,8 @@ Available commands:
     parser.add_option("", "--skip-emails", dest="skip_emails", action="store_true", default=False, help="Skip sending email notifications")
     parser.add_option("", "--force-emails", dest="force_emails", action="store_true", default=False, help="Force sending email notifications even if there's nothing wrong")
     parser.add_option("", "--skip-custom", dest="skip_custom", action="store_true", default=False, help="Skip custom query execution and evaluation")
-    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=400, help="Chart image width (default: 400, min value: 150)")
-    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=200, help="Chart image height (default: 200, min value: 100)")
+    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=380, help="Chart image width (default: 380, min value: 150)")
+    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=180, help="Chart image height (default: 180, min value: 100)")
     parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
     parser.add_option("", "--smtp-host", dest="smtp_host", default=None, help="SMTP mail server host name or IP")
     parser.add_option("", "--smtp-from", dest="smtp_from", default=None, help="Address to use as mail sender")
@@ -220,8 +220,9 @@ openark_lchart="""
     openark_lchart=function(a,b){if(a.style.width==""){this.canvas_width=b.width}else{this.canvas_width=a.style.width}if(a.style.height==""){this.canvas_height=b.height}else{this.canvas_height=a.style.height}this.title_height=0;this.chart_title="";this.x_axis_values_height=20;this.y_axis_values_width=50;this.y_axis_tick_values=[];this.y_axis_tick_positions=[];this.x_axis_grid_positions=[];this.x_axis_label_positions=[];this.x_axis_labels=[];this.y_axis_min=0;this.y_axis_max=0;this.multi_series=[];this.multi_series_dot_positions=[];this.series_labels=[];this.series_colors=openark_lchart.series_colors;this.container=a;this.isIE=false;this.current_color=null;this.recalc();return this};openark_lchart.title_font_size=10;openark_lchart.title_color="#505050";openark_lchart.axis_color="#707070";openark_lchart.axis_font_size=8;openark_lchart.legend_font_size=9;openark_lchart.legend_color="#606060";openark_lchart.series_line_width=1.5;openark_lchart.grid_color="#e4e4e4";openark_lchart.grid_thick_color="#c8c8c8";openark_lchart.series_colors=["#ff0000","#ff8c00","#4682b4","#9acd32","#dc143c","#9932cc","#ffd700","#191970","#7fffd4","#808080","#dda0dd"];openark_lchart.google_simple_format_scheme="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";openark_lchart.prototype.recalc=function(){this.chart_width=this.canvas_width-this.y_axis_values_width;this.chart_height=this.canvas_height-(this.x_axis_values_height+this.title_height);this.chart_origin_x=this.canvas_width-this.chart_width;this.chart_origin_y=this.title_height+this.chart_height;this.y_axis_tick_values=[];this.y_axis_tick_positions=[];if(this.y_axis_max<=this.y_axis_min){return}max_steps=Math.floor(this.chart_height/(openark_lchart.axis_font_size*1.6));round_steps_basis=[1,2,5];step_size=null;pow=0;for(power=-4;power<10&&!step_size;++power){for(i=0;i<round_steps_basis.length&&!step_size;++i){round_step=round_steps_basis[i]*Math.pow(10,power);if((this.y_axis_max-this.y_axis_min)/round_step<max_steps){step_size=round_step;pow=power}}}var c=step_size*Math.ceil(this.y_axis_min/step_size);while(c<=this.y_axis_max){var b=(pow>=0?c:c.toFixed(-pow));this.y_axis_tick_values.push(b);var a=(c-this.y_axis_min)/(this.y_axis_max-this.y_axis_min);this.y_axis_tick_positions.push(Math.floor(this.chart_origin_y-a*this.chart_height));c+=step_size}};openark_lchart.prototype.create_graphics=function(){this.container.innerHTML="";this.isIE=(/MSIE/.test(navigator.userAgent)&&!window.opera);this.container.style.position="relative";this.container.style.color=""+openark_lchart.axis_color;this.container.style.fontSize=""+openark_lchart.axis_font_size+"pt";this.container.style.fontFamily="Helvetica,Verdana,Arial,sans-serif";if(this.isIE){}else{var a=document.createElement("canvas");a.setAttribute("width",this.canvas_width);a.setAttribute("height",this.canvas_height);this.canvas=a;this.container.appendChild(this.canvas);this.ctx=this.canvas.getContext("2d")}};openark_lchart.prototype.parse_url=function(a){a=a.replace(/[+]/gi," ");var b={};var c=a.indexOf("?");if(c>=0){a=a.substring(c+1)}tokens=a.split("&");for(i=0;i<tokens.length;++i){param_tokens=tokens[i].split("=");if(param_tokens.length==2){b[param_tokens[0]]=param_tokens[1]}}return b};openark_lchart.prototype.read_google_url=function(a){params=this.parse_url(a);this.title_height=0;if(params.chtt){this.chart_title=params.chtt;this.title_height=20}if(params.chdl){var j=params.chdl.split("|");this.series_labels=j}if(params.chco){var j=params.chco.split(",");this.series_colors=new Array(j.length);for(i=0;i<j.length;++i){this.series_colors[i]="#"+j[i]}}var j=params.chxr.split(",");if(j.length>=3){this.y_axis_min=parseFloat(j[1]);this.y_axis_max=parseFloat(j[2])}this.recalc();var j=params.chg.split(",");if(j.length>=6){var k=parseFloat(j[0]);var e=parseFloat(j[4]);this.x_axis_grid_positions=[];for(i=0,chart_x_pos=0;chart_x_pos<this.chart_width;++i){chart_x_pos=(e+i*k)*this.chart_width/100;if(chart_x_pos<this.chart_width){this.x_axis_grid_positions.push(Math.floor(chart_x_pos+this.chart_origin_x))}}}var j=params.chxp.split("|");for(axis=0;axis<j.length;++axis){var n=j[axis].split(",");var h=parseInt(n[0]);if(h==0){this.x_axis_label_positions=new Array(n.length-1);for(i=1;i<n.length;++i){var b=parseFloat(n[i])*this.chart_width/100;this.x_axis_label_positions[i-1]=Math.floor(b+this.chart_origin_x)}}}var j=params.chxl.split("|");if(j[0]=="0:"){this.x_axis_labels=new Array(j.length-1);for(i=1;i<j.length;++i){this.x_axis_labels[i-1]=j[i]}}if(params.chd){var q=params.chd;var m=null;var c=q.substring(0,2);if(c=="s:"){m="simple"}if(m){this.multi_series=[];this.multi_series_dot_positions=[]}if(m=="simple"){q=q.substring(2);var j=q.split(",");this.multi_series=new Array(j.length);this.multi_series_dot_positions=new Array(j.length);for(series_index=0;series_index<j.length;++series_index){var l=j[series_index];var d=new Array(l.length);var p=new Array(l.length);for(i=0;i<l.length;++i){var g=l.charAt(i);if(g=="_"){d[i]=null;p[i]=null}else{var f=openark_lchart.google_simple_format_scheme.indexOf(g)/61;var o=this.y_axis_min+f*(this.y_axis_max-this.y_axis_min);d[i]=o;p[i]=Math.round(this.chart_origin_y-f*this.chart_height)}}this.multi_series[series_index]=d;this.multi_series_dot_positions[series_index]=p}}}this.redraw()};openark_lchart.prototype.redraw=function(){this.create_graphics();this.draw()};openark_lchart.prototype.draw=function(){if(this.chart_title){this.draw_text({text:this.chart_title,left:0,top:0,width:this.canvas_width,height:this.title_height,text_align:"center",font_size:openark_lchart.title_font_size})}this.set_color(openark_lchart.grid_color);for(i=0;i<this.y_axis_tick_positions.length;++i){this.draw_line(this.chart_origin_x,this.y_axis_tick_positions[i],this.chart_origin_x+this.chart_width-1,this.y_axis_tick_positions[i],1)}for(i=0;i<this.x_axis_grid_positions.length;++i){if(this.x_axis_labels[i].replace(/ /gi,"")){this.set_color(openark_lchart.grid_thick_color)}else{this.set_color(openark_lchart.grid_color)}this.draw_line(this.x_axis_grid_positions[i],this.chart_origin_y,this.x_axis_grid_positions[i],this.chart_origin_y-this.chart_height+1,1)}this.set_color(openark_lchart.axis_color);for(i=0;i<this.x_axis_label_positions.length;++i){if(this.x_axis_labels[i]){this.draw_line(this.x_axis_label_positions[i],this.chart_origin_y,this.x_axis_label_positions[i],this.chart_origin_y+3,1);if(this.x_axis_labels[i].replace(/ /gi,"")){this.draw_text({text:""+this.x_axis_labels[i],left:this.x_axis_label_positions[i]-25,top:this.chart_origin_y+5,width:50,height:openark_lchart.axis_font_size,text_align:"center",font_size:openark_lchart.axis_font_size})}}}for(series=0;series<this.multi_series_dot_positions.length;++series){var g=[];g.push([]);this.set_color(this.series_colors[series]);var c=this.multi_series_dot_positions[series];for(i=0;i<c.length;++i){if(c[i]==null){g.push([])}else{var a=Math.round(this.chart_origin_x+i*this.chart_width/(c.length-1));g[g.length-1].push({x:a,y:c[i]})}}for(path=0;path<g.length;++path){this.draw_line_path(g[path],openark_lchart.series_line_width)}}this.set_color(openark_lchart.axis_color);this.draw_line(this.chart_origin_x,this.chart_origin_y,this.chart_origin_x,this.chart_origin_y-this.chart_height+1,1);this.draw_line(this.chart_origin_x,this.chart_origin_y,this.chart_origin_x+this.chart_width-1,this.chart_origin_y,1);var e="";for(i=0;i<this.y_axis_tick_positions.length;++i){this.draw_line(this.chart_origin_x,this.y_axis_tick_positions[i],this.chart_origin_x-3,this.y_axis_tick_positions[i],1);this.draw_text({text:""+this.y_axis_tick_values[i],left:0,top:this.y_axis_tick_positions[i]-openark_lchart.axis_font_size+Math.floor(openark_lchart.axis_font_size/3),width:this.y_axis_values_width-5,height:openark_lchart.axis_font_size,text_align:"right",font_size:openark_lchart.axis_font_size})}if(this.series_labels&&this.series_labels.length){if(this.isIE){var d=document.createElement("div");d.style.width=this.canvas_width;d.style.height=this.canvas_height;this.container.appendChild(d)}var f=document.createElement("div");var h=document.createElement("ul");h.style.margin=0;h.style.paddingLeft=this.chart_origin_x;for(i=0;i<this.series_labels.length;++i){var b=document.createElement("li");b.style.listStyleType="square";b.style.color=this.series_colors[i];b.style.fontSize=""+openark_lchart.legend_font_size+"pt";b.innerHTML='<span style="color: '+openark_lchart.legend_color+'">'+this.series_labels[i]+"</span>";h.appendChild(b)}f.appendChild(h);this.container.appendChild(f)}};openark_lchart.prototype.set_color=function(a){this.current_color=a;if(!this.isIE){this.ctx.strokeStyle=a}};openark_lchart.prototype.draw_line=function(d,f,c,e,a){if(this.isIE){var b=document.createElement("v:line");b.setAttribute("from"," "+d+" "+f+" ");b.setAttribute("to"," "+c+" "+e+" ");b.setAttribute("strokecolor",""+this.current_color);b.setAttribute("strokeweight",""+a+"pt");this.container.appendChild(b)}else{this.ctx.lineWidth=a;this.ctx.strokeWidth=0.5;this.ctx.beginPath();this.ctx.moveTo(d+0.5,f+0.5);this.ctx.lineTo(c+0.5,e+0.5);this.ctx.closePath();this.ctx.stroke()}};openark_lchart.prototype.draw_line_path=function(e,a){if(e.length==0){return}if(e.length==1){this.draw_line(e[0].x-2,e[0].y,e[0].x+2,e[0].y,a*0.8);this.draw_line(e[0].x,e[0].y-2,e[0].x,e[0].y+2,a*0.8);return}if(this.isIE){var c=document.createElement("v:polyline");var b=new Array(e.length*2);for(i=0;i<e.length;++i){b[i*2]=e[i].x;b[i*2+1]=e[i].y}var d=b.join(",");c.setAttribute("points",d);c.setAttribute("stroked","true");c.setAttribute("filled","false");c.setAttribute("strokecolor",""+this.current_color);c.setAttribute("strokeweight",""+a+"pt");this.container.appendChild(c)}else{this.ctx.lineWidth=a;this.ctx.strokeWidth=0.5;this.ctx.beginPath();this.ctx.moveTo(e[0].x+0.5,e[0].y+0.5);for(i=1;i<e.length;++i){this.ctx.lineTo(e[i].x+0.5,e[i].y+0.5)}this.ctx.stroke()}};openark_lchart.prototype.draw_text=function(b){var a=document.createElement("div");a.style.position="absolute";a.style.left=""+b.left+"px";a.style.top=""+b.top+"px";a.style.width=""+b.width+"px";a.style.height=""+b.height+"px";a.style.textAlign=""+b.text_align;a.style.verticalAlign="top";if(b.font_size){a.style.fontSize=""+b.font_size+"pt"}a.innerHTML=b.text;this.container.appendChild(a)};
     """
 openark_pchart = """
-    openark_pchart=function(a,b){if(a.style.width==""){this.canvas_width=b.width}else{this.canvas_width=a.style.width}if(a.style.height==""){this.canvas_height=b.height}else{this.canvas_height=a.style.height}this.title_height=0;this.chart_title="";this.x_axis_values_height=30;this.y_axis_values_width=50;this.x_axis_labels=[];this.x_axis_label_positions=[];this.y_axis_labels=[];this.y_axis_label_positions=[];this.dot_x_positions=[];this.dot_y_positions=[];this.dot_values=[];this.dot_colors=[];this.plot_colors=openark_pchart.plot_colors;this.container=a;this.isIE=false;this.current_color=null;this.recalc();return this};openark_pchart.title_font_size=10;openark_pchart.title_color="#505050";openark_pchart.axis_color="#707070";openark_pchart.axis_font_size=8;openark_pchart.plot_colors=["#9aed32","#ff8c00"];openark_pchart.max_dot_size=9;openark_pchart.prototype.recalc=function(){this.chart_width=this.canvas_width-this.y_axis_values_width-openark_pchart.max_dot_size;this.chart_height=this.canvas_height-(this.x_axis_values_height+this.title_height)-openark_pchart.max_dot_size;this.chart_origin_x=this.y_axis_values_width;this.chart_origin_y=this.canvas_height-this.x_axis_values_height};openark_pchart.prototype.create_graphics=function(){this.container.innerHTML="";this.isIE=(/MSIE/.test(navigator.userAgent)&&!window.opera);this.container.style.position="relative";this.container.style.color=""+openark_pchart.axis_color;this.container.style.fontSize=""+openark_pchart.axis_font_size+"pt";this.container.style.fontFamily="Helvetica,Verdana,Arial,sans-serif";if(this.isIE){var b=document.createElement("div");b.style.width=this.canvas_width;b.style.height=this.canvas_height;this.container.appendChild(b)}else{var a=document.createElement("canvas");a.setAttribute("width",this.canvas_width);a.setAttribute("height",this.canvas_height);this.canvas=a;this.container.appendChild(this.canvas);this.ctx=this.canvas.getContext("2d")}};openark_pchart.prototype.hex_to_rgb=function(b){if(b.substring(0,1)=="#"){b=b.substring(1)}var a=[];b.replace(/(..)/g,function(c){a.push(parseInt(c,16))});return a};openark_pchart.prototype.toHex=function(a){if(a==0){return"00"}return"0123456789abcdef".charAt((a-a%16)/16)+"0123456789abcdef".charAt(a%16)};openark_pchart.prototype.rgb_to_hex=function(c,b,a){return"#"+this.toHex(c)+this.toHex(b)+this.toHex(a)};openark_pchart.prototype.gradient=function(c,b,a){var e=this.hex_to_rgb(c);var d=this.hex_to_rgb(b);return this.rgb_to_hex(Math.floor(e[0]+(d[0]-e[0])*a/100),Math.floor(e[1]+(d[1]-e[1])*a/100),Math.floor(e[2]+(d[2]-e[2])*a/100))};openark_pchart.prototype.parse_url=function(a){a=a.replace(/[+]/gi," ");var b={};var c=a.indexOf("?");if(c>=0){a=a.substring(c+1)}tokens=a.split("&");for(i=0;i<tokens.length;++i){param_tokens=tokens[i].split("=");if(param_tokens.length==2){b[param_tokens[0]]=param_tokens[1]}}return b};openark_pchart.prototype.read_google_url=function(b){params=this.parse_url(b);this.title_height=0;if(params.chtt){this.chart_title=params.chtt;this.title_height=20}if(params.chco){var h=params.chco.split(",");this.plot_colors=[];for(i=0;i<h.length;++i){this.plot_colors.push("#"+h[i])}}this.recalc();if(params.chxl){var d=params.chxl;var j=[];for(i=0,pos=0;pos>=0;++i){pos=d.indexOf(""+i+":|");if(pos<0){j.push(d);break}var c=d.substring(0,pos);if(c.length){if(c.substring(c.length-1)=="|"){c=c.substring(0,c.length-1)}j.push(c)}d=d.substring(pos+3)}this.x_axis_labels=j[0].split("|");this.x_axis_label_positions=[];for(i=0;i<this.x_axis_labels.length;++i){var g=Math.floor(this.chart_origin_x+i*this.chart_width/(this.x_axis_labels.length-1));this.x_axis_label_positions.push(g)}this.y_axis_labels=j[1].split("|");this.y_axis_label_positions=[];for(i=0;i<this.y_axis_labels.length;++i){var f=Math.floor(this.chart_origin_y-i*this.chart_height/(this.y_axis_labels.length-1));this.y_axis_label_positions.push(f)}}if(params.chd){var n=params.chd;var e=n.substring(0,2);if(e=="t:"){this.dot_x_positions=[];this.dot_y_positions=[];this.dot_values=[];this.dot_colors=[];n=n.substring(2);var h=n.split("|");var a=h[0].split(",");var k=h[1].split(",");var m=null;if(h.length>2){m=h[2].split(",")}else{m=new Array(a.length)}for(i=0;i<m.length;++i){var g=Math.floor(this.chart_origin_x+parseInt(a[i])*this.chart_width/100);this.dot_x_positions.push(g);var f=Math.floor(this.chart_origin_y-parseInt(k[i])*this.chart_height/100);this.dot_y_positions.push(f);var l=null;if(m[i]&&(m[i]!="_")){l=Math.floor(m[i]*openark_pchart.max_dot_size/100)}this.dot_values.push(l);this.dot_colors.push(this.gradient(this.plot_colors[0],this.plot_colors[1],m[i]))}}}this.redraw()};openark_pchart.prototype.redraw=function(){this.create_graphics();this.draw()};openark_pchart.prototype.draw=function(){if(this.chart_title){this.draw_text({text:this.chart_title,left:0,top:0,width:this.canvas_width,height:this.title_height,text_align:"center",font_size:openark_pchart.title_font_size})}for(i=0;i<this.dot_values.length;++i){if(this.dot_values[i]!=null){this.draw_circle(this.dot_x_positions[i],this.dot_y_positions[i],this.dot_values[i],this.dot_colors[i])}}this.set_color(openark_pchart.axis_color);for(i=0;i<this.x_axis_label_positions.length;++i){if(this.x_axis_labels[i]){this.draw_text({text:""+this.x_axis_labels[i],left:this.x_axis_label_positions[i]-25,top:this.chart_origin_y+openark_pchart.max_dot_size+5,width:50,height:openark_pchart.axis_font_size,text_align:"center"})}}for(i=0;i<this.y_axis_label_positions.length;++i){if(this.y_axis_labels[i]){this.draw_text({text:""+this.y_axis_labels[i],left:0,top:this.y_axis_label_positions[i]-openark_pchart.axis_font_size+Math.floor(openark_pchart.axis_font_size/3),width:this.y_axis_values_width-openark_pchart.max_dot_size-5,height:openark_pchart.axis_font_size,text_align:"right"})}}};openark_pchart.prototype.set_color=function(a){this.current_color=a;if(!this.isIE){this.ctx.strokeStyle=a}};openark_pchart.prototype.draw_circle=function(b,e,a,c){if(this.isIE){var d=document.createElement("v:oval");d.style.position="absolute";d.style.left=b-a;d.style.top=e-a;d.style.width=a*2;d.style.height=a*2;d.setAttribute("stroked","false");d.setAttribute("filled","true");d.setAttribute("fillcolor",""+c);this.container.appendChild(d)}else{this.ctx.fillStyle=this.dot_colors[i];this.ctx.beginPath();this.ctx.arc(b,e,a,0,Math.PI*2,true);this.ctx.closePath();this.ctx.fill()}};openark_pchart.prototype.draw_text=function(b){var a=document.createElement("div");a.style.position="absolute";a.style.left=""+b.left+"px";a.style.top=""+b.top+"px";a.style.width=""+b.width+"px";a.style.height=""+b.height+"px";a.style.textAlign=""+b.text_align;a.style.verticalAlign="top";if(b.font_size){a.style.fontSize=""+b.font_size+"pt"}a.innerHTML=b.text;this.container.appendChild(a)};
+    openark_pchart=function(a,b){if(a.style.width==""){this.canvas_width=b.width}else{this.canvas_width=a.style.width}if(a.style.height==""){this.canvas_height=b.height}else{this.canvas_height=a.style.height}this.title_height=0;this.chart_title="";this.x_axis_values_height=30;this.y_axis_values_width=35;this.x_axis_labels=[];this.x_axis_label_positions=[];this.y_axis_labels=[];this.y_axis_label_positions=[];this.dot_x_positions=[];this.dot_y_positions=[];this.dot_values=[];this.dot_colors=[];this.plot_colors=openark_pchart.plot_colors;this.container=a;this.isIE=false;this.current_color=null;this.recalc();return this};openark_pchart.title_font_size=10;openark_pchart.title_color="#505050";openark_pchart.axis_color="#707070";openark_pchart.axis_font_size=8;openark_pchart.plot_colors=["#9aed32","#ff8c00"];openark_pchart.max_dot_size=9;openark_pchart.prototype.recalc=function(){this.chart_width=this.canvas_width-this.y_axis_values_width-openark_pchart.max_dot_size;this.chart_height=this.canvas_height-(this.x_axis_values_height+this.title_height)-openark_pchart.max_dot_size;this.chart_origin_x=this.y_axis_values_width;this.chart_origin_y=this.canvas_height-this.x_axis_values_height};openark_pchart.prototype.create_graphics=function(){this.container.innerHTML="";this.isIE=(/MSIE/.test(navigator.userAgent)&&!window.opera);this.container.style.position="relative";this.container.style.color=""+openark_pchart.axis_color;this.container.style.fontSize=""+openark_pchart.axis_font_size+"pt";this.container.style.fontFamily="Helvetica,Verdana,Arial,sans-serif";if(this.isIE){var b=document.createElement("div");b.style.width=this.canvas_width;b.style.height=this.canvas_height;this.container.appendChild(b)}else{var a=document.createElement("canvas");a.setAttribute("width",this.canvas_width);a.setAttribute("height",this.canvas_height);this.canvas=a;this.container.appendChild(this.canvas);this.ctx=this.canvas.getContext("2d")}};openark_pchart.prototype.hex_to_rgb=function(b){if(b.substring(0,1)=="#"){b=b.substring(1)}var a=[];b.replace(/(..)/g,function(c){a.push(parseInt(c,16))});return a};openark_pchart.prototype.toHex=function(a){if(a==0){return"00"}return"0123456789abcdef".charAt((a-a%16)/16)+"0123456789abcdef".charAt(a%16)};openark_pchart.prototype.rgb_to_hex=function(c,b,a){return"#"+this.toHex(c)+this.toHex(b)+this.toHex(a)};openark_pchart.prototype.gradient=function(c,b,a){var e=this.hex_to_rgb(c);var d=this.hex_to_rgb(b);return this.rgb_to_hex(Math.floor(e[0]+(d[0]-e[0])*a/100),Math.floor(e[1]+(d[1]-e[1])*a/100),Math.floor(e[2]+(d[2]-e[2])*a/100))};openark_pchart.prototype.parse_url=function(a){a=a.replace(/[+]/gi," ");var b={};var c=a.indexOf("?");if(c>=0){a=a.substring(c+1)}tokens=a.split("&");for(i=0;i<tokens.length;++i){param_tokens=tokens[i].split("=");if(param_tokens.length==2){b[param_tokens[0]]=param_tokens[1]}}return b};openark_pchart.prototype.read_google_url=function(b){params=this.parse_url(b);this.title_height=0;if(params.chtt){this.chart_title=params.chtt;this.title_height=20}if(params.chco){var h=params.chco.split(",");this.plot_colors=[];for(i=0;i<h.length;++i){this.plot_colors.push("#"+h[i])}}this.recalc();if(params.chxl){var d=params.chxl;var j=[];for(i=0,pos=0;pos>=0;++i){pos=d.indexOf(""+i+":|");if(pos<0){j.push(d);break}var c=d.substring(0,pos);if(c.length){if(c.substring(c.length-1)=="|"){c=c.substring(0,c.length-1)}j.push(c)}d=d.substring(pos+3)}this.x_axis_labels=j[0].split("|");this.x_axis_label_positions=[];for(i=0;i<this.x_axis_labels.length;++i){var g=Math.floor(this.chart_origin_x+i*this.chart_width/(this.x_axis_labels.length-1));this.x_axis_label_positions.push(g)}this.y_axis_labels=j[1].split("|");this.y_axis_label_positions=[];for(i=0;i<this.y_axis_labels.length;++i){var f=Math.floor(this.chart_origin_y-i*this.chart_height/(this.y_axis_labels.length-1));this.y_axis_label_positions.push(f)}}if(params.chd){var n=params.chd;var e=n.substring(0,2);if(e=="t:"){this.dot_x_positions=[];this.dot_y_positions=[];this.dot_values=[];this.dot_colors=[];n=n.substring(2);var h=n.split("|");var a=h[0].split(",");var k=h[1].split(",");var m=null;if(h.length>2){m=h[2].split(",")}else{m=new Array(a.length)}for(i=0;i<m.length;++i){var g=Math.floor(this.chart_origin_x+parseInt(a[i])*this.chart_width/100);this.dot_x_positions.push(g);var f=Math.floor(this.chart_origin_y-parseInt(k[i])*this.chart_height/100);this.dot_y_positions.push(f);var l=null;if(m[i]&&(m[i]!="_")){l=Math.floor(m[i]*openark_pchart.max_dot_size/100)}this.dot_values.push(l);this.dot_colors.push(this.gradient(this.plot_colors[0],this.plot_colors[1],m[i]))}}}this.redraw()};openark_pchart.prototype.redraw=function(){this.create_graphics();this.draw()};openark_pchart.prototype.draw=function(){if(this.chart_title){this.draw_text({text:this.chart_title,left:0,top:0,width:this.canvas_width,height:this.title_height,text_align:"center",font_size:openark_pchart.title_font_size})}for(i=0;i<this.dot_values.length;++i){if(this.dot_values[i]!=null){this.draw_circle(this.dot_x_positions[i],this.dot_y_positions[i],this.dot_values[i],this.dot_colors[i])}}this.set_color(openark_pchart.axis_color);for(i=0;i<this.x_axis_label_positions.length;++i){if(this.x_axis_labels[i]){this.draw_text({text:""+this.x_axis_labels[i],left:this.x_axis_label_positions[i]-25,top:this.chart_origin_y+openark_pchart.max_dot_size+5,width:50,height:openark_pchart.axis_font_size,text_align:"center"})}}for(i=0;i<this.y_axis_label_positions.length;++i){if(this.y_axis_labels[i]){this.draw_text({text:""+this.y_axis_labels[i],left:0,top:this.y_axis_label_positions[i]-openark_pchart.axis_font_size+Math.floor(openark_pchart.axis_font_size/3),width:this.y_axis_values_width-openark_pchart.max_dot_size-5,height:openark_pchart.axis_font_size,text_align:"right"})}}};openark_pchart.prototype.set_color=function(a){this.current_color=a;if(!this.isIE){this.ctx.strokeStyle=a}};openark_pchart.prototype.draw_circle=function(b,e,a,c){if(this.isIE){var d=document.createElement("v:oval");d.style.position="absolute";d.style.left=b-a;d.style.top=e-a;d.style.width=a*2;d.style.height=a*2;d.setAttribute("stroked","false");d.setAttribute("filled","true");d.setAttribute("fillcolor",""+c);this.container.appendChild(d)}else{this.ctx.fillStyle=this.dot_colors[i];this.ctx.beginPath();this.ctx.arc(b,e,a,0,Math.PI*2,true);this.ctx.closePath();this.ctx.fill()}};openark_pchart.prototype.draw_text=function(b){var a=document.createElement("div");a.style.position="absolute";a.style.left=""+b.left+"px";a.style.top=""+b.top+"px";a.style.width=""+b.width+"px";a.style.height=""+b.height+"px";a.style.textAlign=""+b.text_align;a.style.verticalAlign="top";if(b.font_size){a.style.fontSize=""+b.font_size+"pt"}a.innerHTML=b.text;this.container.appendChild(a)};
     """
+corners_image = """data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9oGGREdC6h6BI8AAAAZdEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAA2UlEQVQoz5WSS2rEMBBESx/apqWV7384n0CrlhCNPlloMgmZiePUphG8B4Uoc54nPsPMIQTvvbUWwBijtZZzLqU8Gb8OEcUYmdk5h28hom3b9n0XEVV9CER0HAcRGWPwEudcjJGIUkqqagGs91t6xRizKgDwzMzMF/TTYeZaqw0h/Oj9W5xzIQTrvcftrA+094X/0Q9njHGfHmPY1tp9obVmc8699zt07z3nbEsppZQ55zU951ykBbB2cuHMOVVVRABYAKqaUhKRt9167yKyhvS11uXUWv+c9wcqkoXk2CZntQAAAABJRU5ErkJggg%3D%3D"""
 
 def get_monitored_host():
     monitored_host = options.monitored_host
@@ -497,11 +498,18 @@ def get_custom_query_ids():
     Returns the ordered ids
     """
     global custom_query_ids
+    global custom_chart_names
     if custom_query_ids is None:
-        query = """SELECT custom_query_id FROM %s.custom_query ORDER BY chart_order, custom_query_id""" % database_name 
+        query = """SELECT custom_query_id, chart_name FROM %s.custom_query_view""" % database_name 
         rows = get_rows(query)
         custom_query_ids = [int(row["custom_query_id"]) for row in rows]
+        custom_chart_names = [row["chart_name"] for row in rows]
     return custom_query_ids
+
+
+def get_custom_chart_names():
+    get_custom_query_ids()
+    return custom_chart_names
 
 
 def get_custom_status_variables():
@@ -899,6 +907,38 @@ def create_custom_query_table():
     """
     query = query.replace("${database_name}", database_name)
     act_query(query)
+
+
+def create_custom_query_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.custom_query_view AS
+          SELECT
+            custom_query_id,
+            enabled,
+            query_eval,
+            description,
+            chart_type,
+            chart_order,
+            CASE chart_type
+                WHEN 'value' THEN CONCAT('custom_', custom_query_id)
+                WHEN 'value_psec' THEN CONCAT('custom_', custom_query_id, '_psec')
+                WHEN 'time' THEN CONCAT('custom_', custom_query_id, '_time')
+            END AS chart_name
+          FROM
+            ${database_name}.custom_query
+          ORDER BY 
+            custom_query.chart_order, custom_query.custom_query_id
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("custom_query_view created")
+
 
 
 def execute_custom_query(custom_query_id, query_eval):
@@ -1556,6 +1596,16 @@ def column_name_relates_to_custom_query(column_name):
         return True
     return False
 
+
+def get_custom_query_id_by_column_name(column_name):
+    match = re.match("^custom_([\\d]+)(_.+)?$", column_name)
+    if match is None:
+        return None
+    result = match.group(1)
+    if result is None:
+        return None
+    return int(result)
+
     
 def upgrade_status_variables_table():
 
@@ -1927,18 +1977,16 @@ def create_report_html_24_7_view(report_columns):
     js_queries = []
     for report_column in report_columns:
         query = """
-            '<div class="chart">
-                <h3>%s</h3>
-                <a href="', %s, '">Google chart URL</a>
-                <div>
-                    <div id="chart_div_%s" class="chart"></div>
-                </div>
+            '<div class="chart_container">
+                <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+                <h3>%s <a href="', %s, '">[url]</a></h3>
+                <div id="chart_div_%s" class="chart"></div>
             </div>',
             """ % (report_column.replace("_", " "), report_column, report_column)
         chart_queries.append(query)
 
         js_query = """'
-                new openark_pchart(document.getElementById("chart_div_${report_column}"), {width: ', chart_width, ', height: ',  chart_height-20, '}).read_google_url("', ${report_column}, '");
+                new openark_pchart(document.getElementById("chart_div_${report_column}"), {width: ', chart_width, ', height: ',  chart_height, '}).read_google_url("', ${report_column}, '");
             '""" 
         js_query = js_query.replace("${report_column}", report_column)
         js_queries.append(js_query)
@@ -1953,50 +2001,60 @@ def create_report_html_24_7_view(report_columns):
           SELECT CONCAT('
             <html>
                 <head>
-                <title>mycheckpoint 24/7 report</title>
-                <meta http-equiv="refresh" content="600" />
-                <!--[if IE]>
-                    <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
-                    <style> v\\\\:* { behavior: url(#default#VML); }</style >
-                <![endif]-->
-                <script type="text/javascript" charset="utf-8">
-                    ${openark_pchart}
-                </script>
-                <script type="text/javascript" charset="utf-8">
-                    window.onload = function () {
-                ', %s, '
-                    };
-                </script>
-                <style type="text/css">
-                    body {
-                        background:#FFFFFF none repeat scroll 0% 0%;
-                        color:#505050;
-                        font-family:Verdana,Arial,Helvetica,sans-serif;
-                        font-size:9pt;
-                        line-height:1.5;
-                    }
-                    a {
-                        color:#f26522;
-                        text-decoration:none;
-                    }
-                    h3 {
-                        font-weight:normal;
-                    }
-                    div.row {
-                        width: ${global_width};
-                    }
-                    div.chart {
-                        float: left;
-                        white-space: nowrap;
-                        margin-right: 10px;
-                        width:', charts_api.chart_width, ';
-                    }
-                    div.chart img {
-                        border:0px none;
-                        width: ', charts_api.chart_width, ';
-                        height: ', charts_api.chart_height, ';
-                    }
-                </style>
+                    <title>mycheckpoint 24/7 report</title>
+                    <meta http-equiv="refresh" content="600" />
+                    <!--[if IE]>
+                        <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
+                        <style> v\\\\:* { behavior: url(#default#VML); }</style >
+                    <![endif]-->
+                    <style type="text/css">
+                        body {
+                            background:#e0e0e0 none repeat scroll 0% 0%;
+                            color:#505050;
+                            font-family:Verdana,Arial,Helvetica,sans-serif;
+                            font-size:9pt;
+                            line-height:1.5;
+                        }
+                        a {
+                            color:#f26522;
+                            text-decoration:none;
+                        }
+                        h3 {
+                            font-size:10.5pt;
+                            font-weight:normal;
+                        }
+                        h3 a {
+                            font-weight:normal;
+                            font-size: 80%%;
+                        }
+                        div.chart {
+                            white-space: nowrap;
+                            width:', charts_api.chart_width, ';
+                        }
+                        div.chart_container {
+                            position: relative;
+                            float: left;
+                            white-space: nowrap;
+                            padding: 10px;
+                            background: #ffffff;
+                            width: ', charts_api.chart_width, ';
+                            margin-right: 10px;
+                            margin-bottom: 10px;
+                        }
+                        .corner { position: absolute; width: 8px; height: 8px; background: url(''${corners_image}'') no-repeat; font-size: 0; }
+                        .tl { top: 0; left: 0; background-position: 0 0; }
+                        .tr { top: 0; right: 0; background-position: -8px 0; }
+                        .bl { bottom: 0; left: 0; background-position: 0 -8px; }
+                        .br { bottom: 0; right: 0; background-position: -8px -8px; }
+                    </style>
+                    <script type="text/javascript" charset="utf-8">
+                        ${openark_pchart}
+                    </script>
+                    <script type="text/javascript" charset="utf-8">
+                        window.onload = function () {
+                    ', %s, '
+                        };
+                    </script>
                 </head>
                 <body>
                     <a name=""></a>
@@ -2014,6 +2072,7 @@ def create_report_html_24_7_view(report_columns):
     query = query.replace("${database_name}", database_name)
     query = query.replace("${global_width}", str(options.chart_width*3 + 30))
     query = query.replace("${openark_pchart}", openark_pchart.replace("'","''"))
+    query = query.replace("${corners_image}", corners_image.replace("'","''"))
 
     act_query(query)
 
@@ -2306,7 +2365,7 @@ def create_report_chart_labels_views():
             CONCAT(IF (${stale_error_condition}, 'STALE DATA! ', 'Latest '), ${title_numeric_description}, ' ${title_unit_description}: ',
               DATE_FORMAT(ts_min, '${title_ts_format}'), '  -  ', DATE_FORMAT(ts_max, '${title_ts_format}')) AS chart_time_description,
             IF (${stale_error_condition}, '808080', '303030') AS chart_title_color,
-            IF (${stale_error_condition}, 'fff88f', 'ffffff') AS chart_bg_color
+            IF (${stale_error_condition}, 'f0f0f0', 'ffffff') AS chart_bg_color
           FROM
             ${database_name}.sv_report_${view_name_extension}_recent_minmax, ${database_name}.numbers
           WHERE
@@ -2616,152 +2675,40 @@ def create_report_html_brief_view(report_charts):
     chart_aliases_navigation_map = " | ".join(["""<a href="#%s">%s</a>""" % (chart_section, chart_section) for chart_section in charts_sections_list if chart_section])
 
     sections_queries = []
-    for (chart_section, charts_aliases) in report_charts:
-        charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
-        charts_aliases_queries = []
-        for chart_alias in charts_aliases_list:
-            query = """
-                '<div class="chart">
-                    <h3>%s</h3>',
-                    IFNULL(CONCAT('<img src="', %s, '"/>'), 'N/A'),
-                '</div>',
-                """ % (chart_alias.replace("_", " "), chart_alias)
-            query = query.replace("${chart_alias}", chart_alias)
-            charts_aliases_queries.append(query)
-        charts_aliases_query = "".join(charts_aliases_queries)
-        
-        chart_section_anchor = chart_section 
-        if not chart_section:
-            chart_section_anchor = "section_%d" % len(sections_queries)
-        section_query = """'
-            <a name="%s"></a>
-            <h2>%s <a href="#">[top]</a></h2>
-            
-            <div class="row">',
-                %s
-                '<div class="clear"></div>
-            </div>
-                ',
-            """ % (chart_section_anchor, chart_section, charts_aliases_query)
-        sections_queries.append(section_query)
-
-    custom_charts_queries = []
-    for i in get_custom_query_ids():
-        custom_chart_query = """
-            '<div class="chart">
-                <h3>', IFNULL(custom_%d_description, 'N/A'), '</h3>',
-                IFNULL(
-                  CONCAT('<img src="', REPLACE(custom_%d_chart, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(custom_%d_text_description, ':+'), ''), 'custom_')), '"/>'), 
-                  '<div class="img_dummy">Chart N/A</div>'),
-            '</div>',
-            """ % (i, i, i)
-        custom_charts_queries.append(custom_chart_query)
-
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
-        VIEW ${database_name}.sv_report_html_brief AS
-          SELECT CONCAT('
-            <html>
-                <head>
-                <title>mycheckpoint brief report</title>
-                <meta http-equiv="refresh" content="600" />
-                <style type="text/css">
-                    body {
-                        background:#FFFFFF none repeat scroll 0% 0%;
-                        color:#505050;
-                        font-family:Verdana,Arial,Helvetica,sans-serif;
-                        font-size:9pt;
-                        line-height:1.5;
-                    }
-                    a {
-                        color:#f26522;
-                        text-decoration:none;
-                    }
-                    h2 {
-                        font-weight:normal;
-                        margin-top:20px;
-                    }
-                    h2 a {
-                        font-weight:normal;
-                        font-size: 60%%;
-                    }
-                    h3 {
-                        font-weight:normal;
-                    }
-                    .nobr {
-                        white-space: nowrap;
-                    }
-                    div.row {
-                        width: ${global_width};
-                    }
-                    div.chart {
-                        float: left;
-                        white-space: nowrap;
-                        margin-right: 10px;
-                        width:', charts_api.chart_width, ';
-                    }
-                    div.chart img {
-                        border:0px none;
-                        width: ', charts_api.chart_width, ';
-                        height: ', charts_api.chart_height, ';
-                    }
-                    .clear {
-                        clear:both;
-                        height:1px;
-                    }
-                </style>
-                </head>
-                <body>
-                    <a name=""></a>
-                    Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
-                        DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
-                    <br/><br/>
-                    Navigate: ${chart_aliases_navigation_map} | <a href="#Custom">Custom</a>
-                    <br/>
-                    ',
-                    %s '
-                    <a name="Custom"></a>
-                    <h2>Custom <a href="#">[top]</a></h2>
-                    ',
-                    %s '
-                </body>
-            </html>
-          ') AS html
-          FROM
-            ${database_name}.sv_report_chart_sample, ${database_name}.sv_custom_chart_flattened_sample, ${database_name}.charts_api
-        """ % ("".join(sections_queries), "".join(custom_charts_queries))
-    query = query.replace("${database_name}", database_name)
-    query = query.replace("${chart_aliases_navigation_map}", chart_aliases_navigation_map)
-    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
-
-    act_query(query)
-
-    verbose("sv_report_html_brief created")
-
-
-def create_report_html_brief_interactive_view(report_charts):
-    charts_sections_list = [chart_section for (chart_section, charts_aliases) in report_charts]
-    chart_aliases_navigation_map = " | ".join(["""<a href="#%s">%s</a>""" % (chart_section, chart_section) for chart_section in charts_sections_list if chart_section])
-
-    sections_queries = []
     js_queries = []
     for (chart_section, charts_aliases) in report_charts:
         charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
         charts_aliases_queries = []
         for chart_alias in charts_aliases_list:
-            div_query = """'<div id="chart_div_${chart_alias}" class="chart"></div>',
+            # There's different treatment to custom columns:
+            # Custom columns' titles need to reflect the custom query's description. So does the chart's legend.
+            custom_query_id = get_custom_query_id_by_column_name(chart_alias)
+            div_query = """'<div class="chart_container">
+                    <div class="corner TL"></div><div class="corner TR"></div><div class="corner BL"></div><div class="corner BR"></div>
+                    <h3>${chart_alias_header} <a href="', ${chart_alias_url}, '">[url]</a></h3>
+                    <div id="chart_div_${chart_alias}" class="chart"></div>
+                </div>',
                 """
             div_query = div_query.replace("${chart_alias}", chart_alias)
+            if custom_query_id is None:
+                # Normal column
+                chart_alias_url = chart_alias
+                div_query = div_query.replace("${chart_alias_header}", chart_alias.replace("_", " "))
+            else:
+                # This is a custom column
+                chart_alias_url = "REPLACE(%s, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(custom_%d_text_description, ':+'), ''), 'custom_'))" % (chart_alias, custom_query_id,)
+                div_query = div_query.replace("${chart_alias_header}", "', custom_%d_text_description, '" % custom_query_id)
+            div_query = div_query.replace("${chart_alias_url}", chart_alias_url)
             charts_aliases_queries.append(div_query)
 
             js_query = """'
-                    new openark_lchart(document.getElementById("chart_div_${chart_alias}"), {width: ', chart_width, ', height: ',  chart_height-20, '}).read_google_url("', ${chart_alias}, '");
+                    new openark_lchart(
+                        document.getElementById("chart_div_${chart_alias}"), 
+                        {width: ', chart_width, ', height: ',  chart_height, '}
+                        ).read_google_url("', ${chart_alias_url}, '");
                 '""" 
             js_query = js_query.replace("${chart_alias}", chart_alias)
+            js_query = js_query.replace("${chart_alias_url}", chart_alias_url)
             js_queries.append(js_query)
         charts_aliases_query = "".join(charts_aliases_queries)
         
@@ -2780,17 +2727,6 @@ def create_report_html_brief_interactive_view(report_charts):
             """ % (chart_section_anchor, chart_section, charts_aliases_query)
         sections_queries.append(section_query)
 
-    custom_charts_queries = []
-    for i in get_custom_query_ids():
-        js_query = """'
-                new openark_lchart(document.getElementById("chart_div_custom_%d"), {width: ', chart_width, ', height: ',  chart_height-20, '}).read_google_url("', REPLACE(custom_%d_chart, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(custom_%d_text_description, ':+'), ''), 'custom_')), '");
-            '""" % (i, i, i, )
-        js_query = js_query.replace("${chart_alias}", chart_alias)
-        js_queries.append(js_query)
-        div_query = """'<div id="chart_div_custom_%d" class="chart custom_chart"></div>',
-            """ % i
-        custom_charts_queries.append(div_query)
-        
 
     query = """
         CREATE
@@ -2798,7 +2734,7 @@ def create_report_html_brief_interactive_view(report_charts):
         ALGORITHM = TEMPTABLE
         DEFINER = CURRENT_USER
         SQL SECURITY INVOKER
-        VIEW ${database_name}.sv_report_html_brief_interactive AS
+        VIEW ${database_name}.sv_report_html_brief AS
           SELECT CONCAT('
             <html>
                 <head>
@@ -2808,6 +2744,64 @@ def create_report_html_brief_interactive_view(report_charts):
                         <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
                         <style> v\\\\:* { behavior: url(#default#VML); }</style >
                     <![endif]-->
+                    <style type="text/css">
+                        body {
+                            background:#e0e0e0 none repeat scroll 0% 0%;
+                            color:#505050;
+                            font-family: Verdana,Helvetica,Arial,sans-serif;
+                            font-size:9pt;
+                        }
+                        div.row {
+                            width: ', ((chart_width+30)*3), ';
+                        }
+                        div.chart {
+                            white-space: nowrap;
+                            width: ', chart_width, 'px;
+                        }
+                        div.custom_chart {
+                            margin-bottom: 40px;
+                        }
+                        div.chart_container {
+                            position: relative;
+                            float: left;
+                            white-space: nowrap;
+                            padding: 10px;
+                            background: #ffffff;
+                            width: ', charts_api.chart_width, ';
+                            height: ', (charts_api.chart_height+140), ';
+                            margin-right: 10px;
+                            margin-bottom: 10px;
+                        }
+                        .corner { position: absolute; width: 8px; height: 8px; background: url(''${corners_image}'') no-repeat; font-size: 0; }
+                        .tl { top: 0; left: 0; background-position: 0 0; }
+                        .tr { top: 0; right: 0; background-position: -8px 0; }
+                        .bl { bottom: 0; left: 0; background-position: 0 -8px; }
+                        .br { bottom: 0; right: 0; background-position: -8px -8px; }
+                        .clear {
+                            clear:both;
+                            height:1px;
+                        }
+                        a {
+                            color:#f26522;
+                            text-decoration:none;
+                        }
+                        h2 {
+                            font-size:13.5pt;
+                            font-weight:normal;
+                        }
+                        h2 a {
+                            font-weight:normal;
+                            font-size: 60%%;
+                        }
+                        h3 {
+                            font-size:10.5pt;
+                            font-weight:normal;
+                        }
+                        h3 a {
+                            font-weight:normal;
+                            font-size: 80%%;
+                        }
+                    </style>
                     <script type="text/javascript" charset="utf-8">
                         ${openark_lchart}
                     </script>
@@ -2816,60 +2810,14 @@ def create_report_html_brief_interactive_view(report_charts):
                     ', %s, '
                         };
                     </script>
-                    <style type="text/css">
-                    body {
-                        color:#505050;
-                        font-family: Verdana,Helvetica,Arial,sans-serif;
-                        font-size:9pt;
-                    }
-                    div.row {
-                        width: ${global_width};
-                    }
-                    div.chart {
-                        float: left;
-                        white-space: nowrap;
-                        margin-right: 10px;
-                        font-family: Helvetica,Verdana,Arial,sans-serif;
-                        width: ', chart_width, 'px;
-                    }
-                    div.custom_chart {
-                        margin-bottom: 40px;
-                    }
-                    .clear {
-                        clear:both;
-                        height:1px;
-                    }
-                    a {
-                        color:#f26522;
-                        text-decoration:none;
-                    }
-                    h2 {
-                        font-weight:normal;
-                        margin-top:20px;
-                    }
-                    h2 a {
-                        font-weight:normal;
-                        font-size: 60%%;
-                    }
-                    h4 {
-                        font-family: Verdana,Helvetica,Arial,sans-serif;
-                        display: inline;
-                        margin-bottom: 0px;
-                        padding-left: 8px;
-                    }
-                    </style>
                 </head>
                 <body>
                     <a name=""></a>
                     Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
                         DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
                     <br/><br/>
-                    Navigate: ${chart_aliases_navigation_map} | <a href="#Custom">Custom</a>
+                    Navigate: ${chart_aliases_navigation_map}
                     <br/>
-                    ',
-                    %s '
-                    <a name="Custom"></a>
-                    <h2>Custom <a href="#">[top]</a></h2>
                     ',
                     %s '
                 </body>
@@ -2877,11 +2825,12 @@ def create_report_html_brief_interactive_view(report_charts):
           ') AS html
           FROM
             ${database_name}.sv_report_chart_sample, ${database_name}.sv_custom_chart_flattened_sample, ${database_name}.charts_api
-        """ % (",".join(js_queries), "".join(sections_queries), "".join(custom_charts_queries))
+        """ % (",".join(js_queries), "".join(sections_queries))
     query = query.replace("${database_name}", database_name)
     query = query.replace("${chart_aliases_navigation_map}", chart_aliases_navigation_map)
     query = query.replace("${global_width}", str(options.chart_width*3 + 30))
     query = query.replace("${openark_lchart}", openark_lchart.replace("'","''"))
+    query = query.replace("${corners_image}", corners_image.replace("'","''"))
 
     act_query(query)
 
@@ -3504,8 +3453,10 @@ def create_status_variables_views():
             ("Vitals and OS", "seconds_behind_master, connections_usage, os_memory"),
             ("", "os_cpu_utilization_percent, os_loadavg, os_mountpoints_usage_percent"),
         ]
+    if get_custom_chart_names():
+        brief_html_view_charts.append(("Custom", ", ".join(get_custom_chart_names()),))
+        
     create_report_html_brief_view(brief_html_view_charts)
-    create_report_html_brief_interactive_view(brief_html_view_charts)
     create_custom_html_view()
     create_custom_html_brief_view()
 
@@ -3689,6 +3640,7 @@ def deploy_schema():
     create_numbers_table()
     create_charts_api_table()
     create_custom_query_table()
+    create_custom_query_view()
     if not create_status_variables_table():
         upgrade_status_variables_table()
     create_alert_condition_table()
@@ -3748,6 +3700,7 @@ try:
         extra_dict = {}
         report_columns = []
         custom_query_ids = None
+        custom_chart_names = None
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
 
