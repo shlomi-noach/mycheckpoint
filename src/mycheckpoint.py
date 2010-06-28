@@ -957,7 +957,11 @@ def execute_custom_query(custom_query_id, query_eval):
     # Expect an integer value:
     custom_value = None
     try:
-        custom_value = int(row.values()[0])
+        raw_custom_value = row.values()[0]
+        if raw_custom_value is None:
+            custom_value = None
+        else:
+            custom_value = int(raw_custom_value)
     except ValueError:
         return print_error(query_error_message)
     
@@ -991,7 +995,10 @@ def collect_custom_data():
         custom_query_result = execute_custom_query(custom_query_id, query_eval)
         if custom_query_result is not None:
             custom_value, query_time = custom_query_result
-            custom_updates.append("custom_%d = %d, custom_%d_time = %d" % (custom_query_id, custom_value, custom_query_id, query_time,))
+            if custom_value is None:
+                custom_updates.append("custom_%d = NULL, custom_%d_time = %d" % (custom_query_id, custom_query_id, query_time,))
+            else:
+                custom_updates.append("custom_%d = %d, custom_%d_time = %d" % (custom_query_id, custom_value, custom_query_id, query_time,))
     if custom_updates:
         query = """
             UPDATE 
@@ -2575,22 +2582,46 @@ def create_custom_google_charts_flattened_views():
 def create_report_html_view(charts_aliases):
     charts_aliases_list = [chart_alias.strip() for chart_alias in charts_aliases.split(",")]
 
-    all_img_tags_queries = []
+    rows_queries = []
+    js_queries = []
     for chart_alias in charts_aliases_list:
-        alias_img_tags_query = """
+        div_queries = []
+        for view_name_extension in ["sample", "hour", "day"]:
+            div_query = """'<div class="chart_container">
+                    <div class="corner TL"></div><div class="corner TR"></div><div class="corner BL"></div><div class="corner BR"></div>
+                    <h3>', IFNULL(CONCAT('<a href="', sv_report_chart_${view_name_extension}.${chart_alias}, '">[url]</a>'), 'N/A'), '</h3>
+                    <div id="chart_div_${chart_alias}_${view_name_extension}" class="chart"></div>
+                </div>'
+                """
+            div_query = div_query.replace("${chart_alias}", chart_alias)
+            div_query = div_query.replace("${view_name_extension}", view_name_extension)
+            div_queries.append(div_query)
+
+            js_query = """IFNULL(
+                    CONCAT('
+                        new openark_lchart(
+                            document.getElementById("chart_div_${chart_alias}_${view_name_extension}"), 
+                            {width: ', chart_width, ', height: ',  chart_height, '}
+                            ).read_google_url("', sv_report_chart_${view_name_extension}.${chart_alias}, '");
+                        '),
+                    '')
+                """ 
+            js_query = js_query.replace("${chart_alias}", chart_alias)
+            js_query = js_query.replace("${view_name_extension}", view_name_extension)
+            js_queries.append(js_query)
+
+        row_query = """
             '<div class="row">
                 <a name="${chart_alias}"></a>
                 <h2>${chart_alias} <a href="#">[top]</a></h2>',
-                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_sample.${chart_alias}, '"/>'), 'N/A'), '</div>',
-                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_hour.${chart_alias}, '"/>'), 'N/A'), '</div>',
-                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_report_chart_day.${chart_alias}, '"/>'), 'N/A'), '</div>',
+                %s,
                 '<div class="clear"></div>',
             '</div>
                 ',
-            """
-        alias_img_tags_query = alias_img_tags_query.replace("${chart_alias}", chart_alias)
-        all_img_tags_queries.append(alias_img_tags_query)
-    all_img_tags_query = "".join(all_img_tags_queries)
+            """ % "".join(div_queries)
+        row_query = row_query.replace("${chart_alias}", chart_alias)
+        rows_queries.append(row_query)
+    all_charts_query = "".join(rows_queries)
 
     chart_aliases_map = " | ".join(["""<a href="#%s">%s</a>""" % (chart_alias, chart_alias,) for chart_alias in charts_aliases_list])
     query = """
@@ -2601,70 +2632,102 @@ def create_report_html_view(charts_aliases):
         SQL SECURITY INVOKER
         VIEW ${database_name}.sv_report_html AS
           SELECT CONCAT('
-    <html>
-        <head>
-        <title>mycheckpoint report</title>
-        <meta http-equiv="refresh" content="600" />
-        <style type="text/css">
-            body {
-                background:#FFFFFF none repeat scroll 0% 0%;
-                color:#505050;
-                font-family:Verdana,Arial,Helvetica,sans-serif;
-                font-size:9pt;
-                line-height:1.5;
-            }
-            a {
-                color:#f26522;
-                text-decoration:none;
-            }
-            h2 {
-                font-weight:normal;
-                margin-top:20px;
-            }
-            h2 a {
-                font-weight:normal;
-                font-size: 60%%;
-            }
-            .nobr {
-                white-space: nowrap;
-            }
-            div.row {
-                width: ${global_width};
-            }
-            div.chart {
-                float: left;
-                white-space: nowrap;
-                margin-right: 10px;
-                width:', charts_api.chart_width, ';
-            }
-            div.chart img {
-                border:0px none;
-                width: ', charts_api.chart_width, ';
-                height: ', charts_api.chart_height, ';
-            }
-            .clear {
-                clear:both;
-                height:1px;
-            }
-        </style>
-        </head>
-        <body>
-            Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
-                DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
-            <br/><br/>
-            Navigate: ${chart_aliases_map}
-            <br/>
-            ',
-            %s '
-        </body>
-    </html>
+            <html>
+                <head>
+                <title>mycheckpoint report</title>
+                <!--[if IE]>
+                    <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
+                    <style> v\\\\:* { behavior: url(#default#VML); }</style >
+                <![endif]-->
+                <meta http-equiv="refresh" content="600" />
+                <style type="text/css">
+                    body {
+                        background:#e0e0e0 none repeat scroll 0% 0%;
+                        color:#505050;
+                        font-family:Verdana,Arial,Helvetica,sans-serif;
+                        font-size:9pt;
+                        line-height:1.5;
+                    }
+                    a {
+                        color:#f26522;
+                        text-decoration:none;
+                    }
+                    h2 {
+                        font-size:13.5pt;
+                        font-weight:normal;
+                    }
+                    h2 a {
+                        font-weight:normal;
+                        font-size: 60%%;
+                    }
+                    h3 {
+                        font-size:10.5pt;
+                        font-weight:normal;
+                    }
+                    h3 a {
+                        font-weight:normal;
+                        font-size: 80%%;
+                    }
+                    .nobr {
+                        white-space: nowrap;
+                    }
+                    div.row {
+                        width: ', ((chart_width+30)*3), ';
+                    }
+                    div.chart {
+                        white-space: nowrap;
+                        width: ', chart_width, 'px;
+                    }
+                    div.custom_chart {
+                        margin-bottom: 40px;
+                    }
+                    div.chart_container {
+                        position: relative;
+                        float: left;
+                        white-space: nowrap;
+                        padding: 10px;
+                        background: #ffffff;
+                        width: ', charts_api.chart_width, ';
+                        margin-right: 10px;
+                        margin-bottom: 10px;
+                    }
+                    .corner { position: absolute; width: 8px; height: 8px; background: url(''${corners_image}'') no-repeat; font-size: 0; }
+                    .tl { top: 0; left: 0; background-position: 0 0; }
+                    .tr { top: 0; right: 0; background-position: -8px 0; }
+                    .bl { bottom: 0; left: 0; background-position: 0 -8px; }
+                    .br { bottom: 0; right: 0; background-position: -8px -8px; }
+                    .clear {
+                        clear:both;
+                        height:1px;
+                    }
+                </style>
+                <script type="text/javascript" charset="utf-8">
+                    ${openark_lchart}
+                </script>
+                <script type="text/javascript" charset="utf-8">
+                    window.onload = function () {
+                ', %s, '
+                    };
+                </script>
+                </head>
+                <body>
+                    Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                        DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
+                    <br/><br/>
+                    Navigate: ${chart_aliases_map}
+                    <br/>
+                    ',
+                    %s '
+                </body>
+            </html>
           ') AS html
           FROM
             ${database_name}.sv_report_chart_sample, ${database_name}.sv_report_chart_hour, ${database_name}.sv_report_chart_day, ${database_name}.charts_api
-        """ % all_img_tags_query
+        """ % (",".join(js_queries), all_charts_query)
     query = query.replace("${database_name}", database_name)
     query = query.replace("${chart_aliases_map}", chart_aliases_map)
-    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
+    query = query.replace("${openark_lchart}", openark_lchart.replace("'","''"))
+    query = query.replace("${corners_image}", corners_image.replace("'","''"))
     act_query(query)
 
     verbose("report html view created")
@@ -2685,7 +2748,11 @@ def create_report_html_brief_view(report_charts):
             custom_query_id = get_custom_query_id_by_column_name(chart_alias)
             div_query = """'<div class="chart_container">
                     <div class="corner TL"></div><div class="corner TR"></div><div class="corner BL"></div><div class="corner BR"></div>
-                    <h3>${chart_alias_header} <a href="', ${chart_alias_url}, '">[url]</a></h3>
+                    <h3>${chart_alias_header} ', 
+                        IFNULL(
+                            CONCAT('<a href="', ${chart_alias_url}, '">[url]</a>')
+                        , '[N/A]'), 
+                    '</h3>
                     <div id="chart_div_${chart_alias}" class="chart"></div>
                 </div>',
                 """
@@ -2701,12 +2768,15 @@ def create_report_html_brief_view(report_charts):
             div_query = div_query.replace("${chart_alias_url}", chart_alias_url)
             charts_aliases_queries.append(div_query)
 
-            js_query = """'
-                    new openark_lchart(
-                        document.getElementById("chart_div_${chart_alias}"), 
-                        {width: ', chart_width, ', height: ',  chart_height, '}
-                        ).read_google_url("', ${chart_alias_url}, '");
-                '""" 
+            js_query = """IFNULL(
+                    CONCAT('
+                        new openark_lchart(
+                            document.getElementById("chart_div_${chart_alias}"), 
+                            {width: ', chart_width, ', height: ',  chart_height, '}
+                            ).read_google_url("', ${chart_alias_url}, '");
+                        '),
+                    '')
+                """ 
             js_query = js_query.replace("${chart_alias}", chart_alias)
             js_query = js_query.replace("${chart_alias_url}", chart_alias_url)
             js_queries.append(js_query)
