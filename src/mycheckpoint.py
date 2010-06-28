@@ -942,6 +942,31 @@ def create_custom_query_view():
 
 
 
+def create_custom_query_top_navigation_view():
+    query = """
+        CREATE
+        OR REPLACE
+        ALGORITHM = TEMPTABLE
+        DEFINER = CURRENT_USER
+        SQL SECURITY INVOKER
+        VIEW ${database_name}.custom_query_top_navigation_view AS
+          SELECT
+            GROUP_CONCAT(
+                CONCAT('<a href="#custom_', custom_query_view.custom_query_id, '_chart">', custom_query_view.description, '</a>') 
+                ORDER BY 
+                    custom_query_view.chart_order, custom_query_view.custom_query_id
+                SEPARATOR ' | '
+            ) AS custom_query_top_navigation
+          FROM
+            ${database_name}.custom_query_view
+    """
+    query = query.replace("${database_name}", database_name)
+    act_query(query)
+
+    verbose("custom_query_top_navigation_view created")
+
+
+
 def execute_custom_query(custom_query_id, query_eval):
     start_time = time.time()
     rows = get_rows(query_eval)
@@ -1988,15 +2013,19 @@ def create_report_html_24_7_view(report_columns):
         query = """
             '<div class="chart_container">
                 <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-                <h3>%s <a href="', %s, '">[url]</a></h3>
+                <h3>%s ', IFNULL(CONCAT('<a href="', %s, '">[url]</a>'), 'N/A'), '</h3>
                 <div id="chart_div_%s" class="chart"></div>
             </div>',
             """ % (report_column.replace("_", " "), report_column, report_column)
         chart_queries.append(query)
 
-        js_query = """'
-                new openark_pchart(document.getElementById("chart_div_${report_column}"), {width: ', chart_width, ', height: ',  chart_height, '}).read_google_url("', ${report_column}, '");
-            '""" 
+        js_query = """
+                IFNULL(
+                    CONCAT('
+                        new openark_pchart(document.getElementById("chart_div_${report_column}"), {width: ', chart_width, ', height: ',  chart_height, '}).read_google_url("', ${report_column}, '");'
+                    ),
+                    '')
+                """ 
         js_query = js_query.replace("${report_column}", report_column)
         js_queries.append(js_query)
 
@@ -2920,7 +2949,7 @@ def create_report_html_brief_view(report_charts):
 
     act_query(query)
 
-    verbose("sv_report_html_brief_interactive created")
+    verbose("sv_report_html_brief created")
 
 
 def create_custom_html_view():
@@ -2970,7 +2999,7 @@ def create_custom_html_view():
                                 )
                             , '");
                         '),
-                    '')
+                    ''),
                 """ % i
             js_query = js_query.replace("${chart_alias}", chart_alias)
             js_query = js_query.replace("${view_name_extension}", view_name_extension)
@@ -3072,7 +3101,7 @@ def create_custom_html_view():
                 </script>
                 <script type="text/javascript" charset="utf-8">
                     window.onload = function () {
-                ', %s, '
+                        ', %s '
                     };
                 </script>
                 </head>
@@ -3084,7 +3113,10 @@ def create_custom_html_view():
                         DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '. <i>mycheckpoint</i> revision: ', metadata.revision, ', build: ', metadata.build, '. MySQL version: ', metadata.mysql_version, '    
                     <br/>The charts on this report are generated locally and do not send data over the net. Click the [url] links to view Google image charts.
                     <br/><br/>
-                    Navigate: ', GROUP_CONCAT(CONCAT('<a href="#custom_', custom_query_view.custom_query_id, '_chart">', custom_query_view.description, '</a>') SEPARATOR ' | '), '
+                    Navigate: ',
+                        IFNULL(
+                            custom_query_top_navigation_view.custom_query_top_navigation,
+                            'No custom queries   '), '
                     <br/>
                     ',
                     %s '
@@ -3095,10 +3127,10 @@ def create_custom_html_view():
             ${database_name}.sv_custom_chart_flattened_sample, 
             ${database_name}.sv_custom_chart_flattened_hour, 
             ${database_name}.sv_custom_chart_flattened_day, 
-            ${database_name}.custom_query_view,
+            ${database_name}.custom_query_top_navigation_view,
             ${database_name}.metadata,
             ${database_name}.charts_api            
-        """ % (",".join(js_queries), all_charts_query)
+        """ % ("".join(js_queries), all_charts_query)
     query = query.replace("${database_name}", database_name)
     query = query.replace("${openark_lchart}", openark_lchart.replace("'","''"))
     query = query.replace("${corners_image}", corners_image.replace("'","''"))
@@ -3142,7 +3174,7 @@ def create_custom_html_brief_view():
                         {width: ', chart_width, ', height: ',  chart_height, '}
                         ).read_google_url("', ${chart_alias_url}, '");
                     '),
-                '')
+                ''),
             """ 
         js_query = js_query.replace("${chart_alias}", chart_alias)
         js_query = js_query.replace("${chart_alias_url}", chart_alias_url)
@@ -3238,7 +3270,7 @@ def create_custom_html_brief_view():
                     </script>
                     <script type="text/javascript" charset="utf-8">
                         window.onload = function () {
-                    ', %s, '
+                            ', %s '
                         };
                     </script>
                 </head>
@@ -3259,7 +3291,7 @@ def create_custom_html_brief_view():
             ${database_name}.sv_custom_chart_flattened_sample, 
             ${database_name}.metadata, 
             ${database_name}.charts_api
-        """ % (",".join(js_queries), "".join(sections_queries))
+        """ % ("".join(js_queries), "".join(sections_queries))
     query = query.replace("${database_name}", database_name)
     query = query.replace("${global_width}", str(options.chart_width*3 + 30))
     query = query.replace("${openark_lchart}", openark_lchart.replace("'","''"))
@@ -3700,6 +3732,7 @@ def create_status_variables_views():
     if get_custom_chart_names():
         brief_html_view_charts.append(("Custom", ", ".join(get_custom_chart_names()),))
         
+    create_custom_query_top_navigation_view()
     create_report_html_brief_view(brief_html_view_charts)
     create_custom_html_view()
     create_custom_html_brief_view()
