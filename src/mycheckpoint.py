@@ -3181,12 +3181,9 @@ def create_custom_html_brief_view():
         js_queries.append(js_query)
 
     charts_aliases_query = "".join(charts_aliases_queries)
-    section_query = """'
-        <div class="row">',
+    section_query = """
             %s
-            '<div class="clear"></div>
-        </div>
-            ',
+            '<div class="clear"></div>',
         """ % charts_aliases_query
     sections_queries.append(section_query)
 
@@ -3213,9 +3210,6 @@ def create_custom_html_brief_view():
                             color:#505050;
                             font-family: Verdana,Helvetica,Arial,sans-serif;
                             font-size:9pt;
-                        }
-                        div.row {
-                            width: ', ((chart_width+30)*3), ';
                         }
                         div.chart {
                             white-space: nowrap;
