@@ -66,6 +66,16 @@
 		</java>
 		<delete dir="build/graphael/tmp"/>
 	</target>
+	<target name="openark-charts">
+		<mkdir dir="build/openark-charts"/>
+		<java jar="openark-charts/yuicompressor-2.4.2.jar" fork="true" output="build/openark-charts/openark-lchart-min.js">
+			<arg value="openark-charts/openark-lchart.js"/>
+		</java>
+		<java jar="openark-charts/yuicompressor-2.4.2.jar" fork="true" output="build/openark-charts/openark-pchart-min.js">
+			<arg value="openark-charts/openark-pchart.js"/>
+		</java>
+		<delete dir="build/openark-charts/tmp"/>
+	</target>
 
 	<target name="scripts">
 		<mkdir dir="build/scripts"/>
