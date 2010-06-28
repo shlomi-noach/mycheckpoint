@@ -29,7 +29,7 @@ openark_pchart = function(container, options) {
 	this.title_height = 0;
 	this.chart_title = '';
 	this.x_axis_values_height = 30;
-	this.y_axis_values_width = 50;
+	this.y_axis_values_width = 35;
 	this.x_axis_labels = [];
 	this.x_axis_label_positions = [];
 	this.y_axis_labels = [];
@@ -78,8 +78,12 @@ openark_pchart.prototype.create_graphics = function() {
 
 	if (this.isIE)
 	{
-		var htmlElement = document.documentElement;
-		htmlElement.setAttribute("xmlns:v", "urn:schemas-microsoft-com:vml");
+		// Since all drawings are done via VML and absolute positions, the 
+		// entire container becomes dimensionless. We now force its dimensions.
+		var placeholder_div = document.createElement("div");
+		placeholder_div.style.width = this.canvas_width;
+		placeholder_div.style.height = this.canvas_height;
+		this.container.appendChild(placeholder_div);
 	}
 	else
 	{
@@ -212,14 +216,22 @@ openark_pchart.prototype.read_google_url = function(url) {
 			var tokens = chd.split("|");
 			var x_positions = tokens[0].split(",");
 			var y_positions = tokens[1].split(",");
-			var values = tokens[2].split(",");
+			var values = null;
+			if (tokens.length > 2)
+			{
+				values = tokens[2].split(",");
+			}
+			else
+			{
+				values = new Array(x_positions.length);
+			}
 			for (i = 0; i < values.length; ++i) {
 				var x_pos = Math.floor(this.chart_origin_x + parseInt(x_positions[i]) * this.chart_width / 100);
 				this.dot_x_positions.push(x_pos);
 				var y_pos = Math.floor(this.chart_origin_y - parseInt(y_positions[i]) * this.chart_height / 100);
 				this.dot_y_positions.push(y_pos);
 				var value = null;
-				if (values[i] != '_')
+				if (values[i] && (values[i] != '_'))
 					value = Math.floor(values[i] * openark_pchart.max_dot_size / 100);
 				this.dot_values.push(value);
 				

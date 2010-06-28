@@ -81,7 +81,7 @@ openark_lchart.prototype.recalc = function() {
 		return;
 	}
     // Find tick nice round steps.
-	max_steps = Math.floor(this.chart_height / (openark_lchart.axis_font_size * 1.5));
+	max_steps = Math.floor(this.chart_height / (openark_lchart.axis_font_size * 1.6));
     round_steps_basis = [1, 2, 5];
     step_size = null;
     pow = 0;
@@ -121,8 +121,7 @@ openark_lchart.prototype.create_graphics = function() {
 
 	if (this.isIE)
 	{
-		var htmlElement = document.documentElement;
-		htmlElement.setAttribute("xmlns:v", "urn:schemas-microsoft-com:vml");
+		// Nothing to do here right now.
 	}
 	else
 	{
@@ -385,10 +384,17 @@ openark_lchart.prototype.draw = function() {
 	// legend:
 	if (this.series_labels && this.series_labels.length)
 	{
+		if (this.isIE)
+		{
+			// Since all drawings are done via VML and absolute positions, the 
+			// entire container becomes dimensionless. We now force its dimensions:
+			// We add a place holder for the "canvas", then add the legend div.
+			var placeholder_div = document.createElement("div");
+			placeholder_div.style.width = this.canvas_width;
+			placeholder_div.style.height = this.canvas_height;
+			this.container.appendChild(placeholder_div);
+		}
 		var legend_div = document.createElement("div");
-		legend_div.style.position = 'absolute';
-		legend_div.style.left = 0;
-		legend_div.style.top = this.chart_origin_y + 5 + openark_lchart.axis_font_size*1.8;
 
 		var legend_ul = document.createElement("ul");
 		legend_ul.style.margin = 0;
