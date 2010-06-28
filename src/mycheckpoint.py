@@ -2909,21 +2909,72 @@ def create_report_html_brief_view(report_charts):
 
 def create_custom_html_view():
 
-    custom_charts_queries = []
+    rows_queries = []
+    js_queries = []
     for i in get_custom_query_ids():
-        custom_chart_query = """
+        chart_alias = "custom_%d_chart" % i
+        div_queries = []
+        for view_name_extension in ["sample", "hour", "day"]:
+            div_query = """'<div class="chart_container">
+                    <div class="corner TL"></div><div class="corner TR"></div><div class="corner BL"></div><div class="corner BR"></div>
+                    <h3>', 
+                        IFNULL(
+                            CONCAT('<a href="', 
+                                REPLACE(
+                                    sv_custom_chart_flattened_${view_name_extension}.${chart_alias}, 
+                                    '&chdl=custom_', 
+                                    CONCAT(
+                                        '&chdl=', 
+                                        IFNULL(CONCAT(sv_custom_chart_flattened_${view_name_extension}.custom_%d_text_description, ':+'), 
+                                            ''), 
+                                        'custom_')
+                                )
+                            , '">[url]</a>'), 
+                        'N/A'), '</h3>
+                    <div id="chart_div_${chart_alias}_${view_name_extension}" class="chart"></div>
+                </div>'
+                """ % i
+            div_query = div_query.replace("${chart_alias}", chart_alias)
+            div_query = div_query.replace("${view_name_extension}", view_name_extension)
+            div_queries.append(div_query)
+
+            js_query = """IFNULL(
+                    CONCAT('
+                        new openark_lchart(
+                            document.getElementById("chart_div_${chart_alias}_${view_name_extension}"), 
+                            {width: ', chart_width, ', height: ',  chart_height, '}
+                            ).read_google_url("', 
+                                REPLACE(
+                                    sv_custom_chart_flattened_${view_name_extension}.${chart_alias}, 
+                                    '&chdl=custom_', 
+                                    CONCAT(
+                                        '&chdl=', 
+                                        IFNULL(CONCAT(sv_custom_chart_flattened_${view_name_extension}.custom_%d_text_description, ':+'), 
+                                            ''), 
+                                        'custom_')
+                                )
+                            , '");
+                        '),
+                    '')
+                """ % i
+            js_query = js_query.replace("${chart_alias}", chart_alias)
+            js_query = js_query.replace("${view_name_extension}", view_name_extension)
+            js_queries.append(js_query)
+
+        row_query = """
             '<div class="row">
-                <a name="%d"></a>
-                <h2>', IFNULL(sv_custom_chart_flattened_sample.custom_%d_description, 'N/A'), ' <a href="#">[top]</a></h2>',
-                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_custom_chart_flattened_sample.custom_%d_chart, '"/>'), 'N/A'), '</div>',
-                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_custom_chart_flattened_hour.custom_%d_chart, '"/>'), 'N/A'), '</div>',
-                '<div class="chart">', IFNULL(CONCAT('<img src="', sv_custom_chart_flattened_day.custom_%d_chart, '"/>'), 'N/A'), '</div>',
+                <a name="${chart_alias}"></a>
+                <h2>', sv_custom_chart_flattened_${view_name_extension}.custom_%d_text_description,': ${chart_alias} <a href="#">[top]</a></h2>',
+                %s,
                 '<div class="clear"></div>',
             '</div>
                 ',
-            """ % (i, i, i, i, i)
-        custom_charts_queries.append(custom_chart_query)
-        
+            """ % (i, "".join(div_queries))
+        row_query = row_query.replace("${chart_alias}", chart_alias)
+        row_query = row_query.replace("${view_name_extension}", view_name_extension)
+        rows_queries.append(row_query)
+    all_charts_query = "".join(rows_queries)
+
     query = """
         CREATE
         OR REPLACE
@@ -2934,11 +2985,15 @@ def create_custom_html_view():
           SELECT CONCAT('
             <html>
                 <head>
-                <title>mycheckpoint custom report</title>
+                <title>mycheckpoint report</title>
+                <!--[if IE]>
+                    <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
+                    <style> v\\\\:* { behavior: url(#default#VML); }</style >
+                <![endif]-->
                 <meta http-equiv="refresh" content="600" />
                 <style type="text/css">
                     body {
-                        background:#FFFFFF none repeat scroll 0% 0%;
+                        background:#e0e0e0 none repeat scroll 0% 0%;
                         color:#505050;
                         font-family:Verdana,Arial,Helvetica,sans-serif;
                         font-size:9pt;
@@ -2949,44 +3004,69 @@ def create_custom_html_view():
                         text-decoration:none;
                     }
                     h2 {
+                        font-size:13.5pt;
                         font-weight:normal;
-                        margin-top:20px;
                     }
                     h2 a {
                         font-weight:normal;
                         font-size: 60%%;
                     }
                     h3 {
+                        font-size:10.5pt;
                         font-weight:normal;
+                    }
+                    h3 a {
+                        font-weight:normal;
+                        font-size: 80%%;
                     }
                     .nobr {
                         white-space: nowrap;
                     }
                     div.row {
-                        width: ${global_width};
+                        width: ', ((chart_width+30)*3), ';
                     }
                     div.chart {
+                        white-space: nowrap;
+                        width: ', chart_width, 'px;
+                    }
+                    div.custom_chart {
+                        margin-bottom: 40px;
+                    }
+                    div.chart_container {
+                        position: relative;
                         float: left;
                         white-space: nowrap;
-                        margin-right: 10px;
-                        width:', charts_api.chart_width, ';
-                    }
-                    .img_dummy, div.chart img {
-                        border:0px none;
+                        padding: 10px;
+                        background: #ffffff;
                         width: ', charts_api.chart_width, ';
-                        height: ', charts_api.chart_height, ';
+                        margin-right: 10px;
+                        margin-bottom: 10px;
                     }
+                    .corner { position: absolute; width: 8px; height: 8px; background: url(''${corners_image}'') no-repeat; font-size: 0; }
+                    .tl { top: 0; left: 0; background-position: 0 0; }
+                    .tr { top: 0; right: 0; background-position: -8px 0; }
+                    .bl { bottom: 0; left: 0; background-position: 0 -8px; }
+                    .br { bottom: 0; right: 0; background-position: -8px -8px; }
                     .clear {
                         clear:both;
                         height:1px;
                     }
                 </style>
+                <script type="text/javascript" charset="utf-8">
+                    ${openark_lchart}
+                </script>
+                <script type="text/javascript" charset="utf-8">
+                    window.onload = function () {
+                ', %s, '
+                    };
+                </script>
                 </head>
                 <body>
-                    <a name=""></a>
-                    Custom report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
+                    Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on ',
                         DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '
                     <br/><br/>
+                    Navigate: ${chart_aliases_map}
+                    <br/>
                     ',
                     %s '
                 </body>
@@ -2994,10 +3074,10 @@ def create_custom_html_view():
           ') AS html
           FROM
             ${database_name}.sv_custom_chart_flattened_sample, ${database_name}.sv_custom_chart_flattened_hour, ${database_name}.sv_custom_chart_flattened_day, ${database_name}.charts_api
-        """ % "".join(custom_charts_queries)
+        """ % (",".join(js_queries), all_charts_query)
     query = query.replace("${database_name}", database_name)
-    query = query.replace("${global_width}", str(options.chart_width*3 + 30))
-
+    query = query.replace("${openark_lchart}", openark_lchart.replace("'","''"))
+    query = query.replace("${corners_image}", corners_image.replace("'","''"))
     act_query(query)
 
     verbose("sv_custom_html created")
