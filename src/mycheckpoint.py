@@ -3952,15 +3952,19 @@ try:
         if not build_placeholder.isdigit():
             build_placeholder = "0"
         build_number = int(build_placeholder)
-
+        
+        defaults_file_name = None
+        default_defaults_file_name = "/etc/mycheckpoint.cnf" 
+        if not options.defaults_file:
+            if os.path.exists(default_defaults_file_name):
+                options.defaults_file = default_defaults_file_name
         if options.defaults_file:
             defaults_file_name = options.defaults_file
-        else:
-            defaults_file_name = "/etc/mycheckpoint.cnf"
-            verbose("Will assume %s as defaults file" % defaults_file_name)
+            verbose("Using %s as defaults file" % options.defaults_file)
         config_scope = "mycheckpoint"
         config = ConfigParser.ConfigParser()
-        config.read([defaults_file_name])
+        if defaults_file_name:
+            config.read([defaults_file_name])
 
         verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009-2010 by Shlomi Noach" % (revision_number, build_number))
 
