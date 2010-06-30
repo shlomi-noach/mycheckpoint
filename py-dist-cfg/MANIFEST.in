@@ -1,3 +1,2 @@
 include *
 include scripts/*
-include etc/mycheckpoint/*

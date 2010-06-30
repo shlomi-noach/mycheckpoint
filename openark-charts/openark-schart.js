@@ -1,6 +1,6 @@
 /*
- * openark_pchart.js
- * A plot chart javascript implementation. Currently can read google plot chart URLs (partial feature list).
+ * openark_schart.js
+ * A scatter chart javascript implementation. Currently can read google scatter chart URLs (partial feature list).
  * Uses VML on Internet Explorer, and HTML <canvas> on all other browsers.
  * 
  * 
@@ -17,7 +17,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-openark_pchart = function(container, options) {
+openark_schart = function(container, options) {
 	if (container.style.width == '')
 		this.canvas_width = options.width;
 	else
@@ -38,7 +38,7 @@ openark_pchart = function(container, options) {
 	this.dot_y_positions = [];
 	this.dot_values = [];
 	this.dot_colors = [];
-	this.plot_colors = openark_pchart.plot_colors;
+	this.plot_colors = openark_schart.plot_colors;
 
 	this.container = container;
 	
@@ -50,30 +50,30 @@ openark_pchart = function(container, options) {
 	return this;
 };
 
-openark_pchart.title_font_size = 10;
-openark_pchart.title_color = '#505050';
-openark_pchart.axis_color = '#707070';
-openark_pchart.axis_font_size = 8;
-openark_pchart.plot_colors = ["#9aed32", "#ff8c00"];
-openark_pchart.max_dot_size = 9;
+openark_schart.title_font_size = 10;
+openark_schart.title_color = '#505050';
+openark_schart.axis_color = '#707070';
+openark_schart.axis_font_size = 8;
+openark_schart.plot_colors = ["#9aed32", "#ff8c00"];
+openark_schart.max_dot_size = 9;
 
 
-openark_pchart.prototype.recalc = function() {
-	this.chart_width = this.canvas_width - this.y_axis_values_width	- openark_pchart.max_dot_size;
-	this.chart_height = this.canvas_height - (this.x_axis_values_height + this.title_height) - openark_pchart.max_dot_size;
+openark_schart.prototype.recalc = function() {
+	this.chart_width = this.canvas_width - this.y_axis_values_width	- openark_schart.max_dot_size;
+	this.chart_height = this.canvas_height - (this.x_axis_values_height + this.title_height) - openark_schart.max_dot_size;
 	this.chart_origin_x = this.y_axis_values_width;
 	this.chart_origin_y = this.canvas_height - this.x_axis_values_height;
 };
 
 
-openark_pchart.prototype.create_graphics = function() {
+openark_schart.prototype.create_graphics = function() {
 	this.container.innerHTML = '';
 	
 	this.isIE = (/MSIE/.test(navigator.userAgent) && !window.opera);
 
 	this.container.style.position = 'relative';
-	this.container.style.color = ''+openark_pchart.axis_color;
-	this.container.style.fontSize = ''+openark_pchart.axis_font_size+'pt';
+	this.container.style.color = ''+openark_schart.axis_color;
+	this.container.style.fontSize = ''+openark_schart.axis_font_size+'pt';
 	this.container.style.fontFamily = 'Helvetica,Verdana,Arial,sans-serif';
 
 	if (this.isIE)
@@ -99,7 +99,7 @@ openark_pchart.prototype.create_graphics = function() {
 };
 
 
-openark_pchart.prototype.hex_to_rgb = function(color_string) {
+openark_schart.prototype.hex_to_rgb = function(color_string) {
 	if (color_string.substring(0, 1) == '#')
 		color_string = color_string.substring(1);
 	var rgb = [];
@@ -109,7 +109,7 @@ openark_pchart.prototype.hex_to_rgb = function(color_string) {
 	return rgb;
 };
 
-openark_pchart.prototype.toHex = function(n) {
+openark_schart.prototype.toHex = function(n) {
 	if (n == 0)
 		return "00";
 	return "0123456789abcdef".charAt((n - n % 16) / 16)
@@ -117,12 +117,12 @@ openark_pchart.prototype.toHex = function(n) {
 };
 
 
-openark_pchart.prototype.rgb_to_hex = function(red, green, blue) {
+openark_schart.prototype.rgb_to_hex = function(red, green, blue) {
 	return '#' + this.toHex(red) + this.toHex(green) + this.toHex(blue);
 };
 
 
-openark_pchart.prototype.gradient = function(color_string0, color_string1, percent) {
+openark_schart.prototype.gradient = function(color_string0, color_string1, percent) {
 	var rgb0 = this.hex_to_rgb(color_string0);
 	var rgb1 = this.hex_to_rgb(color_string1);
 
@@ -133,7 +133,7 @@ openark_pchart.prototype.gradient = function(color_string0, color_string1, perce
 };
 
 
-openark_pchart.prototype.parse_url = function(url) {
+openark_schart.prototype.parse_url = function(url) {
 	url = url.replace(/[+]/gi, " ");
 	var params = {};
 
@@ -149,7 +149,7 @@ openark_pchart.prototype.parse_url = function(url) {
 	return params;
 };
 
-openark_pchart.prototype.read_google_url = function(url) {
+openark_schart.prototype.read_google_url = function(url) {
 	params = this.parse_url(url);
 	// title:
 	this.title_height = 0;
@@ -232,7 +232,7 @@ openark_pchart.prototype.read_google_url = function(url) {
 				this.dot_y_positions.push(y_pos);
 				var value = null;
 				if (values[i] && (values[i] != '_'))
-					value = Math.floor(values[i] * openark_pchart.max_dot_size / 100);
+					value = Math.floor(values[i] * openark_schart.max_dot_size / 100);
 				this.dot_values.push(value);
 				
 				this.dot_colors.push(this.gradient(this.plot_colors[0], this.plot_colors[1], values[i]));
@@ -243,12 +243,12 @@ openark_pchart.prototype.read_google_url = function(url) {
 	this.redraw();
 };
 
-openark_pchart.prototype.redraw = function() {
+openark_schart.prototype.redraw = function() {
 	this.create_graphics();
 	this.draw();
 };
 
-openark_pchart.prototype.draw = function() {
+openark_schart.prototype.draw = function() {
 	// title
 	if (this.chart_title) {
 		this.draw_text({
@@ -258,7 +258,7 @@ openark_pchart.prototype.draw = function() {
 			width: this.canvas_width, 
 			height: this.title_height, 
 			text_align: 'center', 
-			font_size: openark_pchart.title_font_size
+			font_size: openark_schart.title_font_size
 		});
 	}
 	// dots
@@ -269,20 +269,20 @@ openark_pchart.prototype.draw = function() {
 		}
 	}
 
-	this.set_color(openark_pchart.axis_color);
+	this.set_color(openark_schart.axis_color);
 	// x axis labels
 	for (i = 0; i < this.x_axis_label_positions.length; ++i) {
 		if (this.x_axis_labels[i]) {
 			// x-ticks:
-			//this.draw_line(this.x_axis_label_positions[i], this.chart_origin_y + openark_pchart.max_dot_size,	this.x_axis_label_positions[i], this.chart_origin_y + openark_pchart.max_dot_size + 3, 1);
+			//this.draw_line(this.x_axis_label_positions[i], this.chart_origin_y + openark_schart.max_dot_size,	this.x_axis_label_positions[i], this.chart_origin_y + openark_schart.max_dot_size + 3, 1);
 
 			// x-labels:
 			this.draw_text({
 				text: ''+this.x_axis_labels[i], 
 				left: this.x_axis_label_positions[i] - 25,
-				top: this.chart_origin_y + openark_pchart.max_dot_size + 5,
+				top: this.chart_origin_y + openark_schart.max_dot_size + 5,
 				width: 50, 
-				height: openark_pchart.axis_font_size,
+				height: openark_schart.axis_font_size,
 				text_align: 'center' 
 			});
 		}
@@ -291,14 +291,14 @@ openark_pchart.prototype.draw = function() {
 	for (i = 0; i < this.y_axis_label_positions.length; ++i) {
 		if (this.y_axis_labels[i]) {
 			// y-ticks:
-			//this.draw_line(this.chart_origin_x - openark_pchart.max_dot_size, this.y_axis_label_positions[i], this.chart_origin_x - openark_pchart.max_dot_size - 3, this.y_axis_label_positions[i], 1);
+			//this.draw_line(this.chart_origin_x - openark_schart.max_dot_size, this.y_axis_label_positions[i], this.chart_origin_x - openark_schart.max_dot_size - 3, this.y_axis_label_positions[i], 1);
 			// y-labels:
 			this.draw_text({
 				text: ''+this.y_axis_labels[i], 
 				left: 0,
-				top: this.y_axis_label_positions[i] - openark_pchart.axis_font_size + Math.floor(openark_pchart.axis_font_size / 3),
-				width: this.y_axis_values_width - openark_pchart.max_dot_size - 5, 
-				height: openark_pchart.axis_font_size,
+				top: this.y_axis_label_positions[i] - openark_schart.axis_font_size + Math.floor(openark_schart.axis_font_size / 3),
+				width: this.y_axis_values_width - openark_schart.max_dot_size - 5, 
+				height: openark_schart.axis_font_size,
 				text_align: 'right' 
 			});
 		}
@@ -306,7 +306,7 @@ openark_pchart.prototype.draw = function() {
 };
 
 
-openark_pchart.prototype.set_color = function(color) {
+openark_schart.prototype.set_color = function(color) {
 	this.current_color = color;
 	if (!this.isIE)
 	{
@@ -315,7 +315,7 @@ openark_pchart.prototype.set_color = function(color) {
 };
 
 
-openark_pchart.prototype.draw_circle = function(x, y, radius, color) {
+openark_schart.prototype.draw_circle = function(x, y, radius, color) {
 	if (this.isIE)
 	{
 		var oval_element = document.createElement("v:oval");
@@ -340,7 +340,7 @@ openark_pchart.prototype.draw_circle = function(x, y, radius, color) {
 };
 
 
-openark_pchart.prototype.draw_text = function(options) {
+openark_schart.prototype.draw_text = function(options) {
 	var label_div = document.createElement("div");
 	label_div.style.position = 'absolute';
 	label_div.style.left = ''+options.left+'px';
