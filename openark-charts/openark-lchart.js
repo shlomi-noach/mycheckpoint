@@ -57,6 +57,7 @@ openark_lchart.title_font_size = 10;
 openark_lchart.title_color = '#505050';
 openark_lchart.axis_color = '#707070';
 openark_lchart.axis_font_size = 8;
+openark_lchart.min_x_label_spacing = 32;
 openark_lchart.legend_font_size = 9;
 openark_lchart.legend_color = '#606060';
 openark_lchart.series_line_width = 1.5;
@@ -313,18 +314,22 @@ openark_lchart.prototype.draw = function() {
 	}
 	this.set_color(openark_lchart.axis_color);
 	// x (vertical) ticks:
+	var last_drawn_x_axis_label_position = 0;
 	for (i = 0 ; i < this.x_axis_label_positions.length ; ++i)
 	{
-		if (this.x_axis_labels[i])
+		var label = this.x_axis_labels[i];
+		var trimmed_label = label.replace(/ /gi, "");
+		                            
+		if (label && ((last_drawn_x_axis_label_position == 0) || (this.x_axis_label_positions[i] - last_drawn_x_axis_label_position >= openark_lchart.min_x_label_spacing) || !trimmed_label))
 		{
 			// x-ticks:
 			this.draw_line(this.x_axis_label_positions[i], this.chart_origin_y, this.x_axis_label_positions[i], this.chart_origin_y + 3, 1);
-			
+		
 			// x-labels:
-			if (this.x_axis_labels[i].replace(/ /gi, ""))
+			if (trimmed_label)
 			{
 				this.draw_text({
-					text: ''+this.x_axis_labels[i], 
+					text: ''+label, 
 					left: this.x_axis_label_positions[i] - 25, 
 					top: this.chart_origin_y + 5, 
 					width: 50, 
@@ -332,6 +337,8 @@ openark_lchart.prototype.draw = function() {
 					text_align: 'center', 
 					font_size: openark_lchart.axis_font_size
 				});
+				// Space-only labels do not count here: they do not signify a change in last drawn label position
+				last_drawn_x_axis_label_position = this.x_axis_label_positions[i];
 			}
 		}
 	}
