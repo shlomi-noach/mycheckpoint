@@ -1217,7 +1217,7 @@ def create_alert_pending_html_view():
             CONCAT('
                 <html>
                     <head>
-                    <title>', metadata.database_name, ' monitoring: pending alerts</title>
+                    <title>monitoring: pending alerts</title>
                     <meta http-equiv="refresh" content="600" />
                     <style type="text/css">
                         body {
@@ -1279,6 +1279,9 @@ def create_alert_pending_html_view():
                             color: #ffffff;
                             background-color: #000000;
                         }
+                        .clear {
+                            clear:both;
+                        }
                     </style>
                     </head>
                     <body>
@@ -1317,7 +1320,8 @@ def create_alert_pending_html_view():
                         </div>
                         ',
                         IF(GROUP_CONCAT(alert_pending_id) IS NULL, 
-                          '<br/>
+                          '<div class="clear"></div>
+                          <br/>
                           <div>
                             There are no pending alerts
                           </div>', 
@@ -1327,12 +1331,11 @@ def create_alert_pending_html_view():
                 %s
             ') AS html
           FROM
-            ${database_name}.alert_pending_view, ${database_name}.metadata
+            ${database_name}.metadata LEFT JOIN ${database_name}.alert_pending_view ON (NULL IS NULL)
           WHERE
-            resolved = 0
+            (resolved = 0) OR (resolved IS NULL)
     """ % ""
     query = query.replace("${database_name}", database_name)
-    query = query.replace("${corners_image}", corners_image.replace("'","''"))
     act_query(query)
 
     verbose("alert_pending_html_view created")
