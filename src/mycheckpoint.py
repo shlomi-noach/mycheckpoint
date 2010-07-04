@@ -1217,7 +1217,7 @@ def create_alert_pending_html_view():
             CONCAT('
                 <html>
                     <head>
-                    <title>monitoring: pending alerts</title>
+                    <title>', metadata.database_name, ' monitoring: pending alerts</title>
                     <meta http-equiv="refresh" content="600" />
                     <style type="text/css">
                         body {
@@ -2056,7 +2056,6 @@ def create_report_html_24_7_view(report_columns):
             <html>
                 <head>
                     <title>', metadata.database_name, ' monitoring: 24/7 report</title>
-                    <meta http-equiv="refresh" content="600" />
                     <!--[if IE]>
                         <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
                         <style> v\\\\:* { behavior: url(#default#VML); }</style >
@@ -2692,7 +2691,7 @@ def create_report_html_view(charts_aliases):
                     <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
                     <style> v\\\\:* { behavior: url(#default#VML); }</style >
                 <![endif]-->
-                <meta http-equiv="refresh" content="600" />
+                <meta http-equiv="refresh" content="7200" />
                 <style type="text/css">
                     body {
                         background:#e0e0e0 none repeat scroll 0% 0%;
@@ -3059,7 +3058,7 @@ def create_custom_html_view():
                     <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
                     <style> v\\\\:* { behavior: url(#default#VML); }</style >
                 <![endif]-->
-                <meta http-equiv="refresh" content="600" />
+                <meta http-equiv="refresh" content="7200" />
                 <style type="text/css">
                     body {
                         background:#e0e0e0 none repeat scroll 0% 0%;
