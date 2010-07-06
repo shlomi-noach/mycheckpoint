@@ -71,8 +71,8 @@
 		<java jar="openark-charts/yuicompressor-2.4.2.jar" fork="true" output="build/openark-charts/openark-lchart-min.js">
 			<arg value="openark-charts/openark-lchart.js"/>
 		</java>
-		<java jar="openark-charts/yuicompressor-2.4.2.jar" fork="true" output="build/openark-charts/openark-pchart-min.js">
-			<arg value="openark-charts/openark-pchart.js"/>
+		<java jar="openark-charts/yuicompressor-2.4.2.jar" fork="true" output="build/openark-charts/openark-schart-min.js">
+			<arg value="openark-charts/openark-schart.js"/>
 		</java>
 		<delete dir="build/openark-charts/tmp"/>
 	</target>
