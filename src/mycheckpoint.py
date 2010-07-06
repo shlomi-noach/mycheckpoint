@@ -2826,7 +2826,7 @@ def create_report_html_brief_view(report_charts):
                 div_query = div_query.replace("${chart_alias_header}", chart_alias.replace("_", " "))
             else:
                 # This is a custom column
-                chart_alias_url = "REPLACE(%s, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(custom_%d_text_description, ':+'), ''), 'custom_'))" % (chart_alias, custom_query_id,)
+                chart_alias_url = "REPLACE(%s, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(REPLACE(custom_%d_text_description, ' ', '+'), ':+'), ''), 'custom_'))" % (chart_alias, custom_query_id,)
                 div_query = div_query.replace("${chart_alias_header}", "', custom_%d_text_description, '" % custom_query_id)
             div_query = div_query.replace("${chart_alias_url}", chart_alias_url)
             charts_aliases_queries.append(div_query)
@@ -2993,7 +2993,10 @@ def create_custom_html_view():
                                     '&chdl=custom_', 
                                     CONCAT(
                                         '&chdl=', 
-                                        IFNULL(CONCAT(sv_custom_chart_flattened_${view_name_extension}.custom_%d_text_description, ':+'), 
+                                        IFNULL(
+                                            CONCAT(
+                                                REPLACE(sv_custom_chart_flattened_${view_name_extension}.custom_%d_text_description, ' ', '+'), 
+                                                ':+'), 
                                             ''), 
                                         'custom_')
                                 )
@@ -3017,7 +3020,10 @@ def create_custom_html_view():
                                     '&chdl=custom_', 
                                     CONCAT(
                                         '&chdl=', 
-                                        IFNULL(CONCAT(sv_custom_chart_flattened_${view_name_extension}.custom_%d_text_description, ':+'), 
+                                        IFNULL(
+                                            CONCAT(
+                                                REPLACE(sv_custom_chart_flattened_${view_name_extension}.custom_%d_text_description, ' ', '+'), 
+                                                ':+'), 
                                             ''), 
                                         'custom_')
                                 )
@@ -3189,7 +3195,7 @@ def create_custom_html_brief_view():
             """
         div_query = div_query.replace("${chart_alias}", chart_alias)
         # This is a custom column
-        chart_alias_url = "REPLACE(%s_chart, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(custom_%d_text_description, ':+'), ''), 'custom_'))" % (chart_alias, custom_query_id,)
+        chart_alias_url = "REPLACE(%s_chart, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(REPLACE(custom_%d_text_description, ' ', '+'), ':+'), ''), 'custom_'))" % (chart_alias, custom_query_id,)
         div_query = div_query.replace("${chart_alias_header}", "', custom_%d_description, '" % custom_query_id)
         div_query = div_query.replace("${chart_alias_url}", chart_alias_url)
         charts_aliases_queries.append(div_query)
