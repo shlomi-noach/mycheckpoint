@@ -3845,7 +3845,8 @@ def create_status_variables_views():
         ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True),
         ("os_loadavg", "os_loadavg", True, False),
         ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
-        ("os_page_ins_psec, os_page_outs_psec, os_swap_ins_psec, os_swap_outs_psec", "os_io", True, False),
+        ("os_page_ins_psec, os_page_outs_psec", "os_page_io", True, False),
+        ("os_swap_ins_psec, os_swap_outs_psec", "os_swap_io", True, False),
 
         ("os_root_mountpoint_usage_percent, os_datadir_mountpoint_usage_percent, os_tmpdir_mountpoint_usage_percent", "os_mountpoints_usage_percent", True, True),
         ]
@@ -3917,7 +3918,8 @@ def create_status_variables_views():
         os_cpu_utilization_percent,
         os_loadavg,
         os_memory,
-        os_io,
+        os_page_io,
+        os_swap_io,
         os_mountpoints_usage_percent
         """)
     brief_html_view_charts = [
@@ -3927,7 +3929,7 @@ def create_status_variables_views():
             ("Caches", "myisam_key_hit, thread_cache_use, table_cache_use"),
             ("Vitals", "seconds_behind_master, connections_usage, uptime_percent"),
             ("OS", "os_memory, os_cpu_utilization_percent, os_loadavg"),
-            ("", "os_io, os_mountpoints_usage_percent"),
+            ("", "os_page_io, os_swap_io, os_mountpoints_usage_percent"),
         ]
     if get_custom_chart_names():
         brief_html_view_charts.append(("Custom", ", ".join(get_custom_chart_names()),))
