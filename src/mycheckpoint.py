@@ -1263,11 +1263,12 @@ def create_alert_pending_html_view():
                         tr.header {
                             font-weight: bold;
                         }
-                        .italic {
-                            font-style: italic;
-                        }
                         td {
                             padding: 3px 6px 3px 6px;
+                        }
+                        .el_awaiting {
+                            color: #ffffff;
+                            background-color: #c0c0c0;
                         }
                         .el_debug {
                             color: #000000;
@@ -1328,11 +1329,11 @@ def create_alert_pending_html_view():
                                   GROUP_CONCAT(
                                     CONCAT(
                                       '<tr class="row">',
-                                        '<td class="el_', error_level, '">', error_level, '</td>', 
+                                        '<td class="el_', IF(ts_notified IS NULL, 'awaiting', error_level), '">', IF(ts_notified IS NULL, 'awaiting: ', ''), error_level, '</td>', 
                                         '<td>', description, '</td>', 
                                         '<td>', ts_start, '</td>', 
                                         '<td>', elapsed_minutes, '</td>', 
-                                        '<td', IF(ts_notified IS NULL, ' class="italic"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start+ INTERVAL alert_delay_minutes MINUTE)), '</td>', 
+                                        '<td', IF(ts_notified IS NULL, ' class="el_awaiting"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start + INTERVAL alert_delay_minutes MINUTE)), '</td>', 
                                         '<td>', IF(repetitive_alert, 'Yes', '-'), '</td>', 
                                       '</tr>')
                                     SEPARATOR ''), 
