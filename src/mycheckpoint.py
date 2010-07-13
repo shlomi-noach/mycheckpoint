@@ -91,7 +91,7 @@ def print_error(message):
     return None
 
 
-def sorted(l):
+def sorted_list(l):
     """
     In favor of Python 2.3 users. Be strong!
     """
@@ -723,7 +723,7 @@ def get_status_variables_columns():
     Others are parameters. Others yet represent slave or master status etc.
     """
     status_dict = fetch_status_variables()
-    return sorted(status_dict.keys())
+    return sorted_list(status_dict.keys())
 
 
 def get_variables_and_status_columns():
@@ -4067,13 +4067,13 @@ def collect_status_variables():
 
     status_dict = fetch_status_variables()
 
-    column_names = ", ".join(["%s" % column_name for column_name in sorted(status_dict.keys())])
+    column_names = ", ".join(["%s" % column_name for column_name in sorted_list(status_dict.keys())])
     for column_name in status_dict.keys():
         if status_dict[column_name] is None:
             status_dict[column_name] = "NULL"
         if status_dict[column_name] == "":
             status_dict[column_name] = "NULL"
-    variable_values = ", ".join(["%s" % status_dict[column_name] for column_name in sorted(status_dict.keys())])
+    variable_values = ", ".join(["%s" % status_dict[column_name] for column_name in sorted_list(status_dict.keys())])
     query = """INSERT /*! IGNORE */ INTO %s.%s
             (%s)
             VALUES (%s)
