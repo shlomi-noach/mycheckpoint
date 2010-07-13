@@ -4107,7 +4107,7 @@ def purge_alert():
         FROM ${database_name}.alert 
       WHERE 
         sv_report_sample_id < 
-          (SELECT MIN(id) FROM ${database_name}.sv_report_sample)"""
+          (SELECT MIN(id) FROM ${database_name}.status_variables)"""
     query = query.replace("${database_name}", database_name)
     num_affected_rows = act_query(query)
     if num_affected_rows:
