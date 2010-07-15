@@ -580,6 +580,8 @@ def fetch_status_variables():
         elif variable_name in extra_variables:
             extra_dict[variable_name] = variable_value
 
+    status_dict["metadata_revision"] = revision_number
+    
     verbose("Global status & variables recorded")
 
     # Master & slave status
