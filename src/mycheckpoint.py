@@ -255,10 +255,22 @@ def is_neglectable_variable(variable_name):
         return True
     if variable_name == "last_query_cost":
         return True
+    if variable_name == "rpl_status":
+        return True
     return False
 
 
-def normalize_variable_value(variable_value):
+def normalize_variable_value(variable_name, variable_value):
+    # First, handle special cases.
+    # I'm fearful about name colisions, where values do not agree.
+    if variable_name == "concurrent_insert":
+        if variable_value == "never":
+            variable_value = 0
+        elif variable_value == "auto":
+            variable_value = 1
+        elif variable_value == "always":
+            variable_value = 2
+        return
     if variable_value == "off":
         variable_value = 0
     elif variable_value == "on":
@@ -430,6 +442,7 @@ def get_extra_variables():
         "datadir",
         "tmpdir",
         "version",
+        "sql_mode",
         ]
     return extra_variables
 
@@ -563,7 +576,7 @@ def fetch_status_variables():
         variable_name = row["Variable_name"].lower()
         variable_value = row["Value"].lower()
         if not is_neglectable_variable(variable_name):
-            status_dict[variable_name] = normalize_variable_value(variable_value)
+            status_dict[variable_name] = normalize_variable_value(variable_name, variable_value)
 
     # Listing of interesting global variables:
     global_variables = get_global_variables()
@@ -576,7 +589,7 @@ def fetch_status_variables():
         variable_name = row["Variable_name"].lower()
         variable_value = row["Value"].lower()
         if variable_name in global_variables:
-            status_dict[variable_name] = normalize_variable_value(variable_value)
+            status_dict[variable_name] = normalize_variable_value(variable_name, variable_value)
         elif variable_name in extra_variables:
             extra_dict[variable_name] = variable_value
 
