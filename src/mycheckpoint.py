@@ -70,6 +70,7 @@ Available commands:
     parser.add_option("", "--skip-emails", dest="skip_emails", action="store_true", default=False, help="Skip sending email notifications")
     parser.add_option("", "--force-emails", dest="force_emails", action="store_true", default=False, help="Force sending email notifications even if there's nothing wrong")
     parser.add_option("", "--skip-custom", dest="skip_custom", action="store_true", default=False, help="Skip custom query execution and evaluation")
+    parser.add_option("", "--skip-defaults-file", dest="skip_defaults_file", action="store_true", default=False, help="Do not read defaults file. Overrides --defaults-file and ignores /etc/mycheckpoint.cnf")
     parser.add_option("", "--chart-width", dest="chart_width", type="int", default=370, help="Chart image width (default: 370, min value: 150)")
     parser.add_option("", "--chart-height", dest="chart_height", type="int", default=180, help="Chart image height (default: 180, min value: 100)")
     parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
@@ -4182,6 +4183,8 @@ try:
         if not options.defaults_file:
             if os.path.exists(default_defaults_file_name):
                 options.defaults_file = default_defaults_file_name
+        if options.skip_defaults_file:
+            options.defaults_file = None
         if options.defaults_file:
             defaults_file_name = options.defaults_file
             verbose("Using %s as defaults file" % options.defaults_file)
