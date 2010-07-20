@@ -2581,7 +2581,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
     query = """
           REPLACE(
           CONCAT(
-            charts_api.service_url, '?cht=lc&chs=', charts_api.chart_width, 'x', charts_api.chart_height, '&chts=', chart_title_color, ',12&chtt=',
+            CONVERT(charts_api.service_url USING utf8), '?cht=lc&chs=', charts_api.chart_width, 'x', charts_api.chart_height, '&chts=', chart_title_color, ',12&chtt=',
             chart_time_description, '&chf=c,s,', chart_bg_color,
             '&chdl=${piped_chart_column_listing}&chdlp=b&chco=${chart_colors}&chd=s:', ${concatenated_column_values}
             '&chxt=x,y&chxr=1,', ${least_value_clause},',', ${greatest_value_clause}, '&chxl=0:|', x_axis_labels, '|&chxs=0,505050,10,0,lt',
