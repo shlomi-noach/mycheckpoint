@@ -45,6 +45,8 @@ except:
 def parse_options():
     usage = """usage: mycheckpoint [options] [command [, command ...]]
 
+See online documentation on http://code.openark.org/forge/mycheckpoint/documentation
+
 Available commands:
   deploy
   email_brief_report
