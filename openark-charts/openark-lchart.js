@@ -46,6 +46,8 @@ openark_lchart = function(container, options) {
 	this.container = container;
 	this.interactive_legend = null;
 	this.legend_values_containers = [];
+	this.canvas_shadow = null;
+	this.position_pointer = null;
 	
 	this.isIE = false;
 	this.current_color = null;
@@ -145,6 +147,14 @@ openark_lchart.prototype.create_graphics = function() {
 	
 		this.ctx = this.canvas.getContext('2d');
 	}
+	this.canvas_shadow = document.createElement("div");
+	this.canvas_shadow.style.position = "absolute";
+	this.canvas_shadow.style.top = "0";
+	this.canvas_shadow.style.left = "0";
+	this.canvas_shadow.style.width = this.canvas_width;
+	this.canvas_shadow.style.height = this.canvas_height;
+	this.canvas_shadow.style.zIndex = '-1';
+	this.container.appendChild(this.canvas_shadow);
 };
 
 openark_lchart.prototype.parse_url = function(url) {
@@ -551,8 +561,8 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 
 	var mouse_x = event.clientX - findPosX(this.container);
 	var mouse_y = event.clientY - findPosY(this.container);
-	chart_x = mouse_x - this.chart_origin_x;
-	chart_y = this.chart_origin_y - mouse_y;
+	var chart_x = mouse_x - this.chart_origin_x;
+	var chart_y = this.chart_origin_y - mouse_y;
 	var dot_position_index = Math.round((this.multi_series[0].length-1) * (chart_x / this.chart_width));
 	var mouse_inside_chart = ((chart_x <= this.chart_width) && (chart_y <= this.chart_height) && (chart_x >= 0) && (chart_y >= 0));
 	
@@ -561,18 +571,41 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 		this.series_legend_values = new Array(this.multi_series.length);
 		for (series = 0 ; series < this.multi_series.length ; ++series)
 		{
-			this.series_legend_values[series] = this.multi_series[series][dot_position_index].toFixed(2);
+			this.series_legend_values[series] = this.multi_series[series][dot_position_index].toFixed(4);
 		}
+
+		if (this.position_pointer == null)
+		{
+			this.position_pointer = document.createElement("div");
+			this.position_pointer.style.position = 'absolute';
+			this.position_pointer.style.top = '' + (this.chart_origin_y - this.chart_height)+ 'px';
+			this.position_pointer.style.width = '1.5px';
+			this.position_pointer.style.height = '' + this.chart_height + 'px';
+			this.position_pointer.style.backgroundColor = '#f06060';
+			this.canvas_shadow.appendChild(this.position_pointer);
+		}
+		var position_pointer_x = Math.round(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
+		this.position_pointer.style.visibility = 'visible';
+		this.position_pointer.style.left = '' + position_pointer_x + 'px';
+		this.update_legend();
 	}
 	else
 	{
-		this.series_legend_values = null;
+		this.clear_position_pointer_and_legend_values(event);
 	}
-	this.update_legend();
 }
 
 
 openark_lchart.prototype.on_mouse_out = function(event) {
+	this.clear_position_pointer_and_legend_values(event);
+}
+
+
+openark_lchart.prototype.clear_position_pointer_and_legend_values = function(event) {
+	if (this.position_pointer != null)
+	{
+		this.position_pointer.style.visibility = 'hidden';
+	}
 	this.series_legend_values = null;
 	this.update_legend();
 }
