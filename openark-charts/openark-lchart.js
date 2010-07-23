@@ -40,9 +40,12 @@ openark_lchart = function(container, options) {
 	this.multi_series = [];
 	this.multi_series_dot_positions = [];
 	this.series_labels = [];
+	this.series_legend_values = [];
 	this.series_colors = openark_lchart.series_colors;
 	
 	this.container = container;
+	this.interactive_legend = null;
+	this.legend_values_containers = [];
 	
 	this.isIE = false;
 	this.current_color = null;
@@ -119,6 +122,13 @@ openark_lchart.prototype.create_graphics = function() {
 	this.container.style.color = ''+openark_lchart.axis_color;
 	this.container.style.fontSize = ''+openark_lchart.axis_font_size+'pt';
 	this.container.style.fontFamily = 'Helvetica,Verdana,Arial,sans-serif';
+	var local_this = this;
+	this.container.onmousemove = function(e) {
+		local_this.on_mouse_move(e);
+	};
+	this.container.onmouseout = function(e) {
+		local_this.on_mouse_out(e);
+	};
 
 	if (this.isIE)
 	{
@@ -413,13 +423,40 @@ openark_lchart.prototype.draw = function() {
 			legend_li.style.color = this.series_colors[i];
 			legend_li.style.fontSize = ''+openark_lchart.legend_font_size+'pt';
 			legend_li.innerHTML = '<span style="color: '+openark_lchart.legend_color+'">'+this.series_labels[i]+'</span>';
+			var legend_value_container = document.createElement("div");
+			legend_value_container.style.display = 'inline';
+			legend_value_container.style.position = 'absolute';
+			legend_value_container.style.left = '' + (this.chart_origin_x + this.chart_width - this.chart_origin_x - 10) + 'px';
+			legend_li.appendChild(legend_value_container);
+			this.legend_values_containers.push(legend_value_container);
+			
 			legend_ul.appendChild(legend_li);
 		}
 		legend_div.appendChild(legend_ul);
 		this.container.appendChild(legend_div);
+		
+		this.interactive_legend = document.createElement("ul");
+		this.interactive_legend.style.position = 'relative';
+		this.interactive_legend.style.right = '0px';
+		this.interactive_legend.style.top = '0'+'px';
+		legend_div.appendChild(this.interactive_legend);
 	}
 };
 
+
+openark_lchart.prototype.update_legend = function() {
+	for (i = 0 ; i < this.series_labels.length ; ++i)
+	{
+		if (this.series_legend_values == null)
+		{
+			this.legend_values_containers[i].innerHTML = '';
+		}
+		else
+		{
+			this.legend_values_containers[i].innerHTML = '' + this.series_legend_values[i];
+		}
+	}
+};
 
 openark_lchart.prototype.set_color = function(color) {
 	this.current_color = color;
@@ -508,3 +545,65 @@ openark_lchart.prototype.draw_text = function(options) {
 	label_div.innerHTML = options.text;
 	this.container.appendChild(label_div);
 };
+
+
+openark_lchart.prototype.on_mouse_move = function(event) {
+
+	var mouse_x = event.clientX - findPosX(this.container);
+	var mouse_y = event.clientY - findPosY(this.container);
+	chart_x = mouse_x - this.chart_origin_x;
+	chart_y = this.chart_origin_y - mouse_y;
+	var dot_position_index = Math.round((this.multi_series[0].length-1) * (chart_x / this.chart_width));
+	var mouse_inside_chart = ((chart_x <= this.chart_width) && (chart_y <= this.chart_height) && (chart_x >= 0) && (chart_y >= 0));
+	
+	if (mouse_inside_chart)
+	{
+		this.series_legend_values = new Array(this.multi_series.length);
+		for (series = 0 ; series < this.multi_series.length ; ++series)
+		{
+			this.series_legend_values[series] = this.multi_series[series][dot_position_index].toFixed(2);
+		}
+	}
+	else
+	{
+		this.series_legend_values = null;
+	}
+	this.update_legend();
+}
+
+
+openark_lchart.prototype.on_mouse_out = function(event) {
+	this.series_legend_values = null;
+	this.update_legend();
+}
+
+
+// From http://blog.firetree.net/2005/07/04/javascript-find-position/ and http://www.quirksmode.org/js/findpos.html
+function findPosX(obj) {
+	var curleft = 0;
+	if (obj.offsetParent)
+		while (1) {
+			curleft += obj.offsetLeft;
+			if (!obj.offsetParent)
+				break;
+			obj = obj.offsetParent;
+		}
+	else if (obj.x)
+		curleft += obj.x;
+	return curleft;
+}
+
+function findPosY(obj) {
+	var curtop = 0;
+	if (obj.offsetParent)
+		while (1) {
+			curtop += obj.offsetTop;
+			if (!obj.offsetParent)
+				break;
+			obj = obj.offsetParent;
+		}
+	else if (obj.y)
+		curtop += obj.y;
+	return curtop;
+}
+
