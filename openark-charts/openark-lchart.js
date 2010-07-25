@@ -37,6 +37,7 @@ openark_lchart = function(container, options) {
 	this.x_axis_labels = [];
 	this.y_axis_min = 0;
 	this.y_axis_max = 0;
+	this.y_axis_round_digits = 0;
 	this.multi_series = [];
 	this.multi_series_dot_positions = [];
 	this.series_labels = [];
@@ -51,6 +52,10 @@ openark_lchart = function(container, options) {
 	
 	this.isIE = false;
 	this.current_color = null;
+	
+	this.skip_interactive = false;
+	if (options.skipInteractive)
+		this.skip_interactive = true;
 	
 	this.recalc();
 	
@@ -68,6 +73,7 @@ openark_lchart.legend_color = '#606060';
 openark_lchart.series_line_width = 1.5;
 openark_lchart.grid_color = '#e4e4e4';
 openark_lchart.grid_thick_color = '#c8c8c8';
+openark_lchart.position_pointer_color = '#808080';
 openark_lchart.series_colors = ["#ff0000", "#ff8c00", "#4682b4", "#9acd32", "#dc143c", "#9932cc", "#ffd700", "#191970", "#7fffd4", "#808080", "#dda0dd"];
 openark_lchart.google_simple_format_scheme = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -111,7 +117,7 @@ openark_lchart.prototype.recalc = function() {
 		this.y_axis_tick_positions.push(Math.floor(this.chart_origin_y - tick_value_ratio*this.chart_height));
 		tick_value += step_size;
 	}
-	
+	this.y_axis_round_digits = (pow >= 0 ? 0 : -pow);	
 };
 
 
@@ -124,14 +130,17 @@ openark_lchart.prototype.create_graphics = function() {
 	this.container.style.color = ''+openark_lchart.axis_color;
 	this.container.style.fontSize = ''+openark_lchart.axis_font_size+'pt';
 	this.container.style.fontFamily = 'Helvetica,Verdana,Arial,sans-serif';
-	var local_this = this;
-	this.container.onmousemove = function(e) {
-		local_this.on_mouse_move(e);
-	};
-	this.container.onmouseout = function(e) {
-		local_this.on_mouse_out(e);
-	};
-
+	
+	if (!this.skip_interactive)
+	{
+		var local_this = this;
+		this.container.onmousemove = function(e) {
+			local_this.on_mouse_move(e);
+		};
+		this.container.onmouseout = function(e) {
+			local_this.on_mouse_out(e);
+		};
+	}
 	if (this.isIE)
 	{
 		// Nothing to do here right now.
@@ -256,6 +265,8 @@ openark_lchart.prototype.read_google_url = function(url) {
 		var chd_format_token = chd.substring(0, 2);
 		if (chd_format_token == "s:")
 			data_format = "simple";
+		else if (chd_format_token == "t:")
+			data_format = "text";
 		if (data_format)
 		{
 			this.multi_series = [];
@@ -263,10 +274,13 @@ openark_lchart.prototype.read_google_url = function(url) {
 		}
 		if (data_format == "simple")
 		{
+			this.skip_interactive = true;
+			
 			chd = chd.substring(2);
 			var tokens = chd.split(",");
 			this.multi_series = new Array(tokens.length);
 			this.multi_series_dot_positions = new Array(tokens.length);
+			
 			for (series_index = 0; series_index < tokens.length ; ++series_index)
 			{
 				var series_encoded_data = tokens[series_index];
@@ -286,6 +300,41 @@ openark_lchart.prototype.read_google_url = function(url) {
 						var x_value_scale_ratio = openark_lchart.google_simple_format_scheme.indexOf(series_encoded_current_data)/61;
 						var x_value = this.y_axis_min + x_value_scale_ratio*(this.y_axis_max-this.y_axis_min);
 						series[i] = x_value;
+						series_dot_positions[i] = Math.round(this.chart_origin_y - x_value_scale_ratio*this.chart_height);
+					}
+				}
+				this.multi_series[series_index] = series;
+				this.multi_series_dot_positions[series_index] = series_dot_positions;
+			}
+		}
+		if (data_format == "text")
+		{
+			chd = chd.substring(2);
+			var tokens = chd.split("|");
+			this.multi_series = new Array(tokens.length);
+			this.multi_series_dot_positions = new Array(tokens.length);
+			
+			for (series_index = 0; series_index < tokens.length ; ++series_index)
+			{
+				var series_data = tokens[series_index];
+				var series_data_tokens = series_data.split(",");
+				
+				var series = new Array(series_data_tokens.length);
+				var series_dot_positions = new Array(series_data_tokens.length);
+				for (i = 0 ; i < series_data_tokens.length ; ++i)
+				{
+					var series_data_current_token = series_data_tokens[i];
+					if (series_data_current_token == '_')
+					{
+						series[i] = null;
+						series_dot_positions[i] = null;
+					}
+					else
+					{
+						series[i] = parseFloat(series_data_current_token);
+						var x_value_scale_ratio = 0;
+						if (this.y_axis_max > this.y_axis_min)
+							x_value_scale_ratio = (series[i] - this.y_axis_min)/(this.y_axis_max - this.y_axis_min);
 						series_dot_positions[i] = Math.round(this.chart_origin_y - x_value_scale_ratio*this.chart_height);
 					}
 				}
@@ -436,7 +485,10 @@ openark_lchart.prototype.draw = function() {
 			var legend_value_container = document.createElement("div");
 			legend_value_container.style.display = 'inline';
 			legend_value_container.style.position = 'absolute';
-			legend_value_container.style.left = '' + (this.chart_origin_x + this.chart_width - this.chart_origin_x - 10) + 'px';
+			//legend_value_container.style.left = '' + (this.chart_origin_x + this.chart_width - this.chart_origin_x - 10) + 'px';
+			legend_value_container.style.right = '' + 0 + 'px';
+			legend_value_container.style.width = '' + (this.chart_origin_x + 10) + 'px';
+			legend_value_container.style.textAlign = 'right';
 			legend_li.appendChild(legend_value_container);
 			this.legend_values_containers.push(legend_value_container);
 			
@@ -453,20 +505,6 @@ openark_lchart.prototype.draw = function() {
 	}
 };
 
-
-openark_lchart.prototype.update_legend = function() {
-	for (i = 0 ; i < this.series_labels.length ; ++i)
-	{
-		if (this.series_legend_values == null)
-		{
-			this.legend_values_containers[i].innerHTML = '';
-		}
-		else
-		{
-			this.legend_values_containers[i].innerHTML = '' + this.series_legend_values[i];
-		}
-	}
-};
 
 openark_lchart.prototype.set_color = function(color) {
 	this.current_color = color;
@@ -558,9 +596,11 @@ openark_lchart.prototype.draw_text = function(options) {
 
 
 openark_lchart.prototype.on_mouse_move = function(event) {
+	//alert(''+event.pageY+',   '+event.clientY+',   '+document.scrollTop+',   '+document.body.scrollTop+',   '+document.clientTop);
 
+	// event.pageY - event.clientY is Y-scroll (also equals to document.body.scrollTop).
 	var mouse_x = event.clientX - findPosX(this.container);
-	var mouse_y = event.clientY - findPosY(this.container);
+	var mouse_y = event.clientY - (findPosY(this.container) - (event.pageY - event.clientY));
 	var chart_x = mouse_x - this.chart_origin_x;
 	var chart_y = this.chart_origin_y - mouse_y;
 	var dot_position_index = Math.round((this.multi_series[0].length-1) * (chart_x / this.chart_width));
@@ -571,7 +611,14 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 		this.series_legend_values = new Array(this.multi_series.length);
 		for (series = 0 ; series < this.multi_series.length ; ++series)
 		{
-			this.series_legend_values[series] = this.multi_series[series][dot_position_index].toFixed(4);
+			var value = this.multi_series[series][dot_position_index];
+			if (value == null)
+				this.series_legend_values[series] = 'n/a';
+			else
+			{
+				// Data is in one order of magnitude more precise than scales.
+				this.series_legend_values[series] = value.toFixed(this.y_axis_round_digits + 1);
+			}
 		}
 
 		if (this.position_pointer == null)
@@ -581,7 +628,7 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 			this.position_pointer.style.top = '' + (this.chart_origin_y - this.chart_height)+ 'px';
 			this.position_pointer.style.width = '1.5px';
 			this.position_pointer.style.height = '' + this.chart_height + 'px';
-			this.position_pointer.style.backgroundColor = '#f06060';
+			this.position_pointer.style.backgroundColor = openark_lchart.position_pointer_color;
 			this.canvas_shadow.appendChild(this.position_pointer);
 		}
 		var position_pointer_x = Math.round(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
@@ -609,6 +656,26 @@ openark_lchart.prototype.clear_position_pointer_and_legend_values = function(eve
 	this.series_legend_values = null;
 	this.update_legend();
 }
+
+
+openark_lchart.prototype.update_legend = function() {
+	for (i = 0 ; i < this.series_labels.length ; ++i)
+	{
+		if (this.series_legend_values == null)
+		{
+			this.legend_values_containers[i].innerHTML = '';
+		}
+		else
+		{
+			var percent = 0;
+			if (this.y_axis_min < this.y_axis_max)
+			{
+				percent = 100.0*((this.series_legend_values[i] - this.y_axis_min) / (this.y_axis_max - this.y_axis_min));
+			}
+			this.legend_values_containers[i].innerHTML = '' + this.series_legend_values[i];
+		}
+	}
+};
 
 
 // From http://blog.firetree.net/2005/07/04/javascript-find-position/ and http://www.quirksmode.org/js/findpos.html
