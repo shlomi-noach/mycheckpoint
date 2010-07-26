@@ -152,6 +152,7 @@ openark_lchart.prototype.create_graphics = function() {
 		canvas.setAttribute("height", this.canvas_height);
 		
 		this.canvas = canvas;
+
 		this.container.appendChild(this.canvas);
 	
 		this.ctx = this.canvas.getContext('2d');
@@ -162,7 +163,6 @@ openark_lchart.prototype.create_graphics = function() {
 	this.canvas_shadow.style.left = "0";
 	this.canvas_shadow.style.width = this.canvas_width;
 	this.canvas_shadow.style.height = this.canvas_height;
-	this.canvas_shadow.style.zIndex = '-1';
 	this.container.appendChild(this.canvas_shadow);
 };
 
@@ -489,6 +489,7 @@ openark_lchart.prototype.draw = function() {
 			legend_value_container.style.right = '' + 0 + 'px';
 			legend_value_container.style.width = '' + (this.chart_origin_x + 10) + 'px';
 			legend_value_container.style.textAlign = 'right';
+			legend_value_container.style.fontWeight = 'bold';
 			legend_li.appendChild(legend_value_container);
 			this.legend_values_containers.push(legend_value_container);
 			
@@ -596,15 +597,17 @@ openark_lchart.prototype.draw_text = function(options) {
 
 
 openark_lchart.prototype.on_mouse_move = function(event) {
-	//alert(''+event.pageY+',   '+event.clientY+',   '+document.scrollTop+',   '+document.body.scrollTop+',   '+document.clientTop);
-
-	// event.pageY - event.clientY is Y-scroll (also equals to document.body.scrollTop).
+	// IE patch:
+	if (!event) var event = window.event;
+	
+	// (event.pageY - event.clientY) is Y-scroll (also equals to document.body.scrollTop).
 	var mouse_x = event.clientX - findPosX(this.container);
-	var mouse_y = event.clientY - (findPosY(this.container) - (event.pageY - event.clientY));
+	// Make compatible across all browsers:
+	var mouse_y = event.clientY - (findPosY(this.container) - (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0));
 	var chart_x = mouse_x - this.chart_origin_x;
 	var chart_y = this.chart_origin_y - mouse_y;
 	var dot_position_index = Math.round((this.multi_series[0].length-1) * (chart_x / this.chart_width));
-	var mouse_inside_chart = ((chart_x <= this.chart_width) && (chart_y <= this.chart_height) && (chart_x >= 0) && (chart_y >= 0));
+	var mouse_inside_chart = ((chart_x <= this.chart_width) && (chart_y <= this.chart_height) && (chart_x >= 0) && (chart_y >= -20));
 	
 	if (mouse_inside_chart)
 	{
@@ -626,15 +629,18 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 			this.position_pointer = document.createElement("div");
 			this.position_pointer.style.position = 'absolute';
 			this.position_pointer.style.top = '' + (this.chart_origin_y - this.chart_height)+ 'px';
-			this.position_pointer.style.width = '1.5px';
-			this.position_pointer.style.height = '' + this.chart_height + 'px';
+			this.position_pointer.style.width = '2px';
+			this.position_pointer.style.filter = 'alpha(opacity=60)';
+			this.position_pointer.style.opacity = '0.6';
+			this.position_pointer.style.height = '' + (this.chart_height) + 'px';
 			this.position_pointer.style.backgroundColor = openark_lchart.position_pointer_color;
+
 			this.canvas_shadow.appendChild(this.position_pointer);
 		}
-		var position_pointer_x = Math.round(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
-		this.position_pointer.style.visibility = 'visible';
-		this.position_pointer.style.left = '' + position_pointer_x + 'px';
 		this.update_legend();
+		var position_pointer_x = Math.round(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
+		this.position_pointer.style.visibility = 'visible';	
+		this.position_pointer.style.left = '' + (position_pointer_x) + 'px';
 	}
 	else
 	{
@@ -644,6 +650,16 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 
 
 openark_lchart.prototype.on_mouse_out = function(event) {
+	// IE patch:
+	if (!event) var event = window.event;
+	
+	if (event.relatedTarget == this.position_pointer)
+	{
+		// Because we're showing the position pointer on mouse move, it 
+		// becomes the element under the mouse, which makes for an onmouseout 
+		// event on the canvas_shadow... So this event is undesired in this case.
+		return;
+	}
 	this.clear_position_pointer_and_legend_values(event);
 }
 
