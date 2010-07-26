@@ -600,8 +600,7 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 	// IE patch:
 	if (!event) var event = window.event;
 	
-	// (event.pageY - event.clientY) is Y-scroll (also equals to document.body.scrollTop).
-	var mouse_x = event.clientX - findPosX(this.container);
+	var mouse_x = event.clientX - (findPosX(this.container) - (window.pageXOffset || document.documentElement.scrollLeft || document.body.scrollLeft || 0));
 	// Make compatible across all browsers:
 	var mouse_y = event.clientY - (findPosY(this.container) - (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0));
 	var chart_x = mouse_x - this.chart_origin_x;
