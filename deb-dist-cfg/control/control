@@ -5,7 +5,7 @@ Priority: optional
 Architecture: all
 Essential: no
 Depends: python-mysqldb
-Installed-Size: 190
+Installed-Size: 200
 Maintainer: Shlomi Noach [shlomi@code.openark.org]
 Description: Monitoring for MySQL
  Lightweight, SQL oriented monitoring solution for MySQL

@@ -487,7 +487,7 @@ openark_lchart.prototype.draw = function() {
 			legend_value_container.style.position = 'absolute';
 			//legend_value_container.style.left = '' + (this.chart_origin_x + this.chart_width - this.chart_origin_x - 10) + 'px';
 			legend_value_container.style.right = '' + 0 + 'px';
-			legend_value_container.style.width = '' + (this.chart_origin_x + 10) + 'px';
+			legend_value_container.style.width = '' + (this.chart_origin_x + 32) + 'px';
 			legend_value_container.style.textAlign = 'right';
 			legend_value_container.style.fontWeight = 'bold';
 			legend_li.appendChild(legend_value_container);
