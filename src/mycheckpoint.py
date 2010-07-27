@@ -2585,7 +2585,9 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
 
     # '_' is used for missing (== NULL) values.
     # Here's an ugly patch: MySQL's ROUND rounds up a number, but can leave the trailing zeros.
-    # How to overcome this? Use FORMAT(), which, sadly, also inserts "," as in ##,###.### - so next is to REPLACE ',' with ''
+    # How to overcome this? 
+    # Tried using ROUND() (there's a bug). Tried using FORMAT (5.0 only accepts constants).
+    # I do manual parsing of the number as text... :(
     # Trick for overcoming group_concat_max_len=1024, as is the default: CONCAT several conditional GROUP_CONCATs
     column_values_extended = [ """
         CONCAT(
@@ -2593,7 +2595,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
             IF (timeseries_key BETWEEN 0 AND 79,
               CONCAT(
                 IF (timeseries_key > 0, ',', ''),
-                IFNULL(REPLACE(FORMAT(${column_name}, ${column_name}_round_digits), ',', ''), '_')
+                IFNULL(CONCAT(TRUNCATE(${column_name}, 0), SUBSTRING(${column_name} - TRUNCATE(${column_name}, 0), 2, ${column_name}_round_digits+1)), '_')
               ),
               ''
             )  
@@ -2603,7 +2605,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
           GROUP_CONCAT(
             IF (timeseries_key BETWEEN 80 AND 159,
               CONCAT(',',
-                IFNULL(REPLACE(FORMAT(${column_name}, ${column_name}_round_digits), ',', ''), '_')
+                IFNULL(CONCAT(TRUNCATE(${column_name}, 0), SUBSTRING(${column_name} - TRUNCATE(${column_name}, 0), 2, ${column_name}_round_digits+1)), '_')
               ),
               ''
             )  
@@ -2613,7 +2615,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
           GROUP_CONCAT(
             IF (timeseries_key >= 160,
               CONCAT(',',
-                IFNULL(REPLACE(FORMAT(${column_name}, ${column_name}_round_digits), ',', ''), '_')
+                IFNULL(CONCAT(TRUNCATE(${column_name}, 0), SUBSTRING(${column_name} - TRUNCATE(${column_name}, 0), 2, ${column_name}_round_digits+1)), '_')
               ),
               ''
             )  
@@ -2624,7 +2626,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
         """.replace("${column_name}", column_name) for column_name in chart_columns_list
     ]
     concatenated_column_values_extended = "'|',".join(column_values_extended)
-
+    
     # For each chart type, we create two columns: one with a simple-format Google chart, another with a semi-text-format.
     # The latter is to be used with openark-charts, is considerably longer (way more than the permitted 2048 characters in a URL),
     # and is not entirely Google-compliant. So it's tailor made.
