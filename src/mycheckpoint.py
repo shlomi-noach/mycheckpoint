@@ -2682,14 +2682,17 @@ def create_custom_google_charts_views():
             "value_psec": "_psec",
             "time": "_time",
         }
-    case_clauses = []
+    simple_chart_case_clauses = []
+    extended_chart_case_clauses = []
     if get_custom_query_ids():
         for i in get_custom_query_ids():
             for chart_type in ["value", "value_psec", "time"]:
-                case_clauses.append("WHEN '%d,%s' THEN custom_%d%s" % (i, chart_type, i, chart_type_extensions[chart_type]))
+                simple_chart_case_clauses.append("WHEN '%d,%s' THEN custom_%d%s" % (i, chart_type, i, chart_type_extensions[chart_type]))
+                extended_chart_case_clauses.append("WHEN '%d,%s' THEN custom_%d%s_extended" % (i, chart_type, i, chart_type_extensions[chart_type]))
     else:
         # No point in this while view; just make a dummy statement
-        case_clauses.append("WHEN NULL THEN NULL");
+        simple_chart_case_clauses.append("WHEN NULL THEN NULL");
+        extended_chart_case_clauses.append("WHEN NULL THEN NULL");
     for view_name_extension in ["sample", "hour", "day"]:
         query = """
             CREATE
@@ -2703,12 +2706,16 @@ def create_custom_google_charts_views():
                 CASE CONCAT(custom_query_id, ',', chart_type)
                     %s
                     ELSE NULL
-                END AS chart
+                END AS chart,
+                CASE CONCAT(custom_query_id, ',', chart_type)
+                    %s
+                    ELSE NULL
+                END AS chart_extended
               FROM
                 ${database_name}.custom_query, ${database_name}.sv_report_chart_${view_name_extension}
               ORDER BY
                 chart_order ASC, custom_query_id ASC
-            """ % "\n".join(case_clauses)
+            """ % ("\n".join(simple_chart_case_clauses), "\n".join(extended_chart_case_clauses),)
         query = query.replace("${database_name}", database_name)
         query = query.replace("${view_name_extension}", view_name_extension)
         act_query(query)
@@ -2725,9 +2732,10 @@ def create_custom_google_charts_flattened_views():
         for i in get_custom_query_ids():
             custom_clause = """
                 MAX(IF(custom_query_id=%d AND enabled, chart, NULL)) AS custom_%d_chart,
+                MAX(IF(custom_query_id=%d AND enabled, chart_extended, NULL)) AS custom_%d_chart_extended,
                 MAX(IF(custom_query_id=%d, description, NULL)) AS custom_%d_text_description,
                 MAX(IF(custom_query_id=%d, CONCAT(description, ' [', chart_type, ']'), NULL)) AS custom_%d_description
-                """ % (i, i, i, i, i, i,)
+                """ % (i, i, i, i, i, i, i, i,)
             custom_clauses.append(custom_clause)
     else:
         # No point in this whole view. Add a dummy column
@@ -3196,7 +3204,7 @@ def create_custom_html_view():
                             {width: ', chart_width, ', height: ',  chart_height, '}
                             ).read_google_url("', 
                                 REPLACE(
-                                    sv_custom_chart_flattened_${view_name_extension}.${chart_alias}, 
+                                    sv_custom_chart_flattened_${view_name_extension}.${chart_alias}_extended, 
                                     '&chdl=custom_', 
                                     CONCAT(
                                         '&chdl=', 
@@ -3394,7 +3402,7 @@ def create_custom_html_brief_view():
                 <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
                 <h3>${chart_alias_header} ', 
                     IFNULL(
-                        CONCAT('<a href="', ${chart_alias_url}, '">[url]</a>')
+                        CONCAT('<a href="', ${chart_alias_url_simple}, '">[url]</a>')
                     , '[N/A]'), 
                 '</h3>
                 <div id="chart_div_${chart_alias}" class="chart"></div>
@@ -3402,9 +3410,12 @@ def create_custom_html_brief_view():
             """
         div_query = div_query.replace("${chart_alias}", chart_alias)
         # This is a custom column
-        chart_alias_url = "REPLACE(%s_chart, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(REPLACE(custom_%d_text_description, ' ', '+'), ':+'), ''), 'custom_'))" % (chart_alias, custom_query_id,)
+        chart_alias_url = "REPLACE(${chart_alias_url_column}, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(REPLACE(custom_%d_text_description, ' ', '+'), ':+'), ''), 'custom_'))" % (custom_query_id,)
+        chart_alias_url_simple = chart_alias_url.replace("${chart_alias_url_column}", "%s_chart" % chart_alias)
+        chart_alias_url_extended = chart_alias_url.replace("${chart_alias_url_column}", "%s_chart_extended" % chart_alias)
+
         div_query = div_query.replace("${chart_alias_header}", "', custom_%d_description, '" % custom_query_id)
-        div_query = div_query.replace("${chart_alias_url}", chart_alias_url)
+        div_query = div_query.replace("${chart_alias_url_simple}", chart_alias_url_simple)
         charts_aliases_queries.append(div_query)
 
         js_query = """IFNULL(
@@ -3412,12 +3423,12 @@ def create_custom_html_brief_view():
                     new openark_lchart(
                         document.getElementById("chart_div_${chart_alias}"), 
                         {width: ', chart_width, ', height: ',  chart_height, '}
-                        ).read_google_url("', ${chart_alias_url}, '");
+                        ).read_google_url("', ${chart_alias_url_extended}, '");
                     '),
                 ''),
             """ 
         js_query = js_query.replace("${chart_alias}", chart_alias)
-        js_query = js_query.replace("${chart_alias_url}", chart_alias_url)
+        js_query = js_query.replace("${chart_alias_url_extended}", chart_alias_url_extended)
         js_queries.append(js_query)
 
     charts_aliases_query = "".join(charts_aliases_queries)
