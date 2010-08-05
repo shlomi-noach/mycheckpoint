@@ -332,9 +332,16 @@ openark_lchart.prototype.read_google_url = function(url) {
 					else
 					{
 						series[i] = parseFloat(series_data_current_token);
-						var x_value_scale_ratio = 0;
+						var x_value_scale_ratio = 0.0;
 						if (this.y_axis_max > this.y_axis_min)
-							x_value_scale_ratio = (series[i] - this.y_axis_min)/(this.y_axis_max - this.y_axis_min);
+						{
+							if (series[i] < this.y_axis_min)
+								x_value_scale_ratio = 0.0;
+							else if (series[i] > this.y_axis_max)
+								x_value_scale_ratio = 1.0;
+							else
+								x_value_scale_ratio = (series[i] - this.y_axis_min)/(this.y_axis_max - this.y_axis_min);
+						}
 						series_dot_positions[i] = Math.round(this.chart_origin_y - x_value_scale_ratio*this.chart_height);
 					}
 				}
