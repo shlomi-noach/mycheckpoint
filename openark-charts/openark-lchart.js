@@ -612,8 +612,13 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 	var mouse_y = event.clientY - (findPosY(this.container) - (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0));
 	var chart_x = mouse_x - this.chart_origin_x;
 	var chart_y = this.chart_origin_y - mouse_y;
-	var dot_position_index = Math.round((this.multi_series[0].length-1) * (chart_x / this.chart_width));
 	var mouse_inside_chart = ((chart_x <= this.chart_width) && (chart_y <= this.chart_height) && (chart_x >= 0) && (chart_y >= -20));
+	var dot_position_index = Math.round((this.multi_series[0].length-1) * (chart_x / this.chart_width));
+	// As special case, when mouse is right under chart (where x axis valus are), and close enough to the right edge, we enforce the 
+	// dot position index to be the last index, meaning it will point to the last measurement in the chart. Reason is that this measurement
+	// is more important than others (being last, i.e. current), and since catching the specific pixel with your mouse is not too easy.
+	if ((chart_y < 0) && (chart_y >= -20) && (chart_x >= this.chart_width-10))
+		dot_position_index = this.multi_series[0].length-1;
 	
 	if (mouse_inside_chart)
 	{
