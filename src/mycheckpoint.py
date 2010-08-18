@@ -515,7 +515,7 @@ def get_custom_query_ids():
     global custom_chart_names
     if custom_query_ids is None:
         query = """SELECT custom_query_id, chart_name FROM %s.custom_query_view""" % database_name 
-        rows = get_rows(query)
+        rows = get_rows(query, write_conn)
         custom_query_ids = [int(row["custom_query_id"]) for row in rows]
         custom_chart_names = [row["chart_name"] for row in rows]
     return custom_query_ids
@@ -825,6 +825,7 @@ def create_metadata_table():
             revision SMALLINT UNSIGNED NOT NULL,
             build BIGINT UNSIGNED NOT NULL,
             last_deploy TIMESTAMP NOT NULL,
+            last_deploy_successful TINYINT UNSIGNED NOT NULL DEFAULT 0,
             mysql_version VARCHAR(255) CHARSET ascii NOT NULL,
             database_name VARCHAR(255) CHARSET utf8 NOT NULL,
             custom_queries VARCHAR(4096) CHARSET ascii NOT NULL
@@ -839,10 +840,18 @@ def create_metadata_table():
 
     query = """
         REPLACE INTO %s.metadata
-            (revision, build, mysql_version, database_name, custom_queries)
+            (revision, build, last_deploy_successful, mysql_version, database_name, custom_queries)
         VALUES
-            (%d, %d, '%s', '%s', '')
+            (%d, %d, 0, '%s', '%s', '')
         """ % (database_name, revision_number, build_number, get_monitored_host_mysql_version(), database_name)
+    act_query(query)
+
+
+def finalize_deploy():
+    query = """UPDATE ${database_name}.metadata 
+        SET last_deploy_successful = 1
+    """
+    query = query.replace("${database_name}", database_name)
     act_query(query)
 
 
@@ -1763,6 +1772,7 @@ def is_same_deploy():
               AND mysql_version = '%s'
               AND database_name = '%s'
               AND custom_queries = (SELECT IFNULL(GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ','), '') FROM ${database_name}.custom_query)
+              AND last_deploy_successful = 1
               """ % (revision_number, build_number, get_monitored_host_mysql_version(), database_name)
         query = query.replace("${database_name}", database_name)
         same_deploy = get_row(query, write_conn)["same_deploy"]
@@ -4012,7 +4022,7 @@ def purge_alert():
     return num_affected_rows
 
 
-def detect_databases(force_reload=False):
+def detect_mycheckpoint_databases(force_reload=False):
     global http_known_databases
     if http_known_databases and not force_reload:
         return
@@ -4038,7 +4048,6 @@ def detect_databases(force_reload=False):
             write_connection.close()
 
 def http_get_html_databases_list(http_database_name):
-    detect_databases()
     databases_links_list = []
     for database_name in http_known_databases:
         if database_name == http_database_name:
@@ -4094,7 +4103,7 @@ class MCPHttpHandler(BaseHTTPRequestHandler):
                 
             html = None
             if self.path == "/refresh-databases-list":
-                detect_databases(True)
+                detect_mycheckpoint_databases(True)
                 
             if database_match or database_view_match:
                 if http_database_name in http_known_databases:
@@ -4177,7 +4186,7 @@ class MCPHttpHandler(BaseHTTPRequestHandler):
 
 def serve_http():
     try:
-        detect_databases()
+        detect_mycheckpoint_databases()
         server = HTTPServer(('', options.http_port), MCPHttpHandler)
         print 'started httpserver...'
         server.serve_forever()
@@ -4205,6 +4214,7 @@ def deploy_schema():
     create_alert_pending_html_view()
     create_alert_email_message_items_view()
     create_alert_condition_query_view()
+    finalize_deploy()
     verbose("Table and views deployed")
 
 
@@ -4314,8 +4324,6 @@ try:
         if should_serve_http:
             serve_http()
             
-        #detect_databases()
-
     except Exception, err:
         if not monitored_conn:
             print_error("Cannot connect to database")
