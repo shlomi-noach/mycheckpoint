@@ -43,7 +43,7 @@ except:
 
 
 
-def parse_options():
+def parse_options_old():
     usage = """usage: mycheckpoint [options] [command [, command ...]]
 
 See online documentation on http://code.openark.org/forge/mycheckpoint/documentation
@@ -57,11 +57,13 @@ Available commands:
     parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL host. Written to by this application (default: localhost)")
     parser.add_option("-p", "--password", dest="password", default="", help="MySQL password")
     parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
-    parser.add_option("-P", "--port", dest="port", type="int", default="3306", help="TCP/IP port (default: 3306)")
+    parser.add_option("-P", "--port", dest="port", type="int", default=3306, help="TCP/IP port (default: 3306)")
     parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost (default: /var/run/mysqld/mysql.sock)")
     parser.add_option("", "--monitored-host", dest="monitored_host", default=None, help="MySQL monitored host. Specity this when the host you're monitoring is not the same one you're writing to (default: none, host specified by --host is both monitored and written to)")
     parser.add_option("", "--monitored-port", dest="monitored_port", type="int", default="3306", help="Monitored host's TCP/IP port (default: 3306). Only applies when monitored-host is specified")
     parser.add_option("", "--monitored-socket", dest="monitored_socket", default="/var/run/mysqld/mysql.sock", help="Monitored host MySQL socket file. Only applies when monitored-host is specified and is localhost (default: /var/run/mysqld/mysql.sock)")
+    parser.add_option("", "--monitored-user", dest="monitored_user", default=None, help="MySQL monitored server user name. Only applies when monitored-host is specified (default: same as user)")
+    parser.add_option("", "--monitored-password", dest="monitored_password", default=None, help="MySQL monitored server password. Only applies when monitored-host is specified (default: same as password)")
     parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", default="mycheckpoint", help="Database name (required unless query uses fully qualified table names)")
     parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
@@ -86,6 +88,129 @@ Available commands:
     return parser.parse_args()
 
 
+
+def parse_options():
+    global options
+    global args
+    
+    usage = """usage: mycheckpoint [options] [command [, command ...]]
+
+See online documentation on http://code.openark.org/forge/mycheckpoint/documentation
+
+Available commands:
+  deploy
+  email_brief_report
+    """
+    parser = OptionParser(usage=usage)
+    parser.add_option("-u", "--user", dest="user", help="MySQL user")
+    parser.add_option("-H", "--host", dest="host", help="MySQL host. Written to by this application (default: localhost)")
+    parser.add_option("-p", "--password", dest="password", help="MySQL password")
+    parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
+    parser.add_option("-P", "--port", dest="port", type="int", help="TCP/IP port (default: 3306)")
+    parser.add_option("-S", "--socket", dest="socket", help="MySQL socket file. Only applies when host is localhost (default: /var/run/mysqld/mysql.sock)")
+    parser.add_option("", "--monitored-host", dest="monitored_host", help="MySQL monitored host. Specity this when the host you're monitoring is not the same one you're writing to (default: none, host specified by --host is both monitored and written to)")
+    parser.add_option("", "--monitored-port", dest="monitored_port", type="int", help="Monitored host's TCP/IP port (default: 3306). Only applies when monitored-host is specified")
+    parser.add_option("", "--monitored-socket", dest="monitored_socket", help="Monitored host MySQL socket file. Only applies when monitored-host is specified and is localhost (default: /var/run/mysqld/mysql.sock)")
+    parser.add_option("", "--monitored-user", dest="monitored_user", help="MySQL monitored server user name. Only applies when monitored-host is specified (default: same as user)")
+    parser.add_option("", "--monitored-password", dest="monitored_password", help="MySQL monitored server password. Only applies when monitored-host is specified (default: same as password)")
+    parser.add_option("", "--defaults-file", dest="defaults_file", help="Read from MySQL configuration file. Overrides all other options")
+    parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
+    parser.add_option("", "--purge-days", dest="purge_days", type="int", help="Purge data older than specified amount of days (default: 182)")
+    parser.add_option("", "--disable-bin-log", dest="disable_bin_log", action="store_true", help="Disable binary logging (binary logging enabled by default)")
+    parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
+    parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", help="Skip checking on master/slave status variables")
+    parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", help="Monitor OS even if monitored host does does nto appear to be the local host. Use when you are certain the monitored host is local")
+    parser.add_option("", "--skip-alerts", dest="skip_alerts", action="store_true", help="Skip evaluating alert conditions as well as sending email notifications")
+    parser.add_option("", "--skip-emails", dest="skip_emails", action="store_true", help="Skip sending email notifications")
+    parser.add_option("", "--force-emails", dest="force_emails", action="store_true", help="Force sending email notifications even if there's nothing wrong")
+    parser.add_option("", "--skip-custom", dest="skip_custom", action="store_true", help="Skip custom query execution and evaluation")
+    parser.add_option("", "--skip-defaults-file", dest="skip_defaults_file", action="store_true", help="Do not read defaults file. Overrides --defaults-file and ignores /etc/mycheckpoint.cnf")
+    parser.add_option("", "--chart-width", dest="chart_width", type="int", help="Chart image width (default: 370, min value: 150)")
+    parser.add_option("", "--chart-height", dest="chart_height", type="int", help="Chart image height (default: 180, min value: 100)")
+    parser.add_option("", "--chart-service-url", dest="chart_service_url", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
+    parser.add_option("", "--smtp-host", dest="smtp_host", help="SMTP mail server host name or IP")
+    parser.add_option("", "--smtp-from", dest="smtp_from", help="Address to use as mail sender")
+    parser.add_option("", "--smtp-to", dest="smtp_to", help="Comma delimited email addresses to send emails to")
+    parser.add_option("", "--http-port", dest="http_port", type="int", help="Socket to listen on when running as web server (argument is http)")
+    parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
+    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
+    options, args = parser.parse_args()
+
+    option_types = {}
+    for option in parser.option_list:
+        option_types[option.dest] = option.type
+        
+    option_defaults = {
+        "user": "",
+        "host": "localhost",
+        "password": "",
+        "prompt_password": False,
+        "port": 3306,
+        "socket": "/var/run/mysqld/mysql.sock",
+        "monitored_host": None,
+        "monitored_port": 3306,
+        "monitored_socket": None,
+        "monitored_user": None,
+        "monitored_password": None,
+        "defaults_file": "",
+        "database": "mycheckpoint",
+        "purge_days": 182,
+        "disable_bin_log": False,
+        "skip_check_replication": False,
+        "force_os_monitoring": False,
+        "skip_alerts": False,
+        "skip_emails": False,
+        "force_emails": False,
+        "skip_custom": False,
+        "skip_defaults_file": False,
+        "chart_width": 370,
+        "chart_height": 180,
+        "chart_service_url": "http://chart.apis.google.com/chart",
+        "smtp_host": None,
+        "smtp_from": None,
+        "smtp_to": None,
+        "http_port": 12306,
+        "debug": False,
+        "verbose": False,
+        }
+    
+    # Determine defaults file name:
+    default_defaults_file_name = "/etc/mycheckpoint.cnf" 
+    if not options.defaults_file:
+        if os.path.exists(default_defaults_file_name):
+            options.defaults_file = default_defaults_file_name
+    if options.skip_defaults_file:
+        options.defaults_file = None
+    if options.defaults_file:
+        verbose("Using %s as defaults file" % options.defaults_file)
+    if options.defaults_file:
+        # Apply config-file options that do not appear on command line:
+        # 'defaults_file' and 'verbose' are options that cannot be overwritten since they're already read beforehand
+        config = ConfigParser.ConfigParser()
+        config.read([options.defaults_file])
+        valid_sections = [section for section in config.sections() if section in ["client", "mycheckpoint"]]
+        for section in valid_sections:
+            for option_dest in config.options(section):
+                if options.__dict__.has_key(option_dest):
+                    # A known option
+                    if options.__dict__[option_dest]:
+                        # Option value specified on command line. Do nothing! 
+                        # Command line take precedence
+                        pass
+                    else:
+                        option_value = config.get(section, option_dest)
+                        if option_types[option_dest] == "int":
+                            option_value = int(option_value)
+                        options.__dict__[option_dest] = option_value
+                        
+    # Apply default values for options not specified on command line nor config file: 
+    for option_dest in options.__dict__.keys():
+        if options.__dict__[option_dest] is None:
+            options.__dict__[option_dest] = option_defaults[option_dest]
+    
+    return options, args
+
+
 def verbose(message):
     if options.verbose:
         print "-- %s" % message
@@ -104,44 +229,41 @@ def sorted_list(l):
     result.extend(l)
     result.sort()
     return result
-
+    
 
 def open_connections():
-    if options.defaults_file:
-        write_connection = MySQLdb.connect(
-            read_default_file = options.defaults_file,
-            db = database_name)
+    if options.prompt_password:
+        password=getpass.getpass()
     else:
-        if options.prompt_password:
-            password=getpass.getpass()
-        else:
-            password=options.password
-        write_connection = MySQLdb.connect(
-            host = options.host,
-            user = options.user,
-            passwd = password,
-            port = options.port,
-            unix_socket = options.socket,
-            db = database_name)
+        password=options.password
+    write_connection = MySQLdb.connect(
+        host = options.host,
+        user = options.user,
+        passwd = password,
+        port = options.port,
+        unix_socket = options.socket,
+        db = database_name)
 
     # If no read (monitored) host specified, then read+write hosts are the same one...
     if not options.monitored_host:
         return write_connection, write_connection;
 
+    verbose("monitored host is: %s" % options.monitored_host)
+    
+    if not options.monitored_user:
+        options.monitored_user = options.user
+        options.monitored_password = options.password
+        verbose("monitored host credentials undefined; using write host credentials")
+    if not options.monitored_socket:
+        options.monitored_socket = options.socket
+
     # Need to open a read connection
-    if options.defaults_file:
-        monitored_connection = MySQLdb.connect(
-            read_default_file = options.defaults_file,
-            host = options.monitored_host,
-            port = options.monitored_port,
-            unix_socket = options.monitored_socket)
-    else:
-        monitored_connection = MySQLdb.connect(
-            user = options.user,
-            passwd = password,
-            host = options.monitored_host,
-            port = options.monitored_port,
-            unix_socket = options.monitored_socket)
+    monitored_connection = MySQLdb.connect(
+        user = options.monitored_user,
+        passwd = options.monitored_password,
+        host = options.monitored_host,
+        port = options.monitored_port,
+        unix_socket = options.monitored_socket)
 
     return monitored_connection, write_connection;
 
@@ -3848,36 +3970,12 @@ def create_status_variables_views():
     create_custom_html_brief_view()
 
 
-def get_smtp_host():
-    if options.smtp_host:
-        return options.smtp_host
-    if config.has_option(config_scope, "smtp_host"):
-        return config.get(config_scope, "smtp_host")
-    return "localhost"
-
-
-def get_smtp_from():
-    if options.smtp_from:
-        return options.smtp_from
-    if config.has_option(config_scope, "smtp_from"):
-        return config.get(config_scope, "smtp_from")
-    return "mycheckpoint@localhost"
-
-
-def get_smtp_to():
-    if options.smtp_to:
-        return options.smtp_to.replace(" ","")
-    if config.has_option(config_scope, "smtp_to"):
-        return config.get(config_scope, "smtp_to").replace(" ","")
-    return "mycheckpoint@localhost"
-
-
 def send_email_message(description, subject, message, attachment=None):
     try:
-        smtp_to = get_smtp_to()
-        smtp_from = get_smtp_from()
-        smtp_host = get_smtp_host()
-
+        smtp_to = options.smtp_to
+        smtp_from = options.smtp_from
+        smtp_host = options.smtp_host
+        
         # Create the container (outer) email message.
         msg = MIMEMultipart()
         msg["Subject"] = subject
@@ -4230,7 +4328,9 @@ try:
     try:
         monitored_conn = None
         write_conn = None
-        (options, args) = parse_options()
+        options = None
+        args = None
+        parse_options()
 
         # The following are overwritten by the ANT build script, and indicate
         # the revision number (e.g. SVN) and build number (e.g. timestamp)
@@ -4243,21 +4343,6 @@ try:
         if not build_placeholder.isdigit():
             build_placeholder = "0"
         build_number = int(build_placeholder)
-        
-        defaults_file_name = None
-        default_defaults_file_name = "/etc/mycheckpoint.cnf" 
-        if not options.defaults_file:
-            if os.path.exists(default_defaults_file_name):
-                options.defaults_file = default_defaults_file_name
-        if options.skip_defaults_file:
-            options.defaults_file = None
-        if options.defaults_file:
-            defaults_file_name = options.defaults_file
-            verbose("Using %s as defaults file" % options.defaults_file)
-        config_scope = "mycheckpoint"
-        config = ConfigParser.ConfigParser()
-        if defaults_file_name:
-            config.read([defaults_file_name])
 
         verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009-2010 by Shlomi Noach" % (revision_number, build_number))
 
