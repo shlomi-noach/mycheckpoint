@@ -763,6 +763,7 @@ def fetch_status_variables():
     status_dict["os_cpu_nice"] = None
     status_dict["os_cpu_system"] = None
     status_dict["os_cpu_idle"] = None
+    status_dict["os_total_cpu_cores"] = None
     # OS Mem
     status_dict["os_mem_total_kb"] = None
     status_dict["os_mem_free_kb"] = None
@@ -783,15 +784,20 @@ def fetch_status_variables():
     if should_monitor_os():
         try:
             f = open("/proc/stat")
-            first_line = f.readline()
+            proc_stat_lines = f.readlines()
             f.close()
-
+            first_line = proc_stat_lines[0]
+            
             tokens = first_line.split()
             os_cpu_user, os_cpu_nice, os_cpu_system, os_cpu_idle = tokens[1:5]
             status_dict["os_cpu_user"] = int(os_cpu_user)
             status_dict["os_cpu_nice"] = int(os_cpu_nice)
             status_dict["os_cpu_system"] = int(os_cpu_system)
             status_dict["os_cpu_idle"] = int(os_cpu_idle)
+
+            cpu_lines = [proc_stat_line for proc_stat_line in proc_stat_lines if re.match("^cpu[\\d]+[\\s]", proc_stat_line)]            
+            status_dict["os_total_cpu_cores"] = len(cpu_lines)
+            
             verbose("OS CPU info recorded")
         except:
             verbose("Cannot read /proc/stat. Skipping")
@@ -3797,6 +3803,7 @@ def create_status_variables_views():
             IF(seconds_behind_master_psec >= 0, NULL, FLOOR(-seconds_behind_master/seconds_behind_master_psec)) AS estimated_slave_catchup_seconds,
 
             ROUND((os_loadavg_millis/1000), 2) AS os_loadavg,
+            os_total_cpu_cores,
             ROUND(100.0*(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff)/(os_cpu_user_diff + os_cpu_nice_diff + os_cpu_system_diff + os_cpu_idle_diff), 1) AS os_cpu_utilization_percent,
             ROUND(os_mem_total_kb/1000, 1) AS os_mem_total_mb,
             ROUND(os_mem_free_kb/1000, 1) AS os_mem_free_mb,
@@ -3873,7 +3880,7 @@ def create_status_variables_views():
         ("estimated_slave_catchup_seconds", "estimated_slave_catchup_seconds", True, False),
 
         ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True),
-        ("os_loadavg", "os_loadavg", True, False),
+        ("os_loadavg, os_total_cpu_cores", "os_loadavg", True, False),
         ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
         ("os_page_ins_psec, os_page_outs_psec", "os_page_io", True, False),
         ("os_swap_ins_psec, os_swap_outs_psec", "os_swap_io", True, False),
