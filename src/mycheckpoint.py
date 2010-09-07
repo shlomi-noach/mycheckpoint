@@ -44,11 +44,12 @@ except:
 
 
 def parse_options_old():
-    usage = """usage: mycheckpoint [options] [command [, command ...]]
+    usage = """usage: mycheckpoint [options] [command]
 
 See online documentation on http://code.openark.org/forge/mycheckpoint/documentation
 
 Available commands:
+  http
   deploy
   email_brief_report
     """
