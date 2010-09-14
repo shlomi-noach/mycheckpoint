@@ -1289,7 +1289,7 @@ def collect_custom_data():
         """
     query = query.replace("${database_name}", database_name)
     custom_updates = []
-    for custom_query in get_rows(query):
+    for custom_query in get_rows(query, write_conn):
         custom_query_id = int(custom_query["custom_query_id"])
         query_eval = custom_query["query_eval"]
         description = custom_query["description"]
@@ -1687,7 +1687,7 @@ def generate_alert_condition_query():
               enabled = 1
         """
     query = query.replace("${database_name}", database_name)
-    rows = get_rows(query)
+    rows = get_rows(query, write_conn)
     if not rows:
         return (None, None)
     
