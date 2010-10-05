@@ -2,6 +2,7 @@
 
 	<property name="python.distribution.dir" value="py-dist"/>
 	<property name="debian.distribution.dir" value="deb-dist"/>
+	<property name="rpm.distribution.dir" value="rpm-dist"/>
 	<property name="script.distribution.dir" value="script-dist"/>
 
 	<target name="clean">
@@ -31,41 +32,7 @@
 		<tstamp description="To be used as build number"/>
 		<echo>revision: ${svn.revision}</echo>
 	</target>
-	
-	<target name="dygraphs">
-		<mkdir dir="build/dygraphs"/>
-		<mkdir dir="build/dygraphs/tmp"/>
-		<concat destfile="build/dygraphs/tmp/dygraphs-concat.js">
-			<filelist>
-				<file name="dygraphs/dygraph-canvas.js"/>
-				<file name="dygraphs/dygraph.js"/>
-				<file name="dygraphs/rgbcolor/rgbcolor.js"/>
-				<file name="dygraphs/strftime/strftime.js"/>
-			</filelist>
-		</concat>
-		<java jar="dygraphs/yuicompressor-2.4.2.jar" fork="true" output="build/dygraphs/dygraph-combined.js">
-			<arg value="build/dygraphs/tmp/dygraphs-concat.js"/>
-		</java>
-		<java jar="dygraphs/yuicompressor-2.4.2.jar" fork="true" output="build/dygraphs/excanvas-min.js">
-			<arg value="dygraphs/excanvas.js"/>
-		</java>
-		<delete dir="build/dygraphs/tmp"/>
-	</target>
-	<target name="graphael">
-		<mkdir dir="build/graphael"/>
-		<mkdir dir="build/graphael/tmp"/>
-		<concat destfile="build/graphael/tmp/graphael-concat.js">
-			<filelist>
-				<file name="graphael/raphael.js"/>
-				<file name="graphael/g.raphael.js"/>
-				<file name="graphael/g.line.js"/>
-			</filelist>
-		</concat>
-		<java jar="graphael/yuicompressor-2.4.2.jar" fork="true" output="build/graphael/graphael-combined.js">
-			<arg value="build/graphael/tmp/graphael-concat.js"/>
-		</java>
-		<delete dir="build/graphael/tmp"/>
-	</target>
+
 	<target name="openark-charts">
 		<mkdir dir="build/openark-charts"/>
 		<java jar="openark-charts/yuicompressor-2.4.2.jar" fork="true" output="build/openark-charts/openark-lchart-min.js">
@@ -107,6 +74,23 @@
 		</move>
 	</target>
 
+	<target name="rpm" depends="revnumber, scripts">
+		<mkdir dir="${rpm.distribution.dir}"/>
+		<copy file="py-dist-cfg/setup.py" todir="build"/>
+		<replace file="build/setup.py" token="revision.placeholder" value="${svn.revision}"/>
+		<copy file="py-dist-cfg/MANIFEST.in" todir="build"/>
+		<copy todir="build/">
+			<fileset dir="doc"/>
+		</copy>
+		<exec dir="build" executable="python">
+			<arg value="setup.py"/>
+			<arg value="bdist_rpm"/>
+		</exec>
+		<move todir="${rpm.distribution.dir}">
+			<fileset dir="build/dist"/>
+		</move>
+	</target>
+
 	<target name="deb" depends="revnumber, scripts">
 		<mkdir dir="${debian.distribution.dir}/mycheckpoint/usr/bin"/>
 		<mkdir dir="${debian.distribution.dir}/mycheckpoint/DEBIAN"/>
@@ -132,18 +116,19 @@
 		<copy file="build/scripts/mycheckpoint" tofile="${script.distribution.dir}/mycheckpoint-${svn.revision}"/>
 	</target>
 
-	<target name="dist" depends="clean, deb, python-module, script-dist">
+	<target name="dist" depends="clean, deb, python-module, rpm, script-dist">
 		<mkdir dir="dist"/>
 		<copy todir="dist">
 			<fileset dir="py-dist"/>
 		</copy>
 		<copy todir="dist">
+			<fileset dir="script-dist"/>
 			<fileset dir="deb-dist">
 				<include name="*.deb"/>
 			</fileset>
-		</copy>
-		<copy todir="dist">
-			<fileset dir="script-dist"/>
+			<fileset dir="rpm-dist">
+				<include name="*.rpm"/>
+			</fileset>
 		</copy>
 		<echo>dist: rev ${svn.revision}</echo>
 	</target>
