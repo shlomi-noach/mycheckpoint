@@ -43,53 +43,6 @@ except:
 
 
 
-def parse_options_old():
-    usage = """usage: mycheckpoint [options] [command]
-
-See online documentation on http://code.openark.org/forge/mycheckpoint/documentation
-
-Available commands:
-  http
-  deploy
-  email_brief_report
-    """
-    parser = OptionParser(usage=usage)
-    parser.add_option("-u", "--user", dest="user", default="", help="MySQL user")
-    parser.add_option("-H", "--host", dest="host", default="localhost", help="MySQL host. Written to by this application (default: localhost)")
-    parser.add_option("-p", "--password", dest="password", default="", help="MySQL password")
-    parser.add_option("--ask-pass", action="store_true", dest="prompt_password", help="Prompt for password")
-    parser.add_option("-P", "--port", dest="port", type="int", default=3306, help="TCP/IP port (default: 3306)")
-    parser.add_option("-S", "--socket", dest="socket", default="/var/run/mysqld/mysql.sock", help="MySQL socket file. Only applies when host is localhost (default: /var/run/mysqld/mysql.sock)")
-    parser.add_option("", "--monitored-host", dest="monitored_host", default=None, help="MySQL monitored host. Specity this when the host you're monitoring is not the same one you're writing to (default: none, host specified by --host is both monitored and written to)")
-    parser.add_option("", "--monitored-port", dest="monitored_port", type="int", default="3306", help="Monitored host's TCP/IP port (default: 3306). Only applies when monitored-host is specified")
-    parser.add_option("", "--monitored-socket", dest="monitored_socket", default="/var/run/mysqld/mysql.sock", help="Monitored host MySQL socket file. Only applies when monitored-host is specified and is localhost (default: /var/run/mysqld/mysql.sock)")
-    parser.add_option("", "--monitored-user", dest="monitored_user", default=None, help="MySQL monitored server user name. Only applies when monitored-host is specified (default: same as user)")
-    parser.add_option("", "--monitored-password", dest="monitored_password", default=None, help="MySQL monitored server password. Only applies when monitored-host is specified (default: same as password)")
-    parser.add_option("", "--defaults-file", dest="defaults_file", default="", help="Read from MySQL configuration file. Overrides all other options")
-    parser.add_option("-d", "--database", dest="database", default="mycheckpoint", help="Database name (required unless query uses fully qualified table names)")
-    parser.add_option("", "--purge-days", dest="purge_days", type="int", default=182, help="Purge data older than specified amount of days (default: 182)")
-    parser.add_option("", "--disable-bin-log", dest="disable_bin_log", action="store_true", default=False, help="Disable binary logging (binary logging enabled by default)")
-    parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
-    parser.add_option("", "--skip-check-replication", dest="skip_check_replication", action="store_true", default=False, help="Skip checking on master/slave status variables")
-    parser.add_option("-o", "--force-os-monitoring", dest="force_os_monitoring", action="store_true", default=False, help="Monitor OS even if monitored host does does nto appear to be the local host. Use when you are certain the monitored host is local")
-    parser.add_option("", "--skip-alerts", dest="skip_alerts", action="store_true", default=False, help="Skip evaluating alert conditions as well as sending email notifications")
-    parser.add_option("", "--skip-emails", dest="skip_emails", action="store_true", default=False, help="Skip sending email notifications")
-    parser.add_option("", "--force-emails", dest="force_emails", action="store_true", default=False, help="Force sending email notifications even if there's nothing wrong")
-    parser.add_option("", "--skip-custom", dest="skip_custom", action="store_true", default=False, help="Skip custom query execution and evaluation")
-    parser.add_option("", "--skip-defaults-file", dest="skip_defaults_file", action="store_true", default=False, help="Do not read defaults file. Overrides --defaults-file and ignores /etc/mycheckpoint.cnf")
-    parser.add_option("", "--chart-width", dest="chart_width", type="int", default=370, help="Chart image width (default: 370, min value: 150)")
-    parser.add_option("", "--chart-height", dest="chart_height", type="int", default=180, help="Chart image height (default: 180, min value: 100)")
-    parser.add_option("", "--chart-service-url", dest="chart_service_url", default="http://chart.apis.google.com/chart", help="Url to Google charts API (default: http://chart.apis.google.com/chart)")
-    parser.add_option("", "--smtp-host", dest="smtp_host", default=None, help="SMTP mail server host name or IP")
-    parser.add_option("", "--smtp-from", dest="smtp_from", default=None, help="Address to use as mail sender")
-    parser.add_option("", "--smtp-to", dest="smtp_to", default=None, help="Comma delimited email addresses to send emails to")
-    parser.add_option("", "--http-port", dest="http_port", type="int", default=12306, help="Socket to listen on when running as web server (argument is http)")
-    parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
-    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
-    return parser.parse_args()
-
-
-
 def parse_options():
     global options
     global args
@@ -99,6 +52,7 @@ def parse_options():
 See online documentation on http://code.openark.org/forge/mycheckpoint/documentation
 
 Available commands:
+  http
   deploy
   email_brief_report
     """
@@ -116,6 +70,7 @@ Available commands:
     parser.add_option("", "--monitored-password", dest="monitored_password", help="MySQL monitored server password. Only applies when monitored-host is specified (default: same as password)")
     parser.add_option("", "--defaults-file", dest="defaults_file", help="Read from MySQL configuration file. Overrides all other options")
     parser.add_option("-d", "--database", dest="database", help="Database name (required unless query uses fully qualified table names)")
+    parser.add_option("", "--skip-aggregation", dest="skip_aggregation", action="store_true", default=False, help="Skip creating and maintaining aggregation tables")
     parser.add_option("", "--purge-days", dest="purge_days", type="int", help="Purge data older than specified amount of days (default: 182)")
     parser.add_option("", "--disable-bin-log", dest="disable_bin_log", action="store_true", help="Disable binary logging (binary logging enabled by default)")
     parser.add_option("", "--skip-disable-bin-log", dest="disable_bin_log", action="store_false", help="Skip disabling the binary logging (this is default behaviour; binary logging enabled by default)")
@@ -155,6 +110,7 @@ Available commands:
         "monitored_password": None,
         "defaults_file": "",
         "database": "mycheckpoint",
+        "skip_aggregation": False,
         "purge_days": 182,
         "disable_bin_log": False,
         "skip_check_replication": False,
@@ -315,6 +271,20 @@ def get_last_insert_id():
     query = "SELECT LAST_INSERT_ID() AS id"
     row = get_row(query, write_conn)
     return int(row["id"])
+
+
+def get_last_written_timestamp():
+    query = """
+            SELECT 
+              CONCAT(ts, '') AS ts_as_string 
+            FROM 
+              %s.%s
+            WHERE 
+              id = %d
+        """ % (database_name, table_name, status_variables_insert_id)
+    
+    row = get_row(query)
+    return row["ts_as_string"]
 
 
 def get_current_timestamp():
@@ -1310,7 +1280,7 @@ def collect_custom_data():
               id = %d""" % (
             database_name, table_name, 
             ",".join(custom_updates), 
-            get_last_insert_id())
+            status_variables_insert_id)
         act_query(query) 
 
 
@@ -1953,6 +1923,49 @@ def upgrade_status_variables_table():
         """ % (database_name, table_name, ",\n".join(alter_statements))
         act_query(query)
         verbose("status_variables table upgraded")
+    return len(alter_statements)
+
+    
+def upgrade_status_variables_aggregation_table(aggregation_table_name):
+    # We should have the exact same set of columns as in sv_sample
+    query = """
+            SHOW COLUMNS FROM %s.sv_sample
+        """ % (database_name,)
+    sv_sample_columns = [row["Field"] for row in get_rows(query, write_conn)]
+
+    query = """
+            SHOW COLUMNS FROM %s.%s
+        """ % (database_name, aggregation_table_name)
+    existing_columns = [row["Field"] for row in get_rows(query, write_conn)]
+
+    new_columns = [column_name for column_name in sv_sample_columns if column_name not in existing_columns]
+    alter_statements = []
+    
+    if new_columns:
+        verbose("Will add the following columns to %s: %s" % (aggregation_table_name, ", ".join(new_columns)))
+        diff_columns = [column_name for column_name in new_columns if column_name.endswith("_diff")]
+        psec_columns = [column_name for column_name in new_columns if column_name.endswith("_psec")]
+        normal_columns = [column_name for column_name in new_columns if (column_name not in diff_columns and column_name not in psec_columns)]
+        alter_statements.extend(["ADD COLUMN %s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in normal_columns])
+        alter_statements.extend(["ADD COLUMN %s BIGINT " % (column_name,) for column_name in diff_columns])
+        alter_statements.extend(["ADD COLUMN %s DECIMAL(23,2)" % (column_name,) for column_name in psec_columns])
+    # TODO: remove unused columns
+    # ...
+    if alter_statements:
+        query = """ALTER TABLE %s.%s
+                %s
+        """ % (database_name, aggregation_table_name, ",\n".join(alter_statements))
+        act_query(query)
+        verbose("%s table upgraded" % aggregation_table_name)
+    return len(alter_statements)
+
+    
+def upgrade_status_variables_hour_aggregation_table():
+    return upgrade_status_variables_aggregation_table("status_variables_aggregated_hour")
+
+
+def upgrade_status_variables_day_aggregation_table():
+    return upgrade_status_variables_aggregation_table("status_variables_aggregated_day")
 
 
 def create_status_variables_latest_view():
@@ -2049,32 +2062,48 @@ def create_status_variables_sample_view():
 
 
 def create_status_variables_hour_view():
-    global_variables, status_columns = get_variables_and_status_columns()
-
-    global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
-    status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
-    sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
-    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
-        VIEW ${database_name}.sv_hour AS
-          SELECT
-            MIN(id) AS id,
-            DATE(ts) + INTERVAL HOUR(ts) HOUR AS ts,
-            DATE(ts) + INTERVAL (HOUR(ts) + 1) HOUR AS end_ts,
-            SUM(ts_diff_seconds) AS ts_diff_seconds,
-            %s,
-            %s,
-            %s,
-            %s
-          FROM
-            ${database_name}.sv_sample
-          GROUP BY DATE(ts), HOUR(ts)
-    """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    if options.skip_aggregation:
+        # Rely on sv_sample
+        global_variables, status_columns = get_variables_and_status_columns()
+    
+        global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
+        status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
+        sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
+        avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = TEMPTABLE
+            DEFINER = CURRENT_USER
+            SQL SECURITY INVOKER
+            VIEW ${database_name}.sv_hour AS
+              SELECT
+                MIN(id) AS id,
+                DATE(ts) + INTERVAL HOUR(ts) HOUR AS ts,
+                DATE(ts) + INTERVAL (HOUR(ts) + 1) HOUR AS end_ts,
+                SUM(ts_diff_seconds) AS ts_diff_seconds,
+                %s,
+                %s,
+                %s,
+                %s
+              FROM
+                ${database_name}.sv_sample
+              GROUP BY DATE(ts), HOUR(ts)
+        """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    else:
+        # Rely on aggregation table
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = MERGE
+            DEFINER = CURRENT_USER
+            SQL SECURITY INVOKER
+            VIEW ${database_name}.sv_hour AS
+              SELECT
+                *
+              FROM
+                ${database_name}.status_variables_aggregated_hour
+        """ 
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
@@ -2082,37 +2111,131 @@ def create_status_variables_hour_view():
 
 
 def create_status_variables_day_view():
-    global_variables, status_columns = get_variables_and_status_columns()
-
-    global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
-    status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
-    sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
-    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
-    query = """
-        CREATE
-        OR REPLACE
-        ALGORITHM = TEMPTABLE
-        DEFINER = CURRENT_USER
-        SQL SECURITY INVOKER
-        VIEW ${database_name}.sv_day AS
-          SELECT
-            MIN(id) AS id,
-            DATE(ts) AS ts,
-            DATE(ts) + INTERVAL 1 DAY AS end_ts,
-            SUM(ts_diff_seconds) AS ts_diff_seconds,
-            %s,
-            %s,
-            %s,
-            %s
-          FROM
-            ${database_name}.sv_sample
-          GROUP BY DATE(ts)
-    """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    if options.skip_aggregation:
+        # Rely on sv_sample
+        global_variables, status_columns = get_variables_and_status_columns()
+    
+        global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
+        status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
+        sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
+        avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = TEMPTABLE
+            DEFINER = CURRENT_USER
+            SQL SECURITY INVOKER
+            VIEW ${database_name}.sv_day AS
+              SELECT
+                MIN(id) AS id,
+                DATE(ts) AS ts,
+                DATE(ts) + INTERVAL 1 DAY AS end_ts,
+                SUM(ts_diff_seconds) AS ts_diff_seconds,
+                %s,
+                %s,
+                %s,
+                %s
+              FROM
+                ${database_name}.sv_sample
+              GROUP BY DATE(ts)
+        """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    else:
+        # Rely on aggregation table
+        query = """
+            CREATE
+            OR REPLACE
+            ALGORITHM = MERGE
+            DEFINER = CURRENT_USER
+            SQL SECURITY INVOKER
+            VIEW ${database_name}.sv_day AS
+              SELECT
+                *
+              FROM
+                ${database_name}.status_variables_aggregated_day
+        """ 
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
     verbose("sv_day view created")
 
+
+
+def create_status_variables_hour_aggregation_table():
+    if options.skip_aggregation:
+        return
+    
+    global_variables, status_columns = get_variables_and_status_columns()
+
+    global_variables_columns_listing = ",\n".join(["%s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in get_status_variables_columns()])
+    sum_diff_columns_listing = ",\n".join(["%s_diff BIGINT" % (column_name,) for column_name in status_columns])
+    avg_psec_columns_listing = ",\n".join(["%s_psec DECIMAL(23,2)" % (column_name,) for column_name in status_columns])
+    
+    aggregation_table_name = "status_variables_aggregated_hour";
+    query = """CREATE TABLE %s.%s (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            end_ts TIMESTAMP,
+            ts_diff_seconds INT UNSIGNED,         
+            %s,
+            %s,
+            %s,
+            UNIQUE KEY ts (ts)
+       )
+        """ % (database_name, aggregation_table_name, global_variables_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing)
+    
+    query = query.replace("${database_name}", database_name)
+
+    table_created = False
+    try:
+        act_query(query)
+        table_created = True
+    except MySQLdb.Error:
+        pass
+
+    if table_created:
+        verbose("%s table created" % aggregation_table_name)
+    else:
+        verbose("%s table exists" % aggregation_table_name)
+    return table_created
+
+
+def create_status_variables_day_aggregation_table():
+    if options.skip_aggregation:
+        return
+    
+    global_variables, status_columns = get_variables_and_status_columns()
+
+    global_variables_columns_listing = ",\n".join(["%s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in get_status_variables_columns()])
+    sum_diff_columns_listing = ",\n".join(["%s_diff BIGINT" % (column_name,) for column_name in status_columns])
+    avg_psec_columns_listing = ",\n".join(["%s_psec DECIMAL(23,2)" % (column_name,) for column_name in status_columns])
+    
+    aggregation_table_name = "status_variables_aggregated_day";
+    query = """CREATE TABLE %s.%s (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ts DATE,
+            end_ts DATE,
+            ts_diff_seconds INT UNSIGNED,         
+            %s,
+            %s,
+            %s,
+            UNIQUE KEY ts (ts)
+       )
+        """ % (database_name, aggregation_table_name, global_variables_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing)
+    
+    query = query.replace("${database_name}", database_name)
+
+    table_created = False
+    try:
+        act_query(query)
+        table_created = True
+    except MySQLdb.Error:
+        pass
+
+    if table_created:
+        verbose("%s table created" % aggregation_table_name)
+    else:
+        verbose("%s table exists" % aggregation_table_name)
+    return table_created
 
 
 def create_report_human_views():
@@ -2722,7 +2845,7 @@ def create_report_chart_labels_views():
     verbose("report charts labels views created")
 
 
-def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_to_100=False):
+def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_to_100=False, chart_colors = []):
     chart_columns_list = [column_name.strip() for column_name in chart_columns.lower().split(",")]
 
     chart_column_min_listing = ",".join(["%s_min" % column_name for column_name in chart_columns_list])
@@ -2747,7 +2870,11 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
 
     piped_chart_column_listing = "|".join(chart_columns_list)
 
-    chart_colors = ["ff8c00", "4682b4", "9acd32", "dc143c", "9932cc", "ffd700", "191970", "7fffd4", "808080", "dda0dd"][0:len(chart_columns_list)]
+    chart_colors = [chart_color.replace("#", "") for chart_color in chart_colors]
+    chart_colors = None
+    if (not chart_colors) or (len(chart_colors) < len(chart_columns_list)):
+        chart_colors = ["ff8c00", "4682b4", "9acd32", "dc143c", "9932cc", "ffd700", "191970", "7fffd4", "808080", "dda0dd"]
+    chart_colors = chart_colors[0:len(chart_columns_list)]
 
     # '_' is used for missing (== NULL) values.
     column_values = [ """
@@ -2842,7 +2969,7 @@ def generate_google_chart_query(chart_columns, alias, scale_from_0=False, scale_
 
 def create_report_google_chart_views(charts_list):
     for view_name_extension in ["sample", "hour", "day"]:
-        charts_queries = [generate_google_chart_query(chart_columns, alias, scale_from_0, scale_to_100) for (chart_columns, alias, scale_from_0, scale_to_100) in charts_list]
+        charts_queries = [generate_google_chart_query(chart_columns, alias, scale_from_0, scale_to_100, chart_colors) for (chart_columns, alias, scale_from_0, scale_to_100, chart_colors) in charts_list]
         charts_query = ",".join(charts_queries)
         query = """
             CREATE
@@ -3678,11 +3805,18 @@ def create_report_views(columns_listing):
     verbose("report views created")
 
 
-def create_status_variables_views():
+def create_status_variables_views_and_aggregations():
     # General status variables views:
     create_status_variables_latest_view()
     create_status_variables_diff_view()
     create_status_variables_sample_view()
+    # If aggregation tables are enabled, then the hour and day views rely on aggregation tables rather than on sv_sample
+    if not options.skip_aggregation:
+        # aggregation is enabled
+        if not create_status_variables_hour_aggregation_table():
+            upgrade_status_variables_hour_aggregation_table()
+        if not create_status_variables_day_aggregation_table():
+            upgrade_status_variables_day_aggregation_table()
     create_status_variables_hour_view()
     create_status_variables_day_view()
     create_status_variables_parameter_change_view()
@@ -3844,58 +3978,58 @@ def create_status_variables_views():
     create_report_chart_day_timeseries_view()
     create_report_chart_labels_views()
     report_chart_views = [
-        ("uptime_percent", "uptime_percent", True, True),
+        ("uptime_percent", "uptime_percent", True, True, ["#ff8c00", ]),
 
-        ("innodb_read_hit_percent", "innodb_read_hit_percent", False, False),
-        ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True, False),
-        ("innodb_buffer_pool_used_percent", "innodb_buffer_pool_used_percent", True, True),
-        ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True, False),
-        ("innodb_row_lock_waits_psec", "innodb_row_lock_waits_psec", True, False),
+        ("innodb_read_hit_percent", "innodb_read_hit_percent", False, False, ["#9acd32", ]),
+        ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True, False, ["#4682b4", "#9acd32", ]),
+        ("innodb_buffer_pool_used_percent", "innodb_buffer_pool_used_percent", True, True, ["#dda0dd", ]),
+        ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True, False, ["9932cc", ]),
+        ("innodb_row_lock_waits_psec", "innodb_row_lock_waits_psec", True, False, ["808080", ]),
 
-        ("mega_bytes_sent_psec, mega_bytes_received_psec", "bytes_io", True, False),
+        ("mega_bytes_sent_psec, mega_bytes_received_psec", "bytes_io", True, False, ["#7fffd4", "808080", ]),
 
-        ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True, True),
-        ("key_read_requests_psec, key_reads_psec, key_write_requests_psec, key_writes_psec", "myisam_key_hit", True, False),
+        ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True, True, ["191970", ]),
+        ("key_read_requests_psec, key_reads_psec, key_write_requests_psec, key_writes_psec", "myisam_key_hit", True, False, ["#9acd32", "#ff8c00", "#ffd700", "#4682b4", ]),
 
-        ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False),
-        ("queries_psec, questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False),
-        ("innodb_rows_inserted_psec, innodb_rows_deleted_psec, innodb_rows_updated_psec", "innodb_rows", True, False),
+        ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False, ["#dc143c", "#ffd700", "#4682b4", "9acd32", "808080", ]),
+        ("queries_psec, questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False, ["#7fffd4", "#ff8c00", "#4682b4", "9932cc", "ffd700", ]),
+        ("innodb_rows_inserted_psec, innodb_rows_deleted_psec, innodb_rows_updated_psec", "innodb_rows", True, False, ["#dda0dd", "#7fffd4", "#4682b4", ]),
 
-        ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True, False),
-        ("handler_read_rnd_psec, handler_read_rnd_next_psec, handler_read_first_psec, handler_read_next_psec, handler_read_prev_psec, handler_read_key_psec", "read_patterns", True, False),
+        ("created_tmp_tables_psec, created_tmp_disk_tables_psec", "tmp_tables", True, False, ["#9932cc", "#ff8c00", ]),
+        ("handler_read_rnd_psec, handler_read_rnd_next_psec, handler_read_first_psec, handler_read_next_psec, handler_read_prev_psec, handler_read_key_psec", "read_patterns", True, False, ["#ff8c00", "#ffd700", "#7fffd4", "#dc143c", "9acd32", "808080" ]),
 
-        ("table_locks_waited_psec", "table_locks_waited_psec", True, False),
+        ("table_locks_waited_psec", "table_locks_waited_psec", True, False, ["dc143c", ]),
 
-        ("table_cache_size, open_tables", "table_cache_use", True, False),
-        ("opened_tables_psec", "opened_tables_psec", True, False),
+        ("table_cache_size, open_tables", "table_cache_use", True, False, ["#9932cc", "7fffd4", ]),
+        ("opened_tables_psec", "opened_tables_psec", True, False, ["#4682b4", "dc143c", ]),
 
-        ("connections_psec, aborted_connects_psec", "connections_psec", True, False),
-        ("max_connections, threads_connected, threads_running", "connections_usage", True, False),
+        ("connections_psec, aborted_connects_psec", "connections_psec", True, False, ["#ff8c00", "#dda0dd", ]),
+        ("max_connections, threads_connected, threads_running", "connections_usage", True, False, ["#808080", "#ffd700", "#7fffd4", ]),
 
-        ("thread_cache_size, threads_cached", "thread_cache_use", True, False),
-        ("threads_created_psec", "threads_created_psec", True, False),
+        ("thread_cache_size, threads_cached", "thread_cache_use", True, False, ["#808080", "#ff8c00", ]),
+        ("threads_created_psec", "threads_created_psec", True, False, ["9932cc", ]),
 
-        ("relay_log_space_limit_mb, relay_log_space_mb", "relay_log_used_mb", True, False),
-        ("seconds_behind_master", "seconds_behind_master", True, True),
-        ("seconds_behind_master_psec", "seconds_behind_master_psec", True, False),
-        ("estimated_slave_catchup_seconds", "estimated_slave_catchup_seconds", True, False),
+        ("relay_log_space_limit_mb, relay_log_space_mb", "relay_log_used_mb", True, False, ["191970", ]),
+        ("seconds_behind_master", "seconds_behind_master", True, True, ["#005E5E", "#0F006C", "#538F00", ]),
+        ("seconds_behind_master_psec", "seconds_behind_master_psec", True, False, ["4682b4", ]),
+        ("estimated_slave_catchup_seconds", "estimated_slave_catchup_seconds", True, False, ["9932cc", ]),
 
-        ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True),
-        ("os_loadavg, os_total_cpu_cores", "os_loadavg", True, False),
-        ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False),
-        ("os_page_ins_psec, os_page_outs_psec", "os_page_io", True, False),
-        ("os_swap_ins_psec, os_swap_outs_psec", "os_swap_io", True, False),
+        ("os_cpu_utilization_percent", "os_cpu_utilization_percent", True, True, ["ff8c00", ]),
+        ("os_loadavg, os_total_cpu_cores", "os_loadavg", True, False, ["dc143c", "7fffd4", ]),
+        ("os_mem_total_mb, os_mem_used_mb, os_mem_active_mb, os_swap_total_mb, os_swap_used_mb", "os_memory", True, False, ["#7fffd4", "#191970", "#ffd700", "#4682b4", "#dc143c", ]),
+        ("os_page_ins_psec, os_page_outs_psec", "os_page_io", True, False, ["#9acd32", "#ff8c00", ]),
+        ("os_swap_ins_psec, os_swap_outs_psec", "os_swap_io", True, False, ["#4682b4", "#dc143c", ]),
 
-        ("os_root_mountpoint_usage_percent, os_datadir_mountpoint_usage_percent, os_tmpdir_mountpoint_usage_percent", "os_mountpoints_usage_percent", True, True),
+        ("os_root_mountpoint_usage_percent, os_datadir_mountpoint_usage_percent, os_tmpdir_mountpoint_usage_percent", "os_mountpoints_usage_percent", True, True, ["#ff8c00", "#ffd700", "#4682b4", ]),
         ]
     report_chart_views.extend([
-        (custom_variable, custom_variable, True, False) for custom_variable in get_custom_status_variables()
+        (custom_variable, custom_variable, True, False, []) for custom_variable in get_custom_status_variables()
         ])
     report_chart_views.extend([
-        (custom_variable, custom_variable, True, False) for custom_variable in get_custom_time_status_variables()
+        (custom_variable, custom_variable, True, False, []) for custom_variable in get_custom_time_status_variables()
         ])
     report_chart_views.extend([
-        (custom_variable, custom_variable, True, False) for custom_variable in get_custom_status_variables_psec()
+        (custom_variable, custom_variable, True, False, []) for custom_variable in get_custom_status_variables_psec()
         ])
     create_report_google_chart_views(report_chart_views)
     report_24_7_columns = [
@@ -4076,6 +4210,9 @@ def disable_bin_log():
 
 
 def collect_status_variables():
+    global status_variables_insert_id
+    global status_variables_insert_timestamp
+    
     disable_bin_log()
 
     status_dict = fetch_status_variables()
@@ -4095,7 +4232,154 @@ def collect_status_variables():
         variable_values)
     num_affected_rows = act_query(query)
     if num_affected_rows:
-        verbose("New entry added")
+        status_variables_insert_id = get_last_insert_id()
+        status_variables_insert_timestamp = get_last_written_timestamp()
+        verbose("New entry added: id=%d; ts=%s" % (status_variables_insert_id, status_variables_insert_timestamp,))
+
+
+def write_status_variables_hour_aggregation(aggregation_timestamp):
+    if options.skip_aggregation:
+        return
+    
+    global_variables, status_columns = get_variables_and_status_columns()
+    
+    global_variables_columns_names = ",\n".join(global_variables)
+    status_columns_names = ",\n".join(status_columns)
+    status_columns_diff_names = ",\n".join(["%s_diff" % (column_name,) for column_name in status_columns])
+    status_columns_psec_names = ",\n".join(["%s_psec" % (column_name,) for column_name in status_columns])
+
+    global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
+    status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
+    sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
+    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
+    query = """
+        REPLACE INTO ${database_name}.status_variables_aggregated_hour 
+          (
+            id, 
+            ts, 
+            end_ts, 
+            ts_diff_seconds, 
+            %s, 
+            %s, 
+            %s, 
+            %s
+          )
+          SELECT
+            MIN(id) AS id,
+            DATE(ts) + INTERVAL HOUR(ts) HOUR AS ts,
+            DATE(ts) + INTERVAL (HOUR(ts) + 1) HOUR AS end_ts,
+            SUM(ts_diff_seconds) AS ts_diff_seconds,
+            %s,
+            %s,
+            %s,
+            %s
+          FROM
+            ${database_name}.sv_sample
+          WHERE
+            ts >= DATE('${aggregation_timestamp}') + INTERVAL HOUR('${aggregation_timestamp}') HOUR
+            AND ts < DATE('${aggregation_timestamp}') + INTERVAL (HOUR('${aggregation_timestamp}') + 1) HOUR
+          GROUP BY DATE(ts), HOUR(ts)
+    """ % (status_columns_names, status_columns_diff_names, status_columns_psec_names, global_variables_columns_names, 
+           status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${aggregation_timestamp}", aggregation_timestamp)
+
+    num_affected_rows = act_query(query)
+    if num_affected_rows:
+        verbose("%s Entry aggregated into status_variables_aggregated_day" % aggregation_timestamp)
+
+
+def write_status_variables_day_aggregation(aggregation_timestamp):
+    if options.skip_aggregation:
+        return
+    
+    global_variables, status_columns = get_variables_and_status_columns()
+    
+    global_variables_columns_names = ",\n".join(global_variables)
+    status_columns_names = ",\n".join(status_columns)
+    status_columns_diff_names = ",\n".join(["%s_diff" % (column_name,) for column_name in status_columns])
+    status_columns_psec_names = ",\n".join(["%s_psec" % (column_name,) for column_name in status_columns])
+
+    global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
+    status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
+    sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
+    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
+    query = """
+        REPLACE INTO ${database_name}.status_variables_aggregated_day 
+          (
+            id, 
+            ts, 
+            end_ts, 
+            ts_diff_seconds, 
+            %s, 
+            %s, 
+            %s, 
+            %s
+          )
+          SELECT
+            MIN(id) AS id,
+            DATE(ts) AS ts,
+            DATE(ts) + INTERVAL 1 DAY AS end_ts,
+            SUM(ts_diff_seconds) AS ts_diff_seconds,
+            %s,
+            %s,
+            %s,
+            %s
+          FROM
+            ${database_name}.sv_sample
+          WHERE
+            ts >= DATE('${aggregation_timestamp}')
+            AND ts < DATE('${aggregation_timestamp}') + INTERVAL 1 DAY
+          GROUP BY DATE(ts)
+    """ % (status_columns_names, status_columns_diff_names, status_columns_psec_names, global_variables_columns_names, 
+           status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${aggregation_timestamp}", aggregation_timestamp)
+
+    num_affected_rows = act_query(query)
+    if num_affected_rows:
+        verbose("%s Entry aggregated into status_variables_aggregated_day" % aggregation_timestamp)
+
+
+def detect_status_variables_hour_aggregation_missing_values():
+    if options.skip_aggregation:
+        return
+    
+    query = """
+            SELECT 
+              DISTINCT CONCAT(DATE(sv_sample.ts) + INTERVAL HOUR(sv_sample.ts) HOUR, '') AS aggregation_timestamp
+            FROM 
+              ${database_name}.sv_sample LEFT JOIN ${database_name}.status_variables_aggregated_hour 
+                ON (DATE(sv_sample.ts) + INTERVAL HOUR(sv_sample.ts) HOUR = status_variables_aggregated_hour.ts) 
+            WHERE 
+              status_variables_aggregated_hour.id IS NULL
+        """
+    query = query.replace("${database_name}", database_name)
+    rows = get_rows(query, write_conn)
+
+    for row in rows:
+        aggregation_timestamp = row["aggregation_timestamp"]
+        write_status_variables_hour_aggregation(aggregation_timestamp)
+
+
+def detect_status_variables_day_aggregation_missing_values():
+    if options.skip_aggregation:
+        return
+    
+    query = """
+            SELECT 
+              DISTINCT CONCAT(DATE(sv_sample.ts), '') AS aggregation_timestamp
+            FROM 
+              ${database_name}.sv_sample LEFT JOIN ${database_name}.status_variables_aggregated_day ON (DATE(sv_sample.ts) = status_variables_aggregated_day.ts) 
+            WHERE 
+              status_variables_aggregated_day.id IS NULL
+        """
+    query = query.replace("${database_name}", database_name)
+    rows = get_rows(query, write_conn)
+
+    for row in rows:
+        aggregation_timestamp = row["aggregation_timestamp"]
+        write_status_variables_day_aggregation(aggregation_timestamp)
 
 
 def purge_status_variables():
@@ -4183,9 +4467,198 @@ def http_get_view_html(http_database_name, http_view_name):
     html = row["html"]
     return html, query
 
+def http_get_html_embed(http_database_name, http_view_name, html_query):
+    pages_list = [
+        ("sv_report_html_brief", "Brief"),
+        ("sv_custom_html_brief", "Custom brief"),
+        ("alert_pending_html_view", "Alert"),
+        ("sv_report_html_24_7", "24/7"),
+        ("sv_report_html", "Full"),
+        ("sv_custom_html", "Custom full"),
+        ]
+    pages_links_list = []
+    for (view_name, view_description) in pages_list:
+        if view_name == http_view_name:
+            page_link = "<strong>%s</strong>" % view_description
+        else:
+            page_link = """<a href="/%s/%s">%s</a>""" % (http_database_name, view_name, view_description,)
+        pages_links_list.append(page_link)
+        
+    generating_query_text = ""
+    if html_query:
+        generating_query_text = "This page was generated using this query: <strong>%s</strong><br/>" % html_query
 
+    html_embed = """
+        <div class="http_html_embed">
+            <a href="/">Home</a> | mycheckpoint databases [<a href="/refresh-databases-list"><i>refresh</i></a>]: %s<br/>
+            Reports: %s<br/>
+            %s
+        </div>
+        """ % (http_get_html_databases_list(http_database_name), " | ".join(pages_links_list), generating_query_text)
+    return html_embed
+
+    
 def http_embed_code(html, anchor, code):
     html = html.replace(anchor, "%s%s" % (anchor, code))
+    return html
+
+
+def http_get_chart_zoom_html(http_database_name, chart_alias):
+    """
+    This HTML page is dynamically generated by the http server. There is no supporting view here.
+    """
+    js_queries = []
+    div_queries = []
+    for view_name_extension in ["sample", "hour", "day"]:
+        js_query = """IFNULL(
+            CONCAT('
+                new openark_lchart(
+                    document.getElementById("chart_div_${chart_alias}_${view_name_extension}"), 
+                    {width: ${chart_width}, height: ${chart_height}}
+                    ).read_google_url("', sv_report_chart_${view_name_extension}.${chart_alias}_extended, '");
+                '),
+            '')
+        """ 
+        js_query = js_query.replace("${view_name_extension}", view_name_extension)
+        js_queries.append(js_query)
+        div_query = """'
+            <div class="row">
+               <div class="chart_container">
+                    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+                    <h3>', IFNULL(CONCAT('<a href="', sv_report_chart_${view_name_extension}.${chart_alias}, '">[url]</a>'), 'N/A'), '</h3>
+                    <div id="chart_div_${chart_alias}_${view_name_extension}" class="chart"></div>
+                </div>
+                <div class="clear"></div>
+            </div>'
+            """
+        div_query = div_query.replace("${view_name_extension}", view_name_extension)
+        div_queries.append(div_query)
+
+    query = """
+      SELECT CONCAT('
+        <html>
+            <head>
+            <title>', metadata.database_name, ' monitoring: full report</title>
+            <!--[if IE]>
+                <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
+                <style> v\\\\:* { behavior: url(#default#VML); }</style >
+            <![endif]-->
+            <meta http-equiv="refresh" content="7200" />
+            <style type="text/css">
+                ', common_css, '
+                div.header {
+                    position: relative;
+                    float: left;
+                    background: #ffffff;
+                    width: ', ${chart_width}+20, ';
+                }
+                div.row {
+                }
+                div.chart {
+                    white-space: nowrap;
+                    width: ${chart_width}px;
+                }
+                div.chart_container {
+                    position: relative;
+                    float: left;
+                    white-space: nowrap;
+                    padding: 10px;
+                    background: #ffffff;
+                    width: ${chart_width};
+                    margin-right: 10px;
+                    margin-bottom: 10px;
+                }
+            </style>
+            <script type="text/javascript" charset="utf-8">
+                ', openark_lchart, '
+            </script>
+            <script type="text/javascript" charset="utf-8">
+                window.onload = function () {
+            ', %s, '
+                };
+            </script>
+            </head>
+            <body>
+                <a name=""></a>
+                <div class="header">
+                    <div class="corner bl"></div><div class="corner br"></div>
+                    <div class="header_content">
+                        <h1><strong class="db">', metadata.database_name, '</strong> database monitoring: ${chart_alias} zoom in</h1>
+                        Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on <strong>',
+                            DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '</strong>. Revision: <strong>', metadata.revision, '</strong>, build: <strong>', metadata.build, '</strong>. MySQL version: <strong>', metadata.mysql_version, '</strong>    
+                        <br/>The charts on this report are generated locally and do not send data over the net. Click the <a name="none">[url]</a> links to view Google image charts.
+                    </div>
+                </div>
+                <div class="clear"></div>
+                <h2>${chart_alias}</h2>
+                ',
+                %s '
+            </body>
+        </html>
+      ') AS html
+      FROM
+        ${database_name}.sv_report_chart_sample, 
+        ${database_name}.sv_report_chart_hour, 
+        ${database_name}.sv_report_chart_day, 
+        ${database_name}.metadata, 
+        ${database_name}.charts_api,
+        ${database_name}.html_components
+      """ % (",".join(js_queries), "".join(div_queries))
+    query = query.replace("${database_name}", database_name)
+    query = query.replace("${chart_alias}", chart_alias)
+    query = query.replace("${chart_width}", "800")
+    query = query.replace("${chart_height}", "200")
+    query = query.replace("${corners_image}", corners_image.replace("'","''"))
+    html = http_get_row(query)["html"]
+    html_embed = http_get_html_embed(http_database_name, None, None)
+    html = http_embed_code(html, '<div class="header">', html_embed)
+    return html
+
+
+def http_get_no_database_selected_html():
+    query = """
+        SELECT CONCAT('
+            <html>
+                <head>
+                    <title>mycheckpoint monitoring server</title>
+                    <meta http-equiv="refresh" content="600" />
+                    <style type="text/css">
+                        ', common_css, '
+                        div.header {
+                            position: relative;
+                            background: #ffffff;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <a name=""></a>
+                    <div class="header">
+                        <div class="corner bl"></div><div class="corner br"></div>
+                        <div class="header_content">
+                            <h1><strong class="db">mycheckpoint monitoring server</strong>: no database selected</h1>
+                            Page generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on <strong>',
+                                DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '</strong>. Revision: <strong>', metadata.revision, '</strong>, build: <strong>', metadata.build, '</strong>. MySQL version: <strong>', metadata.mysql_version, '</strong>    
+                            <br/>The mycheckpoint monitoring server is an HTTP interface to your mycheckpoint monitoring databases. 
+                            Be advised that the charts and HTML pages are dynamically generated via SQL queries from the relevant views;
+                            this server merely tunnels them through. It will present you with the originating query on each report page.
+                            <br/><br/>You do not have to use the mycheckpoint monitoring server is order to view the HTML reports. In fact, you do not
+                            have to use any server. The HTML reports are self contained, including JavaScript charting code, and can be viewed even
+                            as local files.
+                            <hr/>
+                            Select database: %s
+                        </div>
+                    </div>
+                    <div class="clear"></div>
+                </body>
+            </html>
+          ') AS html
+          FROM
+            ${database_name}.metadata, 
+            ${database_name}.charts_api,
+            ${database_name}.html_components
+        """ % (http_get_html_databases_list(""))
+    query = query.replace("${database_name}", database_name)
+    html = http_get_row(query)["html"]
     return html
 
 
@@ -4200,12 +4673,16 @@ class MCPHttpHandler(BaseHTTPRequestHandler):
         try:
             database_match = re.match("^/([^/]+)[/]?$", self.path)
             database_view_match = re.match("^/([^/]+)/([^/]+)[/]?$", self.path)
+            chart_zoom_match = re.match("^/([^/]+)/zoom/([^/]+)[/]?$", self.path)
+            http_view_name = None
             if database_match:
                 http_database_name = database_match.group(1)
                 http_view_name = "sv_report_html_brief"
             elif database_view_match:
                 http_database_name = database_view_match.group(1)
                 http_view_name = database_view_match.group(2)
+            elif chart_zoom_match:
+                http_database_name = chart_zoom_match.group(1)
                 
             html = None
             if self.path == "/refresh-databases-list":
@@ -4214,75 +4691,14 @@ class MCPHttpHandler(BaseHTTPRequestHandler):
             if database_match or database_view_match:
                 if http_database_name in http_known_databases:
                     html, html_query = http_get_view_html(http_database_name, http_view_name)
-                    pages_list = [
-                        ("sv_report_html_brief", "Brief"),
-                        ("sv_custom_html_brief", "Custom brief"),
-                        ("alert_pending_html_view", "Alert"),
-                        ("sv_report_html_24_7", "24/7"),
-                        ("sv_report_html", "Full"),
-                        ("sv_custom_html", "Custom full"),
-                        ]
-                    pages_links_list = []
-                    for (view_name, view_description) in pages_list:
-                        if view_name == http_view_name:
-                            page_link = "<strong>%s</strong>" % view_description
-                        else:
-                            page_link = """<a href="/%s/%s">%s</a>""" % (http_database_name, view_name, view_description,)
-                        pages_links_list.append(page_link)
-
-                    html_embed = """
-                        <div class="http_html_embed">
-                            <a href="/">Home</a> | mycheckpoint databases [<a href="/refresh-databases-list"><i>refresh</i></a>]: %s<br/>
-                            Reports: %s<br/>
-                            This page was generated using this query: <strong>%s</strong><br/>
-                        </div>
-                        """ % (http_get_html_databases_list(http_database_name), " | ".join(pages_links_list), html_query)
+                    html_embed = http_get_html_embed(http_database_name, http_view_name, html_query)
                     html = http_embed_code(html, '<div class="header">', html_embed)
+            elif chart_zoom_match:
+                chart_alias = chart_zoom_match.group(2)
+                html = http_get_chart_zoom_html(http_database_name, chart_alias)
 
             if not html:
-                query = """
-                    SELECT CONCAT('
-                        <html>
-                            <head>
-                                <title>mycheckpoint monitoring server</title>
-                                <meta http-equiv="refresh" content="600" />
-                                <style type="text/css">
-                                    ', common_css, '
-                                    div.header {
-                                        position: relative;
-                                        background: #ffffff;
-                                    }
-                                </style>
-                            </head>
-                            <body>
-                                <a name=""></a>
-                                <div class="header">
-                                    <div class="corner bl"></div><div class="corner br"></div>
-                                    <div class="header_content">
-                                        <h1><strong class="db">mycheckpoint monitoring server</strong>: no database selected</h1>
-                                        Page generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on <strong>',
-                                            DATE_FORMAT(NOW(),'%%b %%D %%Y, %%H:%%i'), '</strong>. Revision: <strong>', metadata.revision, '</strong>, build: <strong>', metadata.build, '</strong>. MySQL version: <strong>', metadata.mysql_version, '</strong>    
-                                        <br/>The mycheckpoint monitoring server is an HTTP interface to your mycheckpoint monitoring databases. 
-                                        Be advised that the charts and HTML pages are dynamically generated via SQL queries from the relevant views;
-                                        this server merely tunnels them through. It will present you with the originating query on each report page.
-                                        <br/><br/>You do not have to use the mycheckpoint monitoring server is order to view the HTML reports. In fact, you do not
-                                        have to use any server. The HTML reports are self contained, including JavaScript charting code, and can be viewed even
-                                        as local files.
-                                        <hr/>
-                                        Select database: %s
-                                    </div>
-                                </div>
-                                <div class="clear"></div>
-                            </body>
-                        </html>
-                      ') AS html
-                      FROM
-                        ${database_name}.metadata, 
-                        ${database_name}.charts_api,
-                        ${database_name}.html_components
-                    """ % (http_get_html_databases_list(""))
-                query = query.replace("${database_name}", database_name)
-                html = http_get_row(query)["html"]
+                html = http_get_no_database_selected_html()
             # html must be applied at this point
             self.serve_content(html)
         except IOError:
@@ -4294,10 +4710,10 @@ def serve_http():
     try:
         detect_mycheckpoint_databases()
         server = HTTPServer(('', options.http_port), MCPHttpHandler)
-        print 'started httpserver...'
+        print "started httpserver on port %d..." % options.http_port
         server.serve_forever()
     except KeyboardInterrupt:
-        print '^C received, shutting down server'
+        print "^C received, shutting down server"
         server.socket.close()
     
 
@@ -4313,7 +4729,7 @@ def deploy_schema():
     create_alert_condition_table()
     create_alert_table()
     create_alert_pending_table()
-    create_status_variables_views()
+    create_status_variables_views_and_aggregations()
     # Some of the following depend on sv_report_chart_sample
     create_alert_view()
     create_alert_pending_view()
@@ -4363,6 +4779,8 @@ try:
         custom_query_ids = None
         custom_chart_names = None
         http_known_databases = []
+        status_variables_insert_id = None
+        status_variables_insert_timestamp = None
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
 
@@ -4399,6 +4817,8 @@ try:
 
         if should_deploy:
             deploy_schema()
+            detect_status_variables_hour_aggregation_missing_values()
+            detect_status_variables_day_aggregation_missing_values()
             
         # Only take record if no arguments provided (no "command")
         if not args:
@@ -4406,8 +4826,11 @@ try:
             if purge_status_variables():
                 purge_alert()
             collect_custom_data()
+            write_status_variables_hour_aggregation(status_variables_insert_timestamp)
+            write_status_variables_day_aggregation(status_variables_insert_timestamp)
             check_alerts()
             verbose("Status variables checkpoint complete")
+            
         else:
             verbose("Will not monitor the database")
             
