@@ -282,8 +282,8 @@ def get_last_written_timestamp():
             WHERE 
               id = %d
         """ % (database_name, table_name, status_variables_insert_id)
-    
-    row = get_row(query)
+
+    row = get_row(query, write_conn)
     return row["ts_as_string"]
 
 
@@ -1942,13 +1942,15 @@ def upgrade_status_variables_aggregation_table(aggregation_table_name):
     alter_statements = []
     
     if new_columns:
-        verbose("Will add the following columns to %s: %s" % (aggregation_table_name, ", ".join(new_columns)))
         diff_columns = [column_name for column_name in new_columns if column_name.endswith("_diff")]
         psec_columns = [column_name for column_name in new_columns if column_name.endswith("_psec")]
         normal_columns = [column_name for column_name in new_columns if (column_name not in diff_columns and column_name not in psec_columns)]
         alter_statements.extend(["ADD COLUMN %s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in normal_columns])
         alter_statements.extend(["ADD COLUMN %s BIGINT " % (column_name,) for column_name in diff_columns])
-        alter_statements.extend(["ADD COLUMN %s DECIMAL(23,2)" % (column_name,) for column_name in psec_columns])
+        # We do not add _psec columns, because of InnoDB's hard coded limitation of max 1000 columns per table.
+        # The _psec columns are easily computed later on.
+        if alter_statements:
+            verbose("Will add the following columns to %s: %s" % (aggregation_table_name, ", ".join(normal_columns + diff_columns)))
     # TODO: remove unused columns
     # ...
     if alter_statements:
@@ -2062,10 +2064,10 @@ def create_status_variables_sample_view():
 
 
 def create_status_variables_hour_view():
+    global_variables, status_columns = get_variables_and_status_columns()
+
     if options.skip_aggregation:
         # Rely on sv_sample
-        global_variables, status_columns = get_variables_and_status_columns()
-    
         global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
         status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
         sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
@@ -2092,6 +2094,7 @@ def create_status_variables_hour_view():
         """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
     else:
         # Rely on aggregation table
+        psec_columns_listing = ",\n".join([" ROUND(%s_diff/ts_diff_seconds, 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
         query = """
             CREATE
             OR REPLACE
@@ -2100,10 +2103,11 @@ def create_status_variables_hour_view():
             SQL SECURITY INVOKER
             VIEW ${database_name}.sv_hour AS
               SELECT
-                *
+                *,
+                %s
               FROM
                 ${database_name}.status_variables_aggregated_hour
-        """ 
+        """ % (psec_columns_listing,)
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
@@ -2111,10 +2115,10 @@ def create_status_variables_hour_view():
 
 
 def create_status_variables_day_view():
+    global_variables, status_columns = get_variables_and_status_columns()
+
     if options.skip_aggregation:
-        # Rely on sv_sample
-        global_variables, status_columns = get_variables_and_status_columns()
-    
+        # Rely on sv_sample    
         global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
         status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
         sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
@@ -2141,6 +2145,7 @@ def create_status_variables_day_view():
         """ % (status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
     else:
         # Rely on aggregation table
+        psec_columns_listing = ",\n".join([" ROUND(%s_diff/ts_diff_seconds, 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
         query = """
             CREATE
             OR REPLACE
@@ -2149,10 +2154,11 @@ def create_status_variables_day_view():
             SQL SECURITY INVOKER
             VIEW ${database_name}.sv_day AS
               SELECT
-                *
+                *,
+                %s
               FROM
                 ${database_name}.status_variables_aggregated_day
-        """ 
+        """ % (psec_columns_listing,)
     query = query.replace("${database_name}", database_name)
     act_query(query)
 
@@ -2168,7 +2174,6 @@ def create_status_variables_hour_aggregation_table():
 
     global_variables_columns_listing = ",\n".join(["%s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in get_status_variables_columns()])
     sum_diff_columns_listing = ",\n".join(["%s_diff BIGINT" % (column_name,) for column_name in status_columns])
-    avg_psec_columns_listing = ",\n".join(["%s_psec DECIMAL(23,2)" % (column_name,) for column_name in status_columns])
     
     aggregation_table_name = "status_variables_aggregated_hour";
     query = """CREATE TABLE %s.%s (
@@ -2178,20 +2183,19 @@ def create_status_variables_hour_aggregation_table():
             ts_diff_seconds INT UNSIGNED,         
             %s,
             %s,
-            %s,
             UNIQUE KEY ts (ts)
        )
-        """ % (database_name, aggregation_table_name, global_variables_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing)
+        """ % (database_name, aggregation_table_name, global_variables_columns_listing, sum_diff_columns_listing,)
     
     query = query.replace("${database_name}", database_name)
-
+    
     table_created = False
     try:
         act_query(query)
         table_created = True
-    except MySQLdb.Error:
+    except MySQLdb.Error, err:
         pass
-
+    
     if table_created:
         verbose("%s table created" % aggregation_table_name)
     else:
@@ -2207,7 +2211,6 @@ def create_status_variables_day_aggregation_table():
 
     global_variables_columns_listing = ",\n".join(["%s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in get_status_variables_columns()])
     sum_diff_columns_listing = ",\n".join(["%s_diff BIGINT" % (column_name,) for column_name in status_columns])
-    avg_psec_columns_listing = ",\n".join(["%s_psec DECIMAL(23,2)" % (column_name,) for column_name in status_columns])
     
     aggregation_table_name = "status_variables_aggregated_day";
     query = """CREATE TABLE %s.%s (
@@ -2217,10 +2220,9 @@ def create_status_variables_day_aggregation_table():
             ts_diff_seconds INT UNSIGNED,         
             %s,
             %s,
-            %s,
             UNIQUE KEY ts (ts)
        )
-        """ % (database_name, aggregation_table_name, global_variables_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing)
+        """ % (database_name, aggregation_table_name, global_variables_columns_listing, sum_diff_columns_listing,)
     
     query = query.replace("${database_name}", database_name)
 
@@ -4251,12 +4253,10 @@ def write_status_variables_hour_aggregation(aggregation_timestamp):
     global_variables_columns_names = ",\n".join(global_variables)
     status_columns_names = ",\n".join(status_columns)
     status_columns_diff_names = ",\n".join(["%s_diff" % (column_name,) for column_name in status_columns])
-    status_columns_psec_names = ",\n".join(["%s_psec" % (column_name,) for column_name in status_columns])
 
     global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
     status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
     sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
-    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
     query = """
         REPLACE INTO ${database_name}.status_variables_aggregated_hour 
           (
@@ -4264,7 +4264,6 @@ def write_status_variables_hour_aggregation(aggregation_timestamp):
             ts, 
             end_ts, 
             ts_diff_seconds, 
-            %s, 
             %s, 
             %s, 
             %s
@@ -4276,7 +4275,6 @@ def write_status_variables_hour_aggregation(aggregation_timestamp):
             SUM(ts_diff_seconds) AS ts_diff_seconds,
             %s,
             %s,
-            %s,
             %s
           FROM
             ${database_name}.sv_sample
@@ -4284,8 +4282,8 @@ def write_status_variables_hour_aggregation(aggregation_timestamp):
             ts >= DATE('${aggregation_timestamp}') + INTERVAL HOUR('${aggregation_timestamp}') HOUR
             AND ts < DATE('${aggregation_timestamp}') + INTERVAL (HOUR('${aggregation_timestamp}') + 1) HOUR
           GROUP BY DATE(ts), HOUR(ts)
-    """ % (status_columns_names, status_columns_diff_names, status_columns_psec_names, global_variables_columns_names, 
-           status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    """ % (status_columns_names, status_columns_diff_names, global_variables_columns_names, 
+           status_columns_listing, sum_diff_columns_listing, global_variables_columns_listing)
     query = query.replace("${database_name}", database_name)
     query = query.replace("${aggregation_timestamp}", aggregation_timestamp)
 
@@ -4303,12 +4301,10 @@ def write_status_variables_day_aggregation(aggregation_timestamp):
     global_variables_columns_names = ",\n".join(global_variables)
     status_columns_names = ",\n".join(status_columns)
     status_columns_diff_names = ",\n".join(["%s_diff" % (column_name,) for column_name in status_columns])
-    status_columns_psec_names = ",\n".join(["%s_psec" % (column_name,) for column_name in status_columns])
 
     global_variables_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in global_variables])
     status_columns_listing = ",\n".join([" MAX(%s) AS %s" % (column_name, column_name,) for column_name in status_columns])
     sum_diff_columns_listing = ",\n".join([" SUM(%s_diff) AS %s_diff" % (column_name, column_name,) for column_name in status_columns])
-    avg_psec_columns_listing = ",\n".join([" ROUND(AVG(%s_psec), 2) AS %s_psec" % (column_name, column_name,) for column_name in status_columns])
     query = """
         REPLACE INTO ${database_name}.status_variables_aggregated_day 
           (
@@ -4316,7 +4312,6 @@ def write_status_variables_day_aggregation(aggregation_timestamp):
             ts, 
             end_ts, 
             ts_diff_seconds, 
-            %s, 
             %s, 
             %s, 
             %s
@@ -4328,7 +4323,6 @@ def write_status_variables_day_aggregation(aggregation_timestamp):
             SUM(ts_diff_seconds) AS ts_diff_seconds,
             %s,
             %s,
-            %s,
             %s
           FROM
             ${database_name}.sv_sample
@@ -4336,8 +4330,8 @@ def write_status_variables_day_aggregation(aggregation_timestamp):
             ts >= DATE('${aggregation_timestamp}')
             AND ts < DATE('${aggregation_timestamp}') + INTERVAL 1 DAY
           GROUP BY DATE(ts)
-    """ % (status_columns_names, status_columns_diff_names, status_columns_psec_names, global_variables_columns_names, 
-           status_columns_listing, sum_diff_columns_listing, avg_psec_columns_listing, global_variables_columns_listing)
+    """ % (status_columns_names, status_columns_diff_names, global_variables_columns_names, 
+           status_columns_listing, sum_diff_columns_listing, global_variables_columns_listing)
     query = query.replace("${database_name}", database_name)
     query = query.replace("${aggregation_timestamp}", aggregation_timestamp)
 
@@ -4609,7 +4603,7 @@ def http_get_chart_zoom_html(http_database_name, chart_alias):
         ${database_name}.charts_api,
         ${database_name}.html_components
       """ % (",".join(js_queries), "".join(div_queries))
-    query = query.replace("${database_name}", database_name)
+    query = query.replace("${database_name}", http_database_name)
     query = query.replace("${chart_alias}", chart_alias)
     query = query.replace("${chart_width}", "800")
     query = query.replace("${chart_height}", "200")
