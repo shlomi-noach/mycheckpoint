@@ -3016,7 +3016,7 @@ def create_custom_google_charts_views():
             SQL SECURITY INVOKER
             VIEW ${database_name}.sv_custom_chart_${view_name_extension} AS
               SELECT
-                custom_query.*,
+                custom_query_view.*,
                 CASE CONCAT(custom_query_id, ',', chart_type)
                     %s
                     ELSE NULL
@@ -3026,7 +3026,7 @@ def create_custom_google_charts_views():
                     ELSE NULL
                 END AS chart_extended
               FROM
-                ${database_name}.custom_query, ${database_name}.sv_report_chart_${view_name_extension}
+                ${database_name}.custom_query_view, ${database_name}.sv_report_chart_${view_name_extension}
               ORDER BY
                 chart_order ASC, custom_query_id ASC
             """ % ("\n".join(simple_chart_case_clauses), "\n".join(extended_chart_case_clauses),)
@@ -3047,9 +3047,10 @@ def create_custom_google_charts_flattened_views():
             custom_clause = """
                 MAX(IF(custom_query_id=%d AND enabled, chart, NULL)) AS custom_%d_chart,
                 MAX(IF(custom_query_id=%d AND enabled, chart_extended, NULL)) AS custom_%d_chart_extended,
+                MAX(IF(custom_query_id=%d, chart_name, NULL)) AS custom_%d_chart_name,
                 MAX(IF(custom_query_id=%d, description, NULL)) AS custom_%d_text_description,
                 MAX(IF(custom_query_id=%d, CONCAT(description, ' [', chart_type, ']'), NULL)) AS custom_%d_description
-                """ % (i, i, i, i, i, i, i, i,)
+                """ % (i, i, i, i, i, i, i, i, i, i,)
             custom_clauses.append(custom_clause)
     else:
         # No point in this whole view. Add a dummy column
@@ -3109,7 +3110,7 @@ def create_report_html_view(charts_aliases):
         row_query = """
             '<div class="row">
                 <a name="${chart_alias}"></a>
-                <h2>${chart_alias} <a href="#">[top]</a></h2>',
+                <h2>${chart_alias} <a href="#">[top]</a><!--mcp_http <a href="zoom/${chart_alias}">[zoom]</a> mcp_http--></h2>',
                 %s,
                 '<div class="clear"></div>',
             '</div>
@@ -3225,7 +3226,7 @@ def create_report_html_brief_view(report_charts):
                         IFNULL(
                             CONCAT('<a href="', ${chart_alias_url_simple}, '">[url]</a>')
                         , '[N/A]'), 
-                    '</h3>
+                    '<!--mcp_http <a href="zoom/${chart_alias}">[zoom]</a> mcp_http--></h3>
                     <div id="chart_div_${chart_alias}" class="chart"></div>
                 </div>',
                 """
@@ -3424,12 +3425,14 @@ def create_custom_html_view():
         row_query = """
             '<div class="row">
                 <a name="${chart_alias}"></a>
-                <h2>', sv_custom_chart_flattened_${view_name_extension}.custom_%d_description,': ${chart_alias} <a href="#">[top]</a></h2>',
+                <h2>', sv_custom_chart_flattened_${view_name_extension}.custom_%d_description,
+                ': ${chart_alias} <a href="#">[top]</a><!--mcp_http <a href="zoom/', sv_custom_chart_flattened_${view_name_extension}.custom_%d_chart_name,
+                '">[zoom]</a> mcp_http--></h2>',
                 %s,
                 '<div class="clear"></div>',
             '</div>
                 ',
-            """ % (i, "".join(div_queries))
+            """ % (i, i, "".join(div_queries))
         row_query = row_query.replace("${chart_alias}", chart_alias)
         row_query = row_query.replace("${view_name_extension}", view_name_extension)
         rows_queries.append(row_query)
@@ -3541,11 +3544,13 @@ def create_custom_html_brief_view():
                     IFNULL(
                         CONCAT('<a href="', ${chart_alias_url_simple}, '">[url]</a>')
                     , '[N/A]'), 
-                '</h3>
+                '<!--mcp_http <a href="zoom/', custom_${custom_query_id}_chart_name,
+                '">[zoom]</a> mcp_http--></h3>
                 <div id="chart_div_${chart_alias}" class="chart"></div>
             </div>',
             """
         div_query = div_query.replace("${chart_alias}", chart_alias)
+        div_query = div_query.replace("${custom_query_id}", "%d" % custom_query_id)
         # This is a custom column
         chart_alias_url = "REPLACE(${chart_alias_url_column}, '&chdl=custom_', CONCAT('&chdl=', IFNULL(CONCAT(REPLACE(custom_%d_text_description, ' ', '+'), ':+'), ''), 'custom_'))" % (custom_query_id,)
         chart_alias_url_simple = chart_alias_url.replace("${chart_alias_url_column}", "%s_chart" % chart_alias)
@@ -4286,7 +4291,7 @@ def write_status_variables_hour_aggregation(aggregation_timestamp):
 
     num_affected_rows = act_query(query)
     if num_affected_rows:
-        verbose("%s Entry aggregated into status_variables_aggregated_day" % aggregation_timestamp)
+        verbose("%s Entry aggregated into status_variables_aggregated_hour" % aggregation_timestamp)
 
 
 def write_status_variables_day_aggregation(aggregation_timestamp):
@@ -4443,7 +4448,7 @@ def http_get_html_databases_list(http_database_name):
         if database_name == http_database_name:
             database_link = "<strong>%s</strong>" % database_name
         else:
-            database_link = """<a href="/%s">%s</a>""" % (database_name, database_name,)
+            database_link = """<a href="/%s/">%s</a>""" % (database_name, database_name,)
         databases_links_list.append(database_link)
     html_databases_list = " | ".join(databases_links_list)
     return html_databases_list
@@ -4645,7 +4650,7 @@ def http_get_no_database_selected_html():
                             have to use any server. The HTML reports are self contained, including JavaScript charting code, and can be viewed even
                             as local files.
                             <hr/>
-                            Select database: %s
+                            Select database: [<a href="/refresh-databases-list"><i>refresh</i></a>] %s
                         </div>
                     </div>
                     <div class="clear"></div>
@@ -4664,6 +4669,8 @@ def http_get_no_database_selected_html():
 
 class MCPHttpHandler(BaseHTTPRequestHandler):
     def serve_content(self, content):
+        content = content.replace("<!--mcp_http", "")
+        content = content.replace("mcp_http-->", "")
         self.send_response(200)
         self.send_header("Content-type", "text/html")
         self.end_headers()
