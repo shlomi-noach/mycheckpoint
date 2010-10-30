@@ -355,7 +355,7 @@ openark_lchart.prototype.read_google_url = function(url) {
 		}
 	}
 	if (params["tsstart"])
-		this.tsstart = new Date(params["tsstart"]);
+		this.tsstart = new Date(params["tsstart"]).replace("-", "/");
 	if (params["tsstep"])
 		this.tsstep = parseInt(params["tsstep"]);
 
