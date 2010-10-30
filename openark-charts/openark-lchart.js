@@ -43,12 +43,15 @@ openark_lchart = function(container, options) {
 	this.series_labels = [];
 	this.series_legend_values = [];
 	this.series_colors = openark_lchart.series_colors;
+	this.tsstart = null;
+	this.tsstep = null;
 	
 	this.container = container;
 	this.interactive_legend = null;
 	this.legend_values_containers = [];
 	this.canvas_shadow = null;
 	this.position_pointer = null;
+	this.timestamp_div = null;
 	
 	this.isIE = false;
 	this.current_color = null;
@@ -74,6 +77,7 @@ openark_lchart.series_line_width = 1.5;
 openark_lchart.grid_color = '#e4e4e4';
 openark_lchart.grid_thick_color = '#c8c8c8';
 openark_lchart.position_pointer_color = '#808080';
+openark_lchart.timestamp_div_color = '#808080';
 openark_lchart.series_colors = ["#ff0000", "#ff8c00", "#4682b4", "#9acd32", "#dc143c", "#9932cc", "#ffd700", "#191970", "#7fffd4", "#808080", "#dda0dd"];
 openark_lchart.google_simple_format_scheme = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -350,6 +354,10 @@ openark_lchart.prototype.read_google_url = function(url) {
 			}
 		}
 	}
+	if (params["tsstart"])
+		this.tsstart = new Date(params["tsstart"]);
+	if (params["tsstep"])
+		this.tsstep = parseInt(params["tsstep"]);
 
 	this.redraw();
 };
@@ -389,7 +397,7 @@ openark_lchart.prototype.draw = function() {
 		this.draw_line(this.x_axis_grid_positions[i], this.chart_origin_y, this.x_axis_grid_positions[i], this.chart_origin_y - this.chart_height + 1, 1);
 	}
 	this.set_color(openark_lchart.axis_color);
-	// x (vertical) ticks:
+	// x (vertical) ticks & labels:
 	var last_drawn_x_axis_label_position = 0;
 	for (i = 0 ; i < this.x_axis_label_positions.length ; ++i)
 	{
@@ -464,6 +472,11 @@ openark_lchart.prototype.draw = function() {
 			font_size: openark_lchart.axis_font_size
 		}); 
 	}
+	//// Bottom right indicator for most recent measurement hover
+	//this.set_color(openark_lchart.axis_color);
+	//this.draw_line(this.chart_origin_x + this.chart_width - 2, this.chart_origin_y + this.x_axis_values_height - 5 - 8, this.chart_origin_x + this.chart_width - 2, this.chart_origin_y + this.x_axis_values_height - 5, 1);
+	//this.draw_line(this.chart_origin_x + this.chart_width - 2, this.chart_origin_y + this.x_axis_values_height - 5, this.chart_origin_x + this.chart_width - 2 - 6, this.chart_origin_y + this.x_axis_values_height - 5, 1)
+
 	// legend:
 	if (this.series_labels && this.series_labels.length)
 	{
@@ -648,10 +661,49 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 
 			this.canvas_shadow.appendChild(this.position_pointer);
 		}
+		if (this.tsstart && (this.timestamp_div == null))
+		{
+			this.timestamp_div = document.createElement("div");
+			this.timestamp_div.style.position = 'absolute';
+			this.timestamp_div.style.top = '' + (this.chart_origin_y+5)+ 'px';
+			this.timestamp_div.style.verticalAlign = 'middle';
+			this.timestamp_div.style.height = '' + (this.x_axis_values_height-5) + 'px';
+			this.timestamp_div.style.backgroundColor = openark_lchart.timestamp_div_color;
+			this.timestamp_div.style.color = '#ffffff';
+
+			this.container.appendChild(this.timestamp_div);
+		}
 		this.update_legend();
+
 		var position_pointer_x = Math.round(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
 		this.position_pointer.style.visibility = 'visible';	
 		this.position_pointer.style.left = '' + (position_pointer_x) + 'px';
+
+		if (this.tsstart)
+		{
+			var displayTimestamp = new Date(this.tsstart.getTime() + (this.tsstep*1000 * dot_position_index));
+			var format = '' + displayTimestamp.getFullYear() + '-' + (displayTimestamp.getMonth()+1) + '-' + displayTimestamp.getDate();
+			{
+				format += ' ' + displayTimestamp.getHours() + ':' + displayTimestamp.getMinutes(); 
+			}
+			if (this.tsstep < 60*60*24)
+				format = dateFormat(displayTimestamp, "yyyy-mm-dd HH:MM");
+			else
+				format = dateFormat(displayTimestamp, "yyyy-mm-dd");
+
+			this.timestamp_div.innerHTML = '&nbsp;'+format+'&nbsp;';
+			this.timestamp_div.style.visibility = 'visible';	
+			if (chart_x < this.chart_width/2)
+			{
+				this.timestamp_div.style.right = '0px';
+				this.timestamp_div.style.left = '';
+			}
+			else
+			{
+				this.timestamp_div.style.left = '' + (this.chart_origin_x) + 'px';
+				this.timestamp_div.style.right = '';			
+			}
+		}
 	}
 	else
 	{
@@ -679,6 +731,7 @@ openark_lchart.prototype.clear_position_pointer_and_legend_values = function(eve
 	if (this.position_pointer != null)
 	{
 		this.position_pointer.style.visibility = 'hidden';
+		this.timestamp_div.style.visibility = 'hidden';
 	}
 	this.series_legend_values = null;
 	this.update_legend();
@@ -734,3 +787,129 @@ function findPosY(obj) {
 	return curtop;
 }
 
+
+/*
+ * Date Format 1.2.3
+ * (c) 2007-2009 Steven Levithan <stevenlevithan.com>
+ * MIT license
+ *
+ * Includes enhancements by Scott Trenda <scott.trenda.net>
+ * and Kris Kowal <cixar.com/~kris.kowal/>
+ *
+ * Accepts a date, a mask, or a date and a mask.
+ * Returns a formatted version of the given date.
+ * The date defaults to the current date/time.
+ * The mask defaults to dateFormat.masks.default.
+ */
+
+var dateFormat = function () {
+	var	token = /d{1,4}|m{1,4}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
+		timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
+		timezoneClip = /[^-+\dA-Z]/g,
+		pad = function (val, len) {
+			val = String(val);
+			len = len || 2;
+			while (val.length < len) val = "0" + val;
+			return val;
+		};
+
+	// Regexes and supporting functions are cached through closure
+	return function (date, mask, utc) {
+		var dF = dateFormat;
+
+		// You can't provide utc if you skip other args (use the "UTC:" mask prefix)
+		if (arguments.length == 1 && Object.prototype.toString.call(date) == "[object String]" && !/\d/.test(date)) {
+			mask = date;
+			date = undefined;
+		}
+
+		// Passing date through Date applies Date.parse, if necessary
+		date = date ? new Date(date) : new Date;
+		if (isNaN(date)) throw SyntaxError("invalid date");
+
+		mask = String(dF.masks[mask] || mask || dF.masks["default"]);
+
+		// Allow setting the utc argument via the mask
+		if (mask.slice(0, 4) == "UTC:") {
+			mask = mask.slice(4);
+			utc = true;
+		}
+
+		var	_ = utc ? "getUTC" : "get",
+			d = date[_ + "Date"](),
+			D = date[_ + "Day"](),
+			m = date[_ + "Month"](),
+			y = date[_ + "FullYear"](),
+			H = date[_ + "Hours"](),
+			M = date[_ + "Minutes"](),
+			s = date[_ + "Seconds"](),
+			L = date[_ + "Milliseconds"](),
+			o = utc ? 0 : date.getTimezoneOffset(),
+			flags = {
+				d:    d,
+				dd:   pad(d),
+				ddd:  dF.i18n.dayNames[D],
+				dddd: dF.i18n.dayNames[D + 7],
+				m:    m + 1,
+				mm:   pad(m + 1),
+				mmm:  dF.i18n.monthNames[m],
+				mmmm: dF.i18n.monthNames[m + 12],
+				yy:   String(y).slice(2),
+				yyyy: y,
+				h:    H % 12 || 12,
+				hh:   pad(H % 12 || 12),
+				H:    H,
+				HH:   pad(H),
+				M:    M,
+				MM:   pad(M),
+				s:    s,
+				ss:   pad(s),
+				l:    pad(L, 3),
+				L:    pad(L > 99 ? Math.round(L / 10) : L),
+				t:    H < 12 ? "a"  : "p",
+				tt:   H < 12 ? "am" : "pm",
+				T:    H < 12 ? "A"  : "P",
+				TT:   H < 12 ? "AM" : "PM",
+				Z:    utc ? "UTC" : (String(date).match(timezone) || [""]).pop().replace(timezoneClip, ""),
+				o:    (o > 0 ? "-" : "+") + pad(Math.floor(Math.abs(o) / 60) * 100 + Math.abs(o) % 60, 4),
+				S:    ["th", "st", "nd", "rd"][d % 10 > 3 ? 0 : (d % 100 - d % 10 != 10) * d % 10]
+			};
+
+		return mask.replace(token, function ($0) {
+			return $0 in flags ? flags[$0] : $0.slice(1, $0.length - 1);
+		});
+	};
+}();
+
+// Some common format strings
+dateFormat.masks = {
+	"default":      "ddd mmm dd yyyy HH:MM:ss",
+	shortDate:      "m/d/yy",
+	mediumDate:     "mmm d, yyyy",
+	longDate:       "mmmm d, yyyy",
+	fullDate:       "dddd, mmmm d, yyyy",
+	shortTime:      "h:MM TT",
+	mediumTime:     "h:MM:ss TT",
+	longTime:       "h:MM:ss TT Z",
+	isoDate:        "yyyy-mm-dd",
+	isoTime:        "HH:MM:ss",
+	isoDateTime:    "yyyy-mm-dd'T'HH:MM:ss",
+	isoUtcDateTime: "UTC:yyyy-mm-dd'T'HH:MM:ss'Z'"
+};
+
+// Internationalization strings
+dateFormat.i18n = {
+	dayNames: [
+		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+		"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+	],
+	monthNames: [
+		"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+		"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
+	]
+};
+
+// For convenience...
+Date.prototype.format = function (mask, utc) {
+	return dateFormat(this, mask, utc);
+};
