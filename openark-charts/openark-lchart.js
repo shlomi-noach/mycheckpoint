@@ -42,6 +42,7 @@ openark_lchart = function(container, options) {
 	this.multi_series_dot_positions = [];
 	this.series_labels = [];
 	this.series_legend_values = [];
+	this.timestamp_legend_value = null;
 	this.series_colors = openark_lchart.series_colors;
 	this.tsstart = null;
 	this.tsstep = null;
@@ -49,9 +50,9 @@ openark_lchart = function(container, options) {
 	this.container = container;
 	this.interactive_legend = null;
 	this.legend_values_containers = [];
+	this.timestamp_value_container = null;
 	this.canvas_shadow = null;
 	this.position_pointer = null;
-	this.timestamp_div = null;
 	
 	this.isIE = false;
 	this.current_color = null;
@@ -77,7 +78,6 @@ openark_lchart.series_line_width = 1.5;
 openark_lchart.grid_color = '#e4e4e4';
 openark_lchart.grid_thick_color = '#c8c8c8';
 openark_lchart.position_pointer_color = '#808080';
-openark_lchart.timestamp_div_color = '#808080';
 openark_lchart.series_colors = ["#ff0000", "#ff8c00", "#4682b4", "#9acd32", "#dc143c", "#9932cc", "#ffd700", "#191970", "#7fffd4", "#808080", "#dda0dd"];
 openark_lchart.google_simple_format_scheme = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -370,6 +370,16 @@ openark_lchart.prototype.redraw = function() {
 	this.draw();
 };
 
+openark_lchart.prototype.create_value_container = function() {
+	var legend_value_container = document.createElement("div");
+	legend_value_container.style.display = 'inline';
+	legend_value_container.style.position = 'absolute';
+	legend_value_container.style.right = '' + 0 + 'px';
+	legend_value_container.style.textAlign = 'right';
+	legend_value_container.style.fontWeight = 'bold';
+	return legend_value_container;
+}
+
 openark_lchart.prototype.draw = function() {
 	// Title
 	if (this.chart_title)
@@ -498,6 +508,17 @@ openark_lchart.prototype.draw = function() {
 		var legend_ul = document.createElement("ul");
 		legend_ul.style.margin = 0;
 		legend_ul.style.paddingLeft = this.chart_origin_x;
+		if (this.tsstart)
+		{
+			var legend_li = document.createElement("li");
+			legend_li.style.listStyleType = 'none';
+			legend_li.style.fontSize = ''+openark_lchart.legend_font_size+'pt';
+			legend_li.innerHTML = '&nbsp;';
+			this.timestamp_value_container = this.create_value_container();
+			legend_li.appendChild(this.timestamp_value_container);
+			
+			legend_ul.appendChild(legend_li);
+		}
 		for (i = 0 ; i < this.series_labels.length ; ++i)
 		{
 			var legend_li = document.createElement("li");
@@ -505,14 +526,8 @@ openark_lchart.prototype.draw = function() {
 			legend_li.style.color = this.series_colors[i];
 			legend_li.style.fontSize = ''+openark_lchart.legend_font_size+'pt';
 			legend_li.innerHTML = '<span style="color: '+openark_lchart.legend_color+'">'+this.series_labels[i]+'</span>';
-			var legend_value_container = document.createElement("div");
-			legend_value_container.style.display = 'inline';
-			legend_value_container.style.position = 'absolute';
-			//legend_value_container.style.left = '' + (this.chart_origin_x + this.chart_width - this.chart_origin_x - 10) + 'px';
-			legend_value_container.style.right = '' + 0 + 'px';
+			var legend_value_container = this.create_value_container();
 			legend_value_container.style.width = '' + (this.chart_origin_x + 32) + 'px';
-			legend_value_container.style.textAlign = 'right';
-			legend_value_container.style.fontWeight = 'bold';
 			legend_li.appendChild(legend_value_container);
 			this.legend_values_containers.push(legend_value_container);
 			
@@ -664,42 +679,17 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 
 			this.canvas_shadow.appendChild(this.position_pointer);
 		}
-		if (this.tsstart && (this.timestamp_div == null))
+		if (this.tsstart)
 		{
-			this.timestamp_div = document.createElement("div");
-			this.timestamp_div.style.position = 'absolute';
-			this.timestamp_div.style.top = '' + (this.chart_origin_y+5)+ 'px';
-			this.timestamp_div.style.verticalAlign = 'middle';
-			this.timestamp_div.style.height = '' + (this.x_axis_values_height-5) + 'px';
-			this.timestamp_div.style.backgroundColor = openark_lchart.timestamp_div_color;
-			this.timestamp_div.style.color = '#ffffff';
-
-			this.container.appendChild(this.timestamp_div);
+			var display_timestamp = new Date(this.tsstart.getTime() + (this.tsstep*1000 * dot_position_index));
+			var is_long_format = (this.tsstep < 60*60*24); 
+			this.timestamp_legend_value = format_date(display_timestamp, is_long_format);
 		}
 		this.update_legend();
 
 		var position_pointer_x = Math.round(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
 		this.position_pointer.style.visibility = 'visible';	
 		this.position_pointer.style.left = '' + (position_pointer_x) + 'px';
-
-		if (this.tsstart)
-		{
-			var displayTimestamp = new Date(this.tsstart.getTime() + (this.tsstep*1000 * dot_position_index));
-
-			var isLongFormat = (this.tsstep < 60*60*24); 
-			this.timestamp_div.innerHTML = '&nbsp;'+formatDate(displayTimestamp, isLongFormat)+'&nbsp;';
-			this.timestamp_div.style.visibility = 'visible';	
-			if (chart_x < this.chart_width/2)
-			{
-				this.timestamp_div.style.right = '0px';
-				this.timestamp_div.style.left = '';
-			}
-			else
-			{
-				this.timestamp_div.style.left = '' + (this.chart_origin_x) + 'px';
-				this.timestamp_div.style.right = '';			
-			}
-		}
 	}
 	else
 	{
@@ -727,7 +717,6 @@ openark_lchart.prototype.clear_position_pointer_and_legend_values = function(eve
 	if (this.position_pointer != null)
 	{
 		this.position_pointer.style.visibility = 'hidden';
-		this.timestamp_div.style.visibility = 'hidden';
 	}
 	this.series_legend_values = null;
 	this.update_legend();
@@ -735,6 +724,13 @@ openark_lchart.prototype.clear_position_pointer_and_legend_values = function(eve
 
 
 openark_lchart.prototype.update_legend = function() {
+	if (this.tsstart)
+	{
+		if (this.series_legend_values == null)
+			this.timestamp_value_container.innerHTML = '';
+		else
+			this.timestamp_value_container.innerHTML = this.timestamp_legend_value.replace(/ /g, "&nbsp;");
+	}
 	for (i = 0 ; i < this.series_labels.length ; ++i)
 	{
 		if (this.series_legend_values == null)
@@ -783,7 +779,7 @@ function findPosY(obj) {
 	return curtop;
 }
 
-function formatDate(d, long_format) {
+function format_date(d, long_format) {
 	pad = function (value, len) {
 		var result = '' + value;
 		while (result.length < len) 
