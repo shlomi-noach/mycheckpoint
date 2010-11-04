@@ -681,13 +681,22 @@ openark_lchart.prototype.on_mouse_move = function(event) {
 		}
 		if (this.tsstart)
 		{
-			var display_timestamp = new Date(this.tsstart.getTime() + (this.tsstep*1000 * dot_position_index));
+			var legend_date = new Date(this.tsstart);
+			// The following avoids issues with summer time.
+			if (this.tsstep % (60*60*24) == 0)
+				legend_date.setDate(this.tsstart.getDate() + (this.tsstep / (60*60*24))*dot_position_index);
+			else if (this.tsstep % (60*60) == 0)
+				legend_date.setHours(this.tsstart.getHours() + (this.tsstep / (60*60))*dot_position_index);
+			else if (this.tsstep % (60) == 0)
+				legend_date.setMinutes(this.tsstart.getMinutes() + (this.tsstep / (60))*dot_position_index);
+			else 
+				legend_date.setSeconds(this.tsstart.getSeconds() + this.tsstep*dot_position_index);
 			var is_long_format = (this.tsstep < 60*60*24); 
-			this.timestamp_legend_value = format_date(display_timestamp, is_long_format);
+			this.timestamp_legend_value = format_date(legend_date, is_long_format);
 		}
 		this.update_legend();
 
-		var position_pointer_x = Math.round(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
+		var position_pointer_x = Math.floor(this.chart_origin_x + dot_position_index*this.chart_width/(this.multi_series_dot_positions[0].length-1));
 		this.position_pointer.style.visibility = 'visible';	
 		this.position_pointer.style.left = '' + (position_pointer_x) + 'px';
 	}
