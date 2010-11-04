@@ -1,0 +1,173 @@
+
+        <html>
+            <head>
+            <title>mcp_sql00 monitoring: full report</title>
+            <!--[if IE]>
+                <xml:namespace ns="urn:schemas-microsoft-com:vml" prefix="v" />
+                <style> v\:* { behavior: url(#default#VML); }</style >
+            <![endif]-->
+            <meta http-equiv="refresh" content="7200" />
+            <style type="text/css">
+                
+            div.http_html_embed {
+                background: #f6f0f0;
+                margin: 10px 10px 0px 10px;
+                padding: 4px 0px 4px 0px;
+            }
+            body {
+                background:#e0e0e0 none repeat scroll 0%;
+                color:#505050;
+                font-family:Verdana,Arial,Helvetica,sans-serif;
+                font-size:9pt;
+                line-height:1.5;
+            }
+            .corner { position: absolute; width: 8px; height: 8px; background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9oGGREdC6h6BI8AAAAZdEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAA2UlEQVQoz5WSS2rEMBBESx/apqWV7384n0CrlhCNPlloMgmZiePUphG8B4Uoc54nPsPMIQTvvbUWwBijtZZzLqU8Gb8OEcUYmdk5h28hom3b9n0XEVV9CER0HAcRGWPwEudcjJGIUkqqagGs91t6xRizKgDwzMzMF/TTYeZaqw0h/Oj9W5xzIQTrvcftrA+094X/0Q9njHGfHmPY1tp9obVmc8699zt07z3nbEsppZQ55zU951ykBbB2cuHMOVVVRABYAKqaUhKRt9167yKyhvS11uXUWv+c9wcqkoXk2CZntQAAAABJRU5ErkJggg%3D%3D') no-repeat; font-size: 0; }
+            .tl { top: 0; left: 0; background-position: 0 0; }
+            .tr { top: 0; right: 0; background-position: -8px 0; }
+            .bl { bottom: 0; left: 0; background-position: 0 -8px; }
+            .br { bottom: 0; right: 0; background-position: -8px -8px; }
+            .clear {
+                clear: both;
+            }
+            .nobr {
+                white-space: nowrap;
+            }
+            strong {
+                font-weight: bold;
+            }
+            strong.db {
+                font-weight: bold;
+                font-size: 24px;
+                color:#f26522;
+            }
+            a {
+                color:#f26522;
+                text-decoration:none;
+            }
+            hr {
+                border: 0;
+                height: 1px;
+                background: #e0e0e0;
+            }
+            h1 {
+                margin: 0 0 10 0;
+                font-size: 16px;
+            }
+            h2 {
+                font-size:13.5pt;
+                font-weight:normal;
+            }
+            h2 a {
+                font-weight:normal;
+                font-size: 60%;
+            }
+            h3 {
+                font-size:10.5pt;
+                font-weight:normal;
+            }
+            h3 a {
+                font-weight:normal;
+                font-size: 80%;
+            }
+            div.header_content {
+                padding: 10px;
+            }
+            div.custom_chart {
+                margin-bottom: 40px;
+            }
+        
+                div.header {
+                    position: relative;
+                    float: left;
+                    background: #ffffff;
+                    width: 820;
+                }
+                div.row {
+                }
+                div.chart {
+                    white-space: nowrap;
+                    width: 800px;
+                }
+                div.chart_container {
+                    position: relative;
+                    float: left;
+                    white-space: nowrap;
+                    padding: 10px;
+                    background: #ffffff;
+                    width: 800;
+                    margin-right: 10px;
+                    margin-bottom: 10px;
+                }
+            </style>
+            <script type="text/javascript" charset="utf-8">
+                
+    openark_lchart=function(a,b){if(a.style.width==""){this.canvas_width=b.width}else{this.canvas_width=a.style.width}if(a.style.height==""){this.canvas_height=b.height}else{this.canvas_height=a.style.height}this.title_height=0;this.chart_title="";this.x_axis_values_height=20;this.y_axis_values_width=50;this.y_axis_tick_values=[];this.y_axis_tick_positions=[];this.x_axis_grid_positions=[];this.x_axis_label_positions=[];this.x_axis_labels=[];this.y_axis_min=0;this.y_axis_max=0;this.y_axis_round_digits=0;this.multi_series=[];this.multi_series_dot_positions=[];this.series_labels=[];this.series_legend_values=[];this.timestamp_legend_value=null;this.series_colors=openark_lchart.series_colors;this.tsstart=null;this.tsstep=null;this.container=a;this.interactive_legend=null;this.legend_values_containers=[];this.timestamp_value_container=null;this.canvas_shadow=null;this.position_pointer=null;this.isIE=false;this.current_color=null;this.skip_interactive=false;if(b.skipInteractive){this.skip_interactive=true}this.recalc();return this};openark_lchart.title_font_size=10;openark_lchart.title_color="#505050";openark_lchart.axis_color="#707070";openark_lchart.axis_font_size=8;openark_lchart.min_x_label_spacing=32;openark_lchart.legend_font_size=9;openark_lchart.legend_color="#606060";openark_lchart.series_line_width=1.5;openark_lchart.grid_color="#e4e4e4";openark_lchart.grid_thick_color="#c8c8c8";openark_lchart.position_pointer_color="#808080";openark_lchart.series_colors=["#ff0000","#ff8c00","#4682b4","#9acd32","#dc143c","#9932cc","#ffd700","#191970","#7fffd4","#808080","#dda0dd"];openark_lchart.google_simple_format_scheme="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";openark_lchart.prototype.recalc=function(){this.chart_width=this.canvas_width-this.y_axis_values_width;this.chart_height=this.canvas_height-(this.x_axis_values_height+this.title_height);this.chart_origin_x=this.canvas_width-this.chart_width;this.chart_origin_y=this.title_height+this.chart_height;this.y_axis_tick_values=[];this.y_axis_tick_positions=[];if(this.y_axis_max<=this.y_axis_min){return}max_steps=Math.floor(this.chart_height/(openark_lchart.axis_font_size*1.6));round_steps_basis=[1,2,5];step_size=null;pow=0;for(power=-4;power<10&&!step_size;++power){for(i=0;i<round_steps_basis.length&&!step_size;++i){round_step=round_steps_basis[i]*Math.pow(10,power);if((this.y_axis_max-this.y_axis_min)/round_step<max_steps){step_size=round_step;pow=power}}}var c=step_size*Math.ceil(this.y_axis_min/step_size);while(c<=this.y_axis_max){var b=(pow>=0?c:c.toFixed(-pow));this.y_axis_tick_values.push(b);var a=(c-this.y_axis_min)/(this.y_axis_max-this.y_axis_min);this.y_axis_tick_positions.push(Math.floor(this.chart_origin_y-a*this.chart_height));c+=step_size}this.y_axis_round_digits=(pow>=0?0:-pow)};openark_lchart.prototype.create_graphics=function(){this.container.innerHTML="";this.isIE=(/MSIE/.test(navigator.userAgent)&&!window.opera);this.container.style.position="relative";this.container.style.color=""+openark_lchart.axis_color;this.container.style.fontSize=""+openark_lchart.axis_font_size+"pt";this.container.style.fontFamily="Helvetica,Verdana,Arial,sans-serif";if(!this.skip_interactive){var b=this;this.container.onmousemove=function(c){b.on_mouse_move(c)};this.container.onmouseout=function(c){b.on_mouse_out(c)}}if(this.isIE){}else{var a=document.createElement("canvas");a.setAttribute("width",this.canvas_width);a.setAttribute("height",this.canvas_height);this.canvas=a;this.container.appendChild(this.canvas);this.ctx=this.canvas.getContext("2d")}this.canvas_shadow=document.createElement("div");this.canvas_shadow.style.position="absolute";this.canvas_shadow.style.top="0";this.canvas_shadow.style.left="0";this.canvas_shadow.style.width=this.canvas_width;this.canvas_shadow.style.height=this.canvas_height;this.container.appendChild(this.canvas_shadow)};openark_lchart.prototype.parse_url=function(a){a=a.replace(/[+]/gi," ");var b={};var c=a.indexOf("?");if(c>=0){a=a.substring(c+1)}tokens=a.split("&");for(i=0;i<tokens.length;++i){param_tokens=tokens[i].split("=");if(param_tokens.length==2){b[param_tokens[0]]=param_tokens[1]}}return b};openark_lchart.prototype.read_google_url=function(f){params=this.parse_url(f);this.title_height=0;if(params.chtt){this.chart_title=params.chtt;this.title_height=20}if(params.chdl){var j=params.chdl.split("|");this.series_labels=j}if(params.chco){var j=params.chco.split(",");this.series_colors=new Array(j.length);for(i=0;i<j.length;++i){this.series_colors[i]="#"+j[i]}}var j=params.chxr.split(",");if(j.length>=3){this.y_axis_min=parseFloat(j[1]);this.y_axis_max=parseFloat(j[2])}this.recalc();var j=params.chg.split(",");if(j.length>=6){var t=parseFloat(j[0]);var k=parseFloat(j[4]);this.x_axis_grid_positions=[];for(i=0,chart_x_pos=0;chart_x_pos<this.chart_width;++i){chart_x_pos=(k+i*t)*this.chart_width/100;if(chart_x_pos<this.chart_width){this.x_axis_grid_positions.push(Math.floor(chart_x_pos+this.chart_origin_x))}}}var j=params.chxp.split("|");for(axis=0;axis<j.length;++axis){var n=j[axis].split(",");var e=parseInt(n[0]);if(e==0){this.x_axis_label_positions=new Array(n.length-1);for(i=1;i<n.length;++i){var l=parseFloat(n[i])*this.chart_width/100;this.x_axis_label_positions[i-1]=Math.floor(l+this.chart_origin_x)}}}var j=params.chxl.split("|");if(j[0]=="0:"){this.x_axis_labels=new Array(j.length-1);for(i=1;i<j.length;++i){this.x_axis_labels[i-1]=j[i]}}if(params.chd){var a=params.chd;var g=null;var d=a.substring(0,2);if(d=="s:"){g="simple"}else{if(d=="t:"){g="text"}}if(g){this.multi_series=[];this.multi_series_dot_positions=[]}if(g=="simple"){this.skip_interactive=true;a=a.substring(2);var j=a.split(",");this.multi_series=new Array(j.length);this.multi_series_dot_positions=new Array(j.length);for(series_index=0;series_index<j.length;++series_index){var c=j[series_index];var h=new Array(c.length);var r=new Array(c.length);for(i=0;i<c.length;++i){var s=c.charAt(i);if(s=="_"){h[i]=null;r[i]=null}else{var m=openark_lchart.google_simple_format_scheme.indexOf(s)/61;var b=this.y_axis_min+m*(this.y_axis_max-this.y_axis_min);h[i]=b;r[i]=Math.round(this.chart_origin_y-m*this.chart_height)}}this.multi_series[series_index]=h;this.multi_series_dot_positions[series_index]=r}}if(g=="text"){a=a.substring(2);var j=a.split("|");this.multi_series=new Array(j.length);this.multi_series_dot_positions=new Array(j.length);for(series_index=0;series_index<j.length;++series_index){var q=j[series_index];var o=q.split(",");var h=new Array(o.length);var r=new Array(o.length);for(i=0;i<o.length;++i){var p=o[i];if(p=="_"){h[i]=null;r[i]=null}else{h[i]=parseFloat(p);var m=0;if(this.y_axis_max>this.y_axis_min){if(h[i]<this.y_axis_min){m=0}else{if(h[i]>this.y_axis_max){m=1}else{m=(h[i]-this.y_axis_min)/(this.y_axis_max-this.y_axis_min)}}}r[i]=Math.round(this.chart_origin_y-m*this.chart_height)}}this.multi_series[series_index]=h;this.multi_series_dot_positions[series_index]=r}}}if(params.tsstart){tsstart_text=params.tsstart.replace(/-/g,"/");this.tsstart=new Date(tsstart_text)}if(params.tsstep){this.tsstep=parseInt(params.tsstep)}this.redraw()};openark_lchart.prototype.redraw=function(){this.create_graphics();this.draw()};openark_lchart.prototype.create_value_container=function(){var a=document.createElement("div");a.style.display="inline";a.style.position="absolute";a.style.right=""+0+"px";a.style.textAlign="right";a.style.fontWeight="bold";return a};openark_lchart.prototype.draw=function(){if(this.chart_title){this.draw_text({text:this.chart_title,left:0,top:0,width:this.canvas_width,height:this.title_height,text_align:"center",font_size:openark_lchart.title_font_size})}this.set_color(openark_lchart.grid_color);for(i=0;i<this.y_axis_tick_positions.length;++i){this.draw_line(this.chart_origin_x,this.y_axis_tick_positions[i],this.chart_origin_x+this.chart_width-1,this.y_axis_tick_positions[i],1)}for(i=0;i<this.x_axis_grid_positions.length;++i){if(this.x_axis_labels[i].replace(/ /gi,"")){this.set_color(openark_lchart.grid_thick_color)}else{this.set_color(openark_lchart.grid_color)}this.draw_line(this.x_axis_grid_positions[i],this.chart_origin_y,this.x_axis_grid_positions[i],this.chart_origin_y-this.chart_height+1,1)}this.set_color(openark_lchart.axis_color);var k=0;for(i=0;i<this.x_axis_label_positions.length;++i){var g=this.x_axis_labels[i];var h=g.replace(/ /gi,"");if(g&&((k==0)||(this.x_axis_label_positions[i]-k>=openark_lchart.min_x_label_spacing)||!h)){this.draw_line(this.x_axis_label_positions[i],this.chart_origin_y,this.x_axis_label_positions[i],this.chart_origin_y+3,1);if(h){this.draw_text({text:""+g,left:this.x_axis_label_positions[i]-25,top:this.chart_origin_y+5,width:50,height:openark_lchart.axis_font_size,text_align:"center",font_size:openark_lchart.axis_font_size});k=this.x_axis_label_positions[i]}}}for(series=0;series<this.multi_series_dot_positions.length;++series){var l=[];l.push([]);this.set_color(this.series_colors[series]);var m=this.multi_series_dot_positions[series];for(i=0;i<m.length;++i){if(m[i]==null){l.push([])}else{var e=Math.round(this.chart_origin_x+i*this.chart_width/(m.length-1));l[l.length-1].push({x:e,y:m[i]})}}for(path=0;path<l.length;++path){this.draw_line_path(l[path],openark_lchart.series_line_width)}}this.set_color(openark_lchart.axis_color);this.draw_line(this.chart_origin_x,this.chart_origin_y,this.chart_origin_x,this.chart_origin_y-this.chart_height+1,1);this.draw_line(this.chart_origin_x,this.chart_origin_y,this.chart_origin_x+this.chart_width-1,this.chart_origin_y,1);var b="";for(i=0;i<this.y_axis_tick_positions.length;++i){this.draw_line(this.chart_origin_x,this.y_axis_tick_positions[i],this.chart_origin_x-3,this.y_axis_tick_positions[i],1);this.draw_text({text:""+this.y_axis_tick_values[i],left:0,top:this.y_axis_tick_positions[i]-openark_lchart.axis_font_size+Math.floor(openark_lchart.axis_font_size/3),width:this.y_axis_values_width-5,height:openark_lchart.axis_font_size,text_align:"right",font_size:openark_lchart.axis_font_size})}if(this.series_labels&&this.series_labels.length){if(this.isIE){var j=document.createElement("div");j.style.width=this.canvas_width;j.style.height=this.canvas_height;this.container.appendChild(j)}var f=document.createElement("div");var a=document.createElement("ul");a.style.margin=0;a.style.paddingLeft=this.chart_origin_x;if(this.tsstart){var c=document.createElement("li");c.style.listStyleType="none";c.style.fontSize=""+openark_lchart.legend_font_size+"pt";c.innerHTML="&nbsp;";this.timestamp_value_container=this.create_value_container();c.appendChild(this.timestamp_value_container);a.appendChild(c)}for(i=0;i<this.series_labels.length;++i){var c=document.createElement("li");c.style.listStyleType="square";c.style.color=this.series_colors[i];c.style.fontSize=""+openark_lchart.legend_font_size+"pt";c.innerHTML='<span style="color: '+openark_lchart.legend_color+'">'+this.series_labels[i]+"</span>";var d=this.create_value_container();d.style.width=""+(this.chart_origin_x+32)+"px";c.appendChild(d);this.legend_values_containers.push(d);a.appendChild(c)}f.appendChild(a);this.container.appendChild(f);this.interactive_legend=document.createElement("ul");this.interactive_legend.style.position="relative";this.interactive_legend.style.right="0px";this.interactive_legend.style.top="0px";f.appendChild(this.interactive_legend)}};openark_lchart.prototype.set_color=function(a){this.current_color=a;if(!this.isIE){this.ctx.strokeStyle=a}};openark_lchart.prototype.draw_line=function(d,f,c,e,a){if(this.isIE){var b=document.createElement("v:line");b.setAttribute("from"," "+d+" "+f+" ");b.setAttribute("to"," "+c+" "+e+" ");b.setAttribute("strokecolor",""+this.current_color);b.setAttribute("strokeweight",""+a+"pt");this.container.appendChild(b)}else{this.ctx.lineWidth=a;this.ctx.strokeWidth=0.5;this.ctx.beginPath();this.ctx.moveTo(d+0.5,f+0.5);this.ctx.lineTo(c+0.5,e+0.5);this.ctx.closePath();this.ctx.stroke()}};openark_lchart.prototype.draw_line_path=function(e,a){if(e.length==0){return}if(e.length==1){this.draw_line(e[0].x-2,e[0].y,e[0].x+2,e[0].y,a*0.8);this.draw_line(e[0].x,e[0].y-2,e[0].x,e[0].y+2,a*0.8);return}if(this.isIE){var c=document.createElement("v:polyline");var b=new Array(e.length*2);for(i=0;i<e.length;++i){b[i*2]=e[i].x;b[i*2+1]=e[i].y}var d=b.join(",");c.setAttribute("points",d);c.setAttribute("stroked","true");c.setAttribute("filled","false");c.setAttribute("strokecolor",""+this.current_color);c.setAttribute("strokeweight",""+a+"pt");this.container.appendChild(c)}else{this.ctx.lineWidth=a;this.ctx.strokeWidth=0.5;this.ctx.beginPath();this.ctx.moveTo(e[0].x+0.5,e[0].y+0.5);for(i=1;i<e.length;++i){this.ctx.lineTo(e[i].x+0.5,e[i].y+0.5)}this.ctx.stroke()}};openark_lchart.prototype.draw_text=function(b){var a=document.createElement("div");a.style.position="absolute";a.style.left=""+b.left+"px";a.style.top=""+b.top+"px";a.style.width=""+b.width+"px";a.style.height=""+b.height+"px";a.style.textAlign=""+b.text_align;a.style.verticalAlign="top";if(b.font_size){a.style.fontSize=""+b.font_size+"pt"}a.innerHTML=b.text;this.container.appendChild(a)};openark_lchart.prototype.on_mouse_move=function(a){if(!a){var a=window.event}var h=a.clientX-(findPosX(this.container)-(window.pageXOffset||document.documentElement.scrollLeft||document.body.scrollLeft||0));var g=a.clientY-(findPosY(this.container)-(window.pageYOffset||document.documentElement.scrollTop||document.body.scrollTop||0));var c=h-this.chart_origin_x;var b=this.chart_origin_y-g;var e=((c<=this.chart_width)&&(b<=this.chart_height)&&(c>=0)&&(b>=-20));var l=Math.round((this.multi_series[0].length-1)*(c/this.chart_width));if((b<0)&&(b>=-20)&&(c>=this.chart_width-10)){l=this.multi_series[0].length-1}if(e){this.series_legend_values=new Array(this.multi_series.length);for(series=0;series<this.multi_series.length;++series){var j=this.multi_series[series][l];if(j==null){this.series_legend_values[series]="n/a"}else{this.series_legend_values[series]=j.toFixed(this.y_axis_round_digits+1)}}if(this.position_pointer==null){this.position_pointer=document.createElement("div");this.position_pointer.style.position="absolute";this.position_pointer.style.top=""+(this.chart_origin_y-this.chart_height)+"px";this.position_pointer.style.width="2px";this.position_pointer.style.filter="alpha(opacity=60)";this.position_pointer.style.opacity="0.6";this.position_pointer.style.height=""+(this.chart_height)+"px";this.position_pointer.style.backgroundColor=openark_lchart.position_pointer_color;this.canvas_shadow.appendChild(this.position_pointer)}if(this.tsstart){var k=new Date(this.tsstart);if(this.tsstep%(60*60*24)==0){k.setDate(this.tsstart.getDate()+(this.tsstep/(60*60*24))*l)}else{if(this.tsstep%(60*60)==0){k.setHours(this.tsstart.getHours()+(this.tsstep/(60*60))*l)}else{if(this.tsstep%(60)==0){k.setMinutes(this.tsstart.getMinutes()+(this.tsstep/(60))*l)}else{k.setSeconds(this.tsstart.getSeconds()+this.tsstep*l)}}}var d=(this.tsstep<60*60*24);this.timestamp_legend_value=format_date(k,d)}this.update_legend();var f=Math.floor(this.chart_origin_x+l*this.chart_width/(this.multi_series_dot_positions[0].length-1));this.position_pointer.style.visibility="visible";this.position_pointer.style.left=""+(f)+"px"}else{this.clear_position_pointer_and_legend_values(a)}};openark_lchart.prototype.on_mouse_out=function(a){if(!a){var a=window.event}if(a.relatedTarget==this.position_pointer){return}this.clear_position_pointer_and_legend_values(a)};openark_lchart.prototype.clear_position_pointer_and_legend_values=function(a){if(this.position_pointer!=null){this.position_pointer.style.visibility="hidden"}this.series_legend_values=null;this.update_legend()};openark_lchart.prototype.update_legend=function(){if(this.tsstart){if(this.series_legend_values==null){this.timestamp_value_container.innerHTML=""}else{this.timestamp_value_container.innerHTML=this.timestamp_legend_value.replace(/ /g,"&nbsp;")}}for(i=0;i<this.series_labels.length;++i){if(this.series_legend_values==null){this.legend_values_containers[i].innerHTML=""}else{var a=0;if(this.y_axis_min<this.y_axis_max){a=100*((this.series_legend_values[i]-this.y_axis_min)/(this.y_axis_max-this.y_axis_min))}this.legend_values_containers[i].innerHTML=""+this.series_legend_values[i]}}};function findPosX(a){var b=0;if(a.offsetParent){while(1){b+=a.offsetLeft;if(!a.offsetParent){break}a=a.offsetParent}}else{if(a.x){b+=a.x}}return b}function findPosY(b){var a=0;if(b.offsetParent){while(1){a+=b.offsetTop;if(!b.offsetParent){break}b=b.offsetParent}}else{if(b.y){a+=b.y}}return a}function format_date(c,b){pad=function(f,e){var d=""+f;while(d.length<e){d="0"+d}return d};var a=""+c.getFullYear()+"-"+pad(c.getMonth()+1,2)+"-"+pad(c.getDate(),2);if(b){a+=" "+pad(c.getHours(),2)+":"+pad(c.getMinutes(),2)}return a};
+    
+            </script>
+            <script type="text/javascript" charset="utf-8">
+                window.onload = function () {
+            
+                new openark_lchart(
+                    document.getElementById("chart_div_os_page_io_sample"), 
+                    {width: 800, height: 200}
+                    ).read_google_url("http://chart.apis.google.com/chart?cht=lc&chs=370x180&chts=303030,12&chtt=Latest+24+hours:+Nov+9,+05:50++-++Nov+10,+05:50&chf=c,s,ffffff&chdl=os_page_ins_psec|os_page_outs_psec&chdlp=b&chco=ff8c00,4682b4&chd=t:4.6,3.2,1.9,7.4,127.3,360.6,4.8,2.0,12.8,6.0,3.4,1.0,5.6,3.5,2.2,11.3,9.3,4.4,6.6,5.8,4.4,6.0,4.5,37.6,14.8,13.8,10.7,11.9,4.4,1.7,6.6,3.7,5.8,4.9,3.7,5.0,10.0,4.7,3.7,6.6,5.8,7.3,7.1,4.6,7.7,7.3,3.4,4.4,6.5,4.0,4.1,5.4,2.2,3.2,11.8,52.0,3.4,10.7,2.5,2.4,4.1,2.8,3.5,23.0,2.4,2.1,4.9,2.2,200.3,4.2,2.0,1.8,3.8,4.1,5.4,7.8,2.4,3.5,10.4,6.3,2.8,5.3,1.6,2.5,4.9,147.2,12.3,2.9,1.8,1.3,4.1,1.4,1.2,3.3,2.1,1.3,3.5,2.5,1.0,4.1,1.4,1.5,4.5,2.2,1.9,3.8,2.3,3.8,4.8,6.5,7.7,13.1,50.7,123.6,189.1,19.5,3.0,3.8,5.6,1.7,5.9,4.7,3.1,4.5,2.2,0.8,3.1,1.2,1.1,5.3,0.8,1.6,4.8,5.0,2.5,3.3,2.2,1.6,3.7,2.6,19.8,3.4,1.3,1.2,5.6|1349.3,1462.0,1364.2,1665.6,1703.2,1376.2,1541.3,1307.4,1499.5,1803.0,1630.2,1347.8,1529.8,1564.9,1429.7,1705.0,2048.9,1622.6,1675.1,2464.4,1888.6,1783.4,2101.1,1433.0,1736.4,2159.1,1668.2,1538.7,2105.8,1698.4,1614.6,1942.1,1787.3,1932.0,2054.6,1646.5,1667.3,1926.2,1881.2,1735.0,2129.3,1925.7,1731.1,1947.3,1897.0,1633.9,1978.6,1654.2,1724.6,1983.2,1777.1,1617.6,1559.5,1771.5,1886.1,1704.5,1793.9,1593.4,1689.8,1884.1,1479.9,1867.8,1852.7,1729.4,1652.3,1766.8,1398.0,1755.7,1729.1,1703.0,1812.5,1804.1,1478.6,1818.2,1959.9,1594.6,1736.9,1777.5,1674.7,1946.1,1796.9,1680.3,1837.7,1721.3,1445.2,1782.0,1687.5,1407.4,1564.0,1420.9,1343.4,1568.0,1240.9,1440.9,1916.6,1479.3,1377.1,1618.0,1519.7,1543.1,1488.5,1402.8,1148.5,1462.6,1632.9,1349.8,1534.8,1561.3,1422.9,2959.2,8772.7,9634.4,9505.3,6254.6,2313.1,2898.1,1791.9,1342.3,1715.4,1601.6,1483.8,1425.9,1781.9,1497.6,1470.3,1361.3,1235.2,1226.1,1249.1,1218.8,1196.0,1349.1,1098.6,1216.2,1379.7,951.4,1435.4,1503.6,1073.2,1273.0,1302.2,1064.6,1200.8,1314.1,1162.6&chxt=x,y&chxr=1,0,9634.465000&chxl=0:|+||08:00||+||12:00||+||16:00||+||20:00||+||00:00||+||04:00||&chxs=0,505050,10,0,lt&chg=4.17,25,1,2,0.69,0&chxp=0,0.69,4.86,9.03,13.20,17.37,21.54,25.71,29.88,34.05,38.22,42.39,46.56,50.73,54.90,59.07,63.24,67.41,71.58,75.75,79.92,84.09,88.26,92.43,96.60&tsstart=2010-11-09+05:50:00&tsstep=600");
+                
+                new openark_lchart(
+                    document.getElementById("chart_div_os_page_io_hour"), 
+                    {width: 800, height: 200}
+                    ).read_google_url("http://chart.apis.google.com/chart?cht=lc&chs=370x180&chts=303030,12&chtt=Latest+10+days:+Oct+31,+06:00++-++Nov+10,+05:00&chf=c,s,ffffff&chdl=os_page_ins_psec|os_page_outs_psec&chdlp=b&chco=ff8c00,4682b4&chd=t:23.0,3.3,8.7,12.8,486.7,6969.1,103.5,82.0,2818.4,55.6,45.9,223.0,43.1,26.4,23.2,26.0,31.6,63.3,266.4,39.9,16.6,13.7,12.1,57.2,26.3,15.3,13.1,84.0,262.1,15.4,27.2,34.3,32.0,16.2,14.5,78.3,336.1,253.9,131.6,144.8,31.0,24.1,132.3,145.3,11.4,4.5,4.8,5.4,23.5,4.0,189.4,184.2,181.6,191.6,178.6,190.7,193.1,191.9,199.1,190.5,193.0,185.9,186.6,151.4,117.2,169.1,372.3,193.7,191.2,201.1,286.4,214.2,226.3,192.4,222.4,207.1,532.2,209.1,196.2,185.2,203.5,206.7,189.0,197.1,196.7,500.9,187.2,195.7,188.2,196.9,454.2,320.6,163.8,79.9,64.6,45.8,56.4,22.9,9.6,25.4,23.8,23.7,9.7,11.4,18.3,264.0,12.7,18.6,9.0,24.8,1473.8,1018.8,506.6,39.4,364.1,16.4,9.7,6.1,3.5,115.7,127.6,34.0,55.1,29.7,23.9,22.4,24.5,37.1,17.0,16.6,15.7,17.2,17.0,13.3,14.7,23.6,27.3,15.6,66.6,20.8,15.0,8.7,7.8,169.6,143.7,148.2,8.9,12.1,5.9,7.2,5.2,6.1,4.4,4.2,4.4,7.1,2.5,3.4,3.2,4.0,4.0,5.0,70.0,8.7,5.1,3.6,5.1,48.4,15.4,3.1,9.5,17.1,8.3,8.1,7.3,3.6,5.2,67.4,51.2,5.1,3.6,9.9,2.9,4.6,5.5,9.5,81.7,15.6,2.7,2.7,2.4,2.9,15.6,3.4,9.8,14.5,18.4,6.8,18.3,6.6,24.1,10.2,7.4,8.4,3.4,7.2,6.8,3.8,5.6,106.9,73.3,3.7,4.0,3.1,2.5,2.8,84.2,5.2,6.2,12.2,8.2,5.5,5.9,5.6,5.1,12.5,6.5,35.7,5.6,3.9,28.3,2.1,2.5,3.1,65.1,6.6,3.1,2.5,3.1,5.7|1272.3,1487.1,1557.3,1901.3,1835.1,2974.9,1766.0,1850.6,1682.7,1759.6,1713.6,1633.5,4949.2,1650.6,1689.3,1610.8,1734.3,2320.2,5333.0,2445.4,1342.1,1184.1,1159.9,1319.1,1319.1,1496.2,1605.3,1951.4,1850.3,1746.5,1844.7,1776.7,1754.8,1814.3,1709.9,1908.0,2587.2,2729.7,3002.0,3018.9,2790.0,2657.1,5327.4,4230.5,1629.5,1288.9,1193.6,1250.2,1323.1,1478.9,6636.3,7941.3,7829.3,7536.0,7531.1,7577.3,7731.5,7543.8,7649.1,7800.4,7725.4,7642.5,7491.8,5850.3,4120.8,6608.8,12755.0,7100.5,6619.9,6691.9,6633.1,6703.9,6583.7,6705.2,7190.3,7372.0,6849.1,6815.2,7237.3,6786.2,6949.6,6694.0,6670.7,6994.1,6750.0,6745.0,6562.5,6653.5,6580.2,6706.6,11712.6,3318.2,3107.4,3054.6,3054.0,2961.5,3162.0,2747.8,1469.8,1911.0,1833.0,1828.1,1727.8,1770.0,1840.0,1731.9,1889.1,1896.6,1880.1,1475.7,38741.3,25595.0,9866.5,1707.8,4033.7,1619.1,1464.0,1378.8,1281.4,1749.7,1385.0,1432.3,1475.4,1650.8,1566.1,1540.0,1569.8,1583.1,1537.5,1598.8,1480.2,1413.8,1386.0,1334.1,1310.6,1338.3,1364.9,1285.1,2563.2,1294.7,1203.4,1105.0,1027.5,1279.2,1559.5,3145.3,1367.9,1290.1,1197.1,1254.8,1250.0,1238.1,1197.1,1185.7,1201.1,1159.3,1124.1,1347.1,1375.8,1475.5,1495.7,1554.9,2894.6,1509.8,1389.8,1242.4,1181.5,1288.5,1233.6,1377.1,1355.6,1724.9,1517.4,1674.7,1755.2,1715.2,1621.3,1665.2,1733.9,1672.4,1855.4,1812.4,1553.9,1741.1,1735.3,1832.3,7224.3,3556.0,1164.3,1181.0,1162.7,1159.2,1352.5,1518.2,1605.1,1990.8,1867.5,1860.5,1928.2,1792.0,1855.4,1762.5,1753.3,1860.8,1673.1,1793.6,1739.3,1946.4,1745.0,1928.0,6883.7,1636.9,1568.9,1499.2,1308.1,1294.0,1518.6,1519.8,1674.2,1901.2,1797.4,1838.3,1888.0,1805.9,1766.0,1691.0,1711.3,1713.9,1760.3,1738.0,1534.3,1503.9,1453.4,1494.1,6573.3,1805.6,1462.0,1223.0,1259.8,1224.7&chxt=x,y&chxr=1,0,38741.35&chxl=0:|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|&chxs=0,505050,10,0,lt&chg=10.04,25,1,2,7.53,0&chxp=0,7.53,17.57,27.61,37.65,47.69,57.73,67.77,77.81,87.85,97.89&tsstart=2010-10-31+06:00:00&tsstep=3600");
+                
+                new openark_lchart(
+                    document.getElementById("chart_div_os_page_io_day"), 
+                    {width: 800, height: 200}
+                    ).read_google_url("http://chart.apis.google.com/chart?cht=lc&chs=370x180&chts=303030,12&chtt=Latest+37+days:+Oct+4,+2010++-++Nov+10,+2010&chf=c,s,ffffff&chdl=os_page_ins_psec|os_page_outs_psec&chdlp=b&chco=ff8c00,4682b4&chd=t:13.2,30.0,5415.0,23.0,12.2,331.7,23.8,22.8,1713.4,323.7,24.7,9.4,70.0,17.6,10.3,14.5,361.6,77.4,56.5,26.0,319.5,134.1,11.9,7.6,12.2,33.1,11.9,466.7,81.1,134.4,237.2,195.7,43.7,27.8,15.8,16.0,13.7,14.4|2069.6,2331.4,2288.2,2257.0,2106.2,1913.1,2027.0,2513.9,2505.7,2249.8,2319.6,2032.5,2109.3,2191.0,2357.6,2407.8,4246.1,2240.5,1541.3,1489.0,1610.7,1709.7,1704.2,1560.1,1458.5,1514.8,1496.1,1914.1,2097.7,5539.1,7056.2,5428.0,1574.1,1412.2,1628.5,1975.8,1854.2,2272.6&chxt=x,y&chxr=1,0,7056.29&chxl=0:|oct+4|oct+11|oct+18|oct+25|nov+1|nov+8|&chxs=0,505050,10,0,lt&chg=18.92,25,1,2,0.00,0&chxp=0,0.00,18.92,37.84,56.76,75.68,94.60&tsstart=2010-10-04&tsstep=86400");
+                
+                };
+            </script>
+            </head>
+            <body>
+                <a name=""></a>
+                <div class="header">
+        <div class="http_html_embed">
+            <a href="../../index.html">Home</a> | mycheckpoint databases [<a href="../../refresh-databases-list"><i>refresh</i></a>]: <strong>mcp_sql00</strong> | <a href="../../mcp_sql01/index.html">mcp_sql01</a><br/>
+            Reports: <a href="../sv_report_html_brief">Brief</a> | <a href="../sv_custom_html_brief">Custom brief</a> | <a href="../alert_pending_html_view">Alert</a> | <a href="../sv_report_html_24_7">24/7</a> | <a href="../sv_report_html">Full</a> | <a href="../sv_custom_html">Custom full</a><br/>
+            
+        </div>
+        
+                    <div class="corner bl"></div><div class="corner br"></div>
+                    <div class="header_content">
+                        <h1><strong class="db">mcp_sql00</strong> database monitoring: os_page_io zoom in</h1>
+                        Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on <strong>Nov 4th 2010, 10:07</strong>. Revision: <strong>0</strong>, build: <strong>0</strong>. MySQL version: <strong>5.1.50</strong>    
+                        <br/>The charts on this report are generated locally and do not send data over the net. Click the <a name="none">[url]</a> links to view Google image charts.
+                    </div>
+                </div>
+                <div class="clear"></div>
+                <h2>os_page_io</h2>
+                
+            <div class="row">
+               <div class="chart_container">
+                    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+                    <h3><a href="http://chart.apis.google.com/chart?cht=lc&chs=370x180&chts=303030,12&chtt=Latest+24+hours:+Nov+9,+05:50++-++Nov+10,+05:50&chf=c,s,ffffff&chdl=os_page_ins_psec|os_page_outs_psec&chdlp=b&chco=ff8c00,4682b4&chd=s:AAAABCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAABBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,JJJLLJKIJLKJKKJLNKLQMLNJLOLKNLKMLMNKLMMLNMLMMKNKLNLKKLMLLKLMJMMLKLJLLLLLJMMKLLLMLLMLJLLJKJJKIJMJJKKKJJHJKJKKJT498oPSLILKJJLJJJIIIIIJHIJGJKHIIHIIH&chxt=x,y&chxr=1,0,9634.465000&chxl=0:|+||08:00||+||12:00||+||16:00||+||20:00||+||00:00||+||04:00||&chxs=0,505050,10,0,lt&chg=4.17,25,1,2,0.69,0&chxp=0,0.69,4.86,9.03,13.20,17.37,21.54,25.71,29.88,34.05,38.22,42.39,46.56,50.73,54.90,59.07,63.24,67.41,71.58,75.75,79.92,84.09,88.26,92.43,96.60&tsstart=2010-11-09+05:50:00&tsstep=600">[url]</a></h3>
+                    <div id="chart_div_os_page_io_sample" class="chart"></div>
+                </div>
+                <div class="clear"></div>
+            </div>
+            <div class="row">
+               <div class="chart_container">
+                    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+                    <h3><a href="http://chart.apis.google.com/chart?cht=lc&chs=370x180&chts=303030,12&chtt=Latest+10+days:+Oct+31,+06:00++-++Nov+10,+05:00&chf=c,s,ffffff&chdl=os_page_ins_psec|os_page_outs_psec&chdlp=b&chco=ff8c00,4682b4&chd=s:AAAABLAAEAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAABAAAAAAAABAAAABBAAAAAAAAAAAAAAAAAACCBABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,CCCDDFDDDDDDIDDDDEIECCCCCCDDDDDDDDDDEEFFEEIHDCCCCCKNMMMMMMMMMMMJGKULKLKLKLLMLLLLLLLLLLKKKLSFFFFFFECDDDDDDDDDDC9oQDGDCCCDCCCDCCCCCDCCCCCCCCECCCCCCFCCCCCCCCCCCCCCCCFCCCCCCCCDCDDDDDDDDDCDDDLGCCCCCCDDDDDDDDDDDDDDDDLDCCCCCCDDDDDDDDDDDDCCCCKDCCCC&chxt=x,y&chxr=1,0,38741.35&chxl=0:|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|&chxs=0,505050,10,0,lt&chg=10.04,25,1,2,7.53,0&chxp=0,7.53,17.57,27.61,37.65,47.69,57.73,67.77,77.81,87.85,97.89&tsstart=2010-10-31+06:00:00&tsstep=3600">[url]</a></h3>
+                    <div id="chart_div_os_page_io_hour" class="chart"></div>
+                </div>
+                <div class="clear"></div>
+            </div>
+            <div class="row">
+               <div class="chart_container">
+                    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+                    <h3><a href="http://chart.apis.google.com/chart?cht=lc&chs=370x180&chts=303030,12&chtt=Latest+37+days:+Oct+4,+2010++-++Nov+10,+2010&chf=c,s,ffffff&chdl=os_page_ins_psec|os_page_outs_psec&chdlp=b&chco=ff8c00,4682b4&chd=s:AAvAADAAPDAABAAADBAADBAAAAAEBBCCAAAAAA,SUUUSRSWWTUSSTUVlTNNOPPNNNNRSw9vOMORQU&chxt=x,y&chxr=1,0,7056.29&chxl=0:|oct+4|oct+11|oct+18|oct+25|nov+1|nov+8|&chxs=0,505050,10,0,lt&chg=18.92,25,1,2,0.00,0&chxp=0,0.00,18.92,37.84,56.76,75.68,94.60&tsstart=2010-10-04&tsstep=86400">[url]</a></h3>
+                    <div id="chart_div_os_page_io_day" class="chart"></div>
+                </div>
+                <div class="clear"></div>
+            </div>
+            </body>
+        </html>
+      

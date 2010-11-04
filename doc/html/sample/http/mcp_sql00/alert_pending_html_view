@@ -1,0 +1,164 @@
+
+                <html>
+                    <head>
+                    <title>mcp_sql00 monitoring: pending alerts</title>
+                    <meta http-equiv="refresh" content="600" />
+                    <style type="text/css">
+                        
+            div.http_html_embed {
+                background: #f6f0f0;
+                margin: 10px 10px 0px 10px;
+                padding: 4px 0px 4px 0px;
+            }
+            body {
+                background:#e0e0e0 none repeat scroll 0%;
+                color:#505050;
+                font-family:Verdana,Arial,Helvetica,sans-serif;
+                font-size:9pt;
+                line-height:1.5;
+            }
+            .corner { position: absolute; width: 8px; height: 8px; background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9oGGREdC6h6BI8AAAAZdEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAA2UlEQVQoz5WSS2rEMBBESx/apqWV7384n0CrlhCNPlloMgmZiePUphG8B4Uoc54nPsPMIQTvvbUWwBijtZZzLqU8Gb8OEcUYmdk5h28hom3b9n0XEVV9CER0HAcRGWPwEudcjJGIUkqqagGs91t6xRizKgDwzMzMF/TTYeZaqw0h/Oj9W5xzIQTrvcftrA+094X/0Q9njHGfHmPY1tp9obVmc8699zt07z3nbEsppZQ55zU951ykBbB2cuHMOVVVRABYAKqaUhKRt9167yKyhvS11uXUWv+c9wcqkoXk2CZntQAAAABJRU5ErkJggg%3D%3D') no-repeat; font-size: 0; }
+            .tl { top: 0; left: 0; background-position: 0 0; }
+            .tr { top: 0; right: 0; background-position: -8px 0; }
+            .bl { bottom: 0; left: 0; background-position: 0 -8px; }
+            .br { bottom: 0; right: 0; background-position: -8px -8px; }
+            .clear {
+                clear: both;
+            }
+            .nobr {
+                white-space: nowrap;
+            }
+            strong {
+                font-weight: bold;
+            }
+            strong.db {
+                font-weight: bold;
+                font-size: 24px;
+                color:#f26522;
+            }
+            a {
+                color:#f26522;
+                text-decoration:none;
+            }
+            hr {
+                border: 0;
+                height: 1px;
+                background: #e0e0e0;
+            }
+            h1 {
+                margin: 0 0 10 0;
+                font-size: 16px;
+            }
+            h2 {
+                font-size:13.5pt;
+                font-weight:normal;
+            }
+            h2 a {
+                font-weight:normal;
+                font-size: 60%;
+            }
+            h3 {
+                font-size:10.5pt;
+                font-weight:normal;
+            }
+            h3 a {
+                font-weight:normal;
+                font-size: 80%;
+            }
+            div.header_content {
+                padding: 10px;
+            }
+            div.custom_chart {
+                margin-bottom: 40px;
+            }
+        
+                        div.header {
+                            position: relative;
+                            float: left;
+                            background: #ffffff;
+                            margin-bottom: 10px;
+                        }
+                        div.table_container {
+                            padding: 10px;
+                            background: #ffffff;
+                            position: relative;
+                            float: left;
+                        }
+                        table {
+                            border-collapse: collapse;
+                            font-size: 9pt;
+                        }
+                        table, tr, td {
+                            border: 2px solid #e0e0e0;
+                        }
+                        tr.header {
+                            font-weight: bold;
+                        }
+                        td {
+                            padding: 3px 6px 3px 6px;
+                        }
+                        .el_awaiting {
+                            color: #ffffff;
+                            background-color: #c0c0c0;
+                        }
+                        .el_debug {
+                            color: #000000;
+                            background-color: #ffffff;
+                        }
+                        .el_info {
+                            color: #ffffff;
+                            background-color: #0000ff;
+                        }
+                        .el_warning {
+                            color: #000000;
+                            background-color: #ffff00;
+                        }
+                        .el_error {
+                            color: #ffffff;
+                            background-color: #ff0000;
+                        }
+                        .el_critical {
+                            color: #ffffff;
+                            background-color: #000000;
+                        }
+                    </style>
+                    </head>
+                    <body>
+                        <a name=""></a>
+                        <div class="table_container">
+                            <div class="header">
+        <div class="http_html_embed">
+            <a href="../index.html">Home</a> | mycheckpoint databases [<a href="../refresh-databases-list"><i>refresh</i></a>]: <strong>mcp_sql00</strong> | <a href="../mcp_sql01/index.html">mcp_sql01</a><br/>
+            Reports: <a href="sv_report_html_brief">Brief</a> | <a href="sv_custom_html_brief">Custom brief</a> | <strong>Alert</strong> | <a href="sv_report_html_24_7">24/7</a> | <a href="sv_report_html">Full</a> | <a href="sv_custom_html">Custom full</a><br/>
+            This page was generated using this query: <strong>SELECT html FROM mcp_sql00.alert_pending_html_view</strong><br/>
+        </div>
+        </div>
+                            <div class="clear"></div>
+                            <table class="table">
+                                <tr>
+                                    <td colspan="6">
+                                        <h1><strong class="db">mcp_sql00</strong> database monitoring: pending alerts report</h1>
+                                        Report generated by <a href="http://code.openark.org/forge/mycheckpoint" target="mycheckpoint">mycheckpoint</a> on <strong>Nov 4th 2010, 10:06</strong>. Revision: <strong>0</strong>, build: <strong>0</strong>. MySQL version: <strong>5.1.50</strong>
+                                        <br/><br/><br/>    
+                                    </td>
+                                </tr>
+                                <tr class="row header">
+                                  <td>Error level</td> 
+                                  <td>Description</td> 
+                                  <td>Alert start time</td> 
+                                  <td>Elapsed minutes</td> 
+                                  <td>Notification time</td>
+                                  <td>Repeating notification</td>
+                                </tr> 
+                                
+                            </table>
+                        </div>
+                        <div class="clear"></div>
+                          <br/>
+                          <div>
+                            There are no pending alerts
+                          </div>
+                    </body>
+                </html>
+                
+            
