@@ -3868,6 +3868,7 @@ def create_status_variables_views_and_aggregations():
             innodb_buffer_pool_size,
             innodb_flush_log_at_trx_commit,
             ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1) AS innodb_buffer_pool_used_percent,
+            ROUND(innodb_buffer_pool_pages_dirty/NULLIF(innodb_buffer_pool_pages_total, 0), 1) AS innodb_buffer_pool_pages_dirty_percent,
             ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
             innodb_buffer_pool_reads_psec,
             innodb_buffer_pool_pages_flushed_psec,
@@ -4021,7 +4022,7 @@ def create_status_variables_views_and_aggregations():
 
         ("innodb_read_hit_percent", "innodb_read_hit_percent", False, False, ["#9acd32", ]),
         ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True, False, ["#4682b4", "#9acd32", ]),
-        ("innodb_buffer_pool_used_percent", "innodb_buffer_pool_used_percent", True, True, ["#dda0dd", ]),
+        ("innodb_buffer_pool_used_percent, innodb_buffer_pool_pages_dirty_percent", "innodb_buffer_pool_usage", True, True, ["#dda0dd", ]),
         ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True, False, ["9932cc", ]),
         ("innodb_row_lock_waits_psec", "innodb_row_lock_waits_psec", True, False, ["808080", ]),
 
@@ -4113,7 +4114,7 @@ def create_status_variables_views_and_aggregations():
     # Report HTML views:
     create_report_html_24_7_view(report_24_7_columns)
     create_report_html_view("""
-        innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_used_percent,
+        innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_usage,
         myisam_key_buffer_used_percent, myisam_key_hit,
         bytes_io,
         DML, questions,
