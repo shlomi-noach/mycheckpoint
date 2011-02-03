@@ -3868,7 +3868,7 @@ def create_status_variables_views_and_aggregations():
             innodb_buffer_pool_size,
             innodb_flush_log_at_trx_commit,
             ROUND(100 - 100*innodb_buffer_pool_pages_free/NULLIF(innodb_buffer_pool_pages_total, 0), 1) AS innodb_buffer_pool_used_percent,
-            ROUND(innodb_buffer_pool_pages_dirty/NULLIF(innodb_buffer_pool_pages_total, 0), 1) AS innodb_buffer_pool_pages_dirty_percent,
+            ROUND(100*innodb_buffer_pool_pages_dirty/NULLIF(innodb_buffer_pool_pages_total, 0), 1) AS innodb_buffer_pool_pages_dirty_percent,
             ROUND(100 - (100*innodb_buffer_pool_reads_diff/NULLIF(innodb_buffer_pool_read_requests_diff, 0)), 2) AS innodb_read_hit_percent,
             innodb_buffer_pool_reads_psec,
             innodb_buffer_pool_pages_flushed_psec,
