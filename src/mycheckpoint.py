@@ -650,6 +650,7 @@ def get_additional_status_variables():
         "innodb_os_log_written", 
         "innodb_row_lock_waits", 
         "innodb_row_lock_current_waits", 
+        "innodb_row_lock_time", 
     ]
     additional_status_variables.extend(get_custom_status_variables())
     additional_status_variables.extend(get_custom_time_status_variables())
@@ -2184,7 +2185,7 @@ def create_status_variables_hour_aggregation_table():
             exit_with_error("Cannot execute %s" % query )
         
     
-    global_variables, status_columns = get_variables_and_status_columns()
+    _global_variables, status_columns = get_variables_and_status_columns()
 
     global_variables_columns_listing = ",\n".join(["%s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in get_status_variables_columns()])
     sum_diff_columns_listing = ",\n".join(["%s_diff BIGINT" % (column_name,) for column_name in status_columns])
@@ -2206,7 +2207,7 @@ def create_status_variables_hour_aggregation_table():
     try:
         act_query(query)
         table_created = True
-    except MySQLdb.Error, err:
+    except MySQLdb.Error, _err:
         pass
     
     if table_created:
@@ -2231,7 +2232,7 @@ def create_status_variables_day_aggregation_table():
             exit_with_error("Cannot execute %s" % query )
         
     
-    global_variables, status_columns = get_variables_and_status_columns()
+    _global_variables, status_columns = get_variables_and_status_columns()
 
     global_variables_columns_listing = ",\n".join(["%s BIGINT %s" % (column_name, get_column_sign_indicator(column_name)) for column_name in get_status_variables_columns()])
     sum_diff_columns_listing = ",\n".join(["%s_diff BIGINT" % (column_name,) for column_name in status_columns])
@@ -3876,6 +3877,7 @@ def create_status_variables_views_and_aggregations():
             ROUND(innodb_os_log_written_psec*60*60/1024/1024, 1) AS innodb_estimated_log_mb_written_per_hour,
             innodb_row_lock_waits_psec,
             innodb_row_lock_current_waits,
+            innodb_row_lock_time_psec,
 
             bytes_sent_psec/1024/1024 AS mega_bytes_sent_psec,
             bytes_received_psec/1024/1024 AS mega_bytes_received_psec,
@@ -3938,9 +3940,12 @@ def create_status_variables_views_and_aggregations():
             ROUND(100*table_locks_waited_diff/NULLIF(table_locks_waited_diff + table_locks_immediate_diff, 0), 1) AS table_lock_waited_percent,
 
             IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0) AS table_cache_size,
+            IFNULL(table_definition_cache, 0) AS table_definition_cache_size,
             open_tables,
+            IFNULL(open_table_definitions, 0) AS open_table_definitions,            
             ROUND(100*open_tables/NULLIF(IFNULL(table_cache, 0) + IFNULL(table_open_cache, 0), 0), 1) AS table_cache_use_percent,
             opened_tables_psec,
+            IFNULL(opened_table_definitions_psec, 0) AS opened_table_definitions_psec,
 
             tmp_table_size,
             max_heap_table_size,
@@ -4024,7 +4029,7 @@ def create_status_variables_views_and_aggregations():
         ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True, False, ["#4682b4", "#9acd32", ]),
         ("innodb_buffer_pool_used_percent, innodb_buffer_pool_pages_dirty_percent", "innodb_buffer_pool_usage", True, True, ["#dda0dd", ]),
         ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True, False, ["9932cc", ]),
-        ("innodb_row_lock_waits_psec", "innodb_row_lock_waits_psec", True, False, ["808080", ]),
+        ("innodb_row_lock_time_psec", "innodb_row_lock_time_psec", True, False, ["808080", ]),
 
         ("mega_bytes_sent_psec, mega_bytes_received_psec", "bytes_io", True, False, ["#7fffd4", "808080", ]),
 
@@ -4040,10 +4045,10 @@ def create_status_variables_views_and_aggregations():
 
         ("table_locks_waited_psec", "table_locks_waited_psec", True, False, ["dc143c", ]),
 
-        ("table_cache_size, open_tables", "table_cache_use", True, False, ["#9932cc", "7fffd4", ]),
-        ("opened_tables_psec", "opened_tables_psec", True, False, ["#4682b4", "dc143c", ]),
+        ("table_cache_size, open_tables, table_definition_cache_size, open_table_definitions", "table_cache_use", True, False, ["#9932cc", "7fffd4", ]),
+        ("opened_tables_psec, opened_table_definitions_psec", "opened_tables_psec", True, False, ["#4682b4", "dc143c", ]),
 
-        ("connections_psec, aborted_connects_psec", "connections_psec", True, False, ["#ff8c00", "#dda0dd", ]),
+        ("connections_psec, aborted_connects_psec, threads_created_psec", "connections", True, False, ["#ff8c00", "#dda0dd", ]),
         ("max_connections, threads_connected, threads_running", "connections_usage", True, False, ["#808080", "#ffd700", "#7fffd4", ]),
 
         ("thread_cache_size, threads_cached", "thread_cache_use", True, False, ["#808080", "#ff8c00", ]),
@@ -4077,7 +4082,7 @@ def create_status_variables_views_and_aggregations():
         "innodb_buffer_pool_reads_psec",
         "innodb_buffer_pool_pages_flushed_psec",
         "innodb_os_log_written_psec",
-        "innodb_row_lock_waits_psec",
+        "innodb_row_lock_time_psec",
         "mega_bytes_sent_psec",
         "mega_bytes_received_psec",
         "key_read_hit_percent",
@@ -4114,7 +4119,7 @@ def create_status_variables_views_and_aggregations():
     # Report HTML views:
     create_report_html_24_7_view(report_24_7_columns)
     create_report_html_view("""
-        innodb_read_hit_percent, innodb_io, innodb_row_lock_waits_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_usage,
+        innodb_read_hit_percent, innodb_io, innodb_row_lock_time_psec, innodb_estimated_log_mb_written_per_hour, innodb_buffer_pool_usage,
         myisam_key_buffer_used_percent, myisam_key_hit,
         bytes_io,
         DML, questions,
@@ -4123,7 +4128,7 @@ def create_status_variables_views_and_aggregations():
         read_patterns,
         table_locks_waited_psec,
         table_cache_use, opened_tables_psec,
-        connections_psec, connections_usage,
+        connections, connections_usage,
         thread_cache_use, threads_created_psec,
         relay_log_used_mb, seconds_behind_master, seconds_behind_master_psec,
         uptime_percent,
@@ -4137,7 +4142,7 @@ def create_status_variables_views_and_aggregations():
     brief_html_view_charts = [
             ("InnoDB & I/O", "innodb_read_hit_percent, innodb_io, bytes_io"),
             ("Questions", "DML, questions, tmp_tables"),
-            ("Resources", "connections_psec, threads_created_psec, opened_tables_psec"),
+            ("Resources", "connections, threads_created_psec, opened_tables_psec"),
             ("Caches", "myisam_key_hit, thread_cache_use, table_cache_use"),
             ("Vitals", "seconds_behind_master, connections_usage, uptime_percent"),
             ("OS", "os_memory, os_cpu_utilization_percent, os_loadavg"),
