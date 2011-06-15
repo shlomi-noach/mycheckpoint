@@ -604,20 +604,32 @@ def get_page_io_activity():
 
 def get_custom_query_ids():
     """
-    Returns the ordered ids
+    Returns ids of custom queries
     """
     global custom_query_ids
-    global custom_chart_names
     if custom_query_ids is None:
         query = """SELECT custom_query_id, chart_name FROM %s.custom_query_view""" % database_name 
         rows = get_rows(query, write_conn)
         custom_query_ids = [int(row["custom_query_id"]) for row in rows]
-        custom_chart_names = [row["chart_name"] for row in rows]
     return custom_query_ids
 
 
+def get_custom_query_ids_charts_enabled():
+    """
+    Returns ids of custom queries which express presentable charts; also read matching chart names
+    """
+    global custom_query_ids_charts_enabled
+    global custom_chart_names
+    if custom_query_ids_charts_enabled is None:
+        query = """SELECT custom_query_id, chart_name FROM %s.custom_query_view WHERE chart_enabled = 1""" % database_name 
+        rows = get_rows(query, write_conn)
+        custom_query_ids_charts_enabled = [int(row["custom_query_id"]) for row in rows]
+        custom_chart_names = [row["chart_name"] for row in rows]
+    return custom_query_ids_charts_enabled
+
+
 def get_custom_chart_names():
-    get_custom_query_ids()
+    get_custom_query_ids_charts_enabled()
     return custom_chart_names
 
 
@@ -1137,9 +1149,15 @@ def create_custom_query_table():
           PRIMARY KEY (custom_query_id)
         )
         """ % database_name
+    # Upgrade:
+    alter_query = """
+        ALTER TABLE %s.custom_query 
+          MODIFY COLUMN chart_type ENUM('value', 'value_psec', 'time', 'none') NOT NULL DEFAULT 'value'
+        """ % database_name
 
     try:
         act_query(query)
+        act_query(alter_query)
         verbose("custom_query table created")
     except MySQLdb.Error:
         if options.debug:
@@ -1150,7 +1168,10 @@ def create_custom_query_table():
         SET custom_queries = 
             (SELECT 
                 IFNULL(
-                  GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ',')
+                  GROUP_CONCAT(
+                    CONCAT(custom_query_id, ':', chart_type) 
+                    ORDER BY chart_order, custom_query_id SEPARATOR ','
+                  )
                   , '') 
             FROM ${database_name}.custom_query
             ) 
@@ -1178,7 +1199,12 @@ def create_custom_query_view():
                 WHEN 'value' THEN CONCAT('custom_', custom_query_id)
                 WHEN 'value_psec' THEN CONCAT('custom_', custom_query_id, '_psec')
                 WHEN 'time' THEN CONCAT('custom_', custom_query_id, '_time')
-            END AS chart_name
+                WHEN 'none' THEN NULL
+            END AS chart_name,
+            CASE chart_type
+                WHEN 'none' THEN 0
+                ELSE 1
+            END AS chart_enabled
           FROM
             ${database_name}.custom_query
           ORDER BY 
@@ -1208,6 +1234,8 @@ def create_custom_query_top_navigation_view():
             ) AS custom_query_top_navigation
           FROM
             ${database_name}.custom_query_view
+          WHERE
+            ${database_name}.custom_query_view.chart_enabled = 1
     """
     query = query.replace("${database_name}", database_name)
     act_query(query)
@@ -1873,7 +1901,18 @@ def is_same_deploy():
               AND build = %d 
               AND mysql_version = '%s'
               AND database_name = '%s'
-              AND custom_queries = (SELECT IFNULL(GROUP_CONCAT(custom_query_id ORDER BY chart_order, custom_query_id SEPARATOR ','), '') FROM ${database_name}.custom_query)
+              AND custom_queries = 
+                (
+                  SELECT 
+                    IFNULL(
+                      GROUP_CONCAT(
+                        CONCAT(custom_query_id, ':', chart_type) 
+                        ORDER BY chart_order, custom_query_id SEPARATOR ','
+                      )
+                      , '') 
+                  FROM 
+                    ${database_name}.custom_query
+                )
               AND last_deploy_successful = 1
               """ % (revision_number, build_number, get_monitored_host_mysql_version(), database_name)
         query = query.replace("${database_name}", database_name)
@@ -3062,6 +3101,8 @@ def create_custom_google_charts_views():
                 END AS chart_extended
               FROM
                 ${database_name}.custom_query_view, ${database_name}.sv_report_chart_${view_name_extension}
+              WHERE
+                ${database_name}.custom_query_view.chart_enabled = 1
               ORDER BY
                 chart_order ASC, custom_query_id ASC
             """ % ("\n".join(simple_chart_case_clauses), "\n".join(extended_chart_case_clauses),)
@@ -3077,8 +3118,9 @@ def create_custom_google_charts_flattened_views():
     We flatten the sv_custom_chart_* views into one row. This will be useful when generating HTML view.
     """
     custom_clauses = []
-    if get_custom_query_ids():
-        for i in get_custom_query_ids():
+    custom_query_ids_charts_enabled
+    if get_custom_query_ids_charts_enabled():
+        for i in get_custom_query_ids_charts_enabled():
             custom_clause = """
                 MAX(IF(custom_query_id=%d AND enabled, chart, NULL)) AS custom_%d_chart,
                 MAX(IF(custom_query_id=%d AND enabled, chart_extended, NULL)) AS custom_%d_chart_extended,
@@ -3401,7 +3443,7 @@ def create_report_html_brief_view(report_charts):
 def create_custom_html_view():
     rows_queries = []
     js_queries = []
-    for i in get_custom_query_ids():
+    for i in get_custom_query_ids_charts_enabled():
         chart_alias = "custom_%d_chart" % i
         div_queries = []
         for view_name_extension in ["sample", "hour", "day"]:
@@ -3568,7 +3610,7 @@ def create_custom_html_brief_view():
     js_queries = []
 
     charts_aliases_queries = []
-    for i in get_custom_query_ids():
+    for i in get_custom_query_ids_charts_enabled():
         chart_alias = "custom_%d" % i
         # There's different treatment to custom columns:
         # Custom columns' titles need to reflect the custom query's description. So does the chart's legend.
@@ -3899,6 +3941,7 @@ def create_status_variables_views_and_aggregations():
 
             com_select_psec,
             com_insert_psec,
+            com_insert_select_psec,
             com_update_psec,
             com_delete_psec,
             com_replace_psec,
@@ -3909,6 +3952,7 @@ def create_status_variables_views_and_aggregations():
             queries_psec,
             ROUND(100*com_select_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_select_percent,
             ROUND(100*com_insert_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_insert_percent,
+            ROUND(100*com_insert_select_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_insert_select_percent,
             ROUND(100*com_update_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_update_percent,
             ROUND(100*com_delete_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_delete_percent,
             ROUND(100*com_replace_diff/NULLIF(IFNULL(queries_diff, questions_diff), 0), 1) AS com_replace_percent,
@@ -4036,7 +4080,7 @@ def create_status_variables_views_and_aggregations():
         ("key_buffer_used_percent", "myisam_key_buffer_used_percent", True, True, ["191970", ]),
         ("key_read_requests_psec, key_reads_psec, key_write_requests_psec, key_writes_psec", "myisam_key_hit", True, False, ["#9acd32", "#ff8c00", "#ffd700", "#4682b4", ]),
 
-        ("com_select_psec, com_insert_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False, ["#dc143c", "#ffd700", "#4682b4", "9acd32", "808080", ]),
+        ("com_select_psec, com_insert_psec, com_insert_select_psec, com_delete_psec, com_update_psec, com_replace_psec", "DML", True, False, ["#dc143c", "#ffd700", "#4682b4", "9acd32", "808080", ]),
         ("queries_psec, questions_psec, slow_queries_psec, com_commit_psec, com_set_option_psec", "questions", True, False, ["#7fffd4", "#ff8c00", "#4682b4", "9932cc", "ffd700", ]),
         ("innodb_rows_inserted_psec, innodb_rows_deleted_psec, innodb_rows_updated_psec", "innodb_rows", True, False, ["#dda0dd", "#7fffd4", "#4682b4", ]),
 
@@ -4818,6 +4862,7 @@ try:
         extra_dict = {}
         report_columns = []
         custom_query_ids = None
+        custom_query_ids_charts_enabled = None
         custom_chart_names = None
         http_known_databases = []
         status_variables_insert_id = None
