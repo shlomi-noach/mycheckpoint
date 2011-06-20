@@ -1,5 +1,13 @@
-<project name="mycheckpoint" default="dist" basedir=".">
 
+<project name="mycheckpoint" default="dist" basedir=".">
+	<taskdef resource="net/sf/antcontrib/antcontrib.properties">
+		<classpath>
+			<pathelement location="/usr/share/java/ant-contrib.jar"/>
+		</classpath>
+	</taskdef>
+
+
+	<property name="doc.templates.dir" value="doc/templates"/>
 	<property name="python.distribution.dir" value="py-dist"/>
 	<property name="debian.distribution.dir" value="deb-dist"/>
 	<property name="rpm.distribution.dir" value="rpm-dist"/>
@@ -9,7 +17,8 @@
 		<delete dir="build"/>
 		<delete dir="dist"/>
 		<delete dir="${python.distribution.dir}"/>
-		<delete dir="deb-dist"/>
+		<delete dir="${debian.distribution.dir}"/>
+		<delete dir="${rpm.distribution.dir}"/>
 		<delete dir="script-dist"/>
 		<delete dir="ant-tmp"/>
 	</target>
@@ -104,7 +113,7 @@
 		<chmod perm="755">
 			<fileset dir="${debian.distribution.dir}/mycheckpoint/usr/bin"/>
 		</chmod>
-		<exec dir="deb-dist" executable="dpkg-deb">
+		<exec dir="${debian.distribution.dir}" executable="dpkg-deb">
 			<arg value="--build"/>
 			<arg value="mycheckpoint"/>
 			<arg value="mycheckpoint-${svn.revision}-1.deb"/>
@@ -123,13 +132,29 @@
 		</copy>
 		<copy todir="dist">
 			<fileset dir="script-dist"/>
-			<fileset dir="deb-dist">
+			<fileset dir="${debian.distribution.dir}">
 				<include name="*.deb"/>
 			</fileset>
-			<fileset dir="rpm-dist">
+			<fileset dir="${rpm.distribution.dir}">
 				<include name="*.rpm"/>
 			</fileset>
 		</copy>
 		<echo>dist: rev ${svn.revision}</echo>
+	</target>
+	
+	<target name="doc">		
+		<foreach param="doc_filename" target="docfile">
+			<path>
+				<fileset dir="${doc.templates.dir}">
+			    	<include name="*.html"/>
+				</fileset>
+			</path>
+		</foreach>		
+		<concat destfile="doc/html/quick-startup-guide.html">
+			<filelist dir="${doc.templates.dir}" files="head.html.template, quick-startup-guide.html, tail.html.template"/>
+		</concat>
+	</target>
+	<target name="docfile">		
+		<echo>${doc_filename}</echo>
 	</target>
 </project>
