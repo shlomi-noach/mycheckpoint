@@ -384,15 +384,20 @@ openark_lchart.prototype.draw = function() {
 	// Title
 	if (this.chart_title)
 	{
-		this.draw_text({
-			text: this.chart_title, 
-			left: 0, 
-			top: 0, 
-			width: this.canvas_width, 
-			height: this.title_height, 
-			text_align: 'center', 
-			font_size: openark_lchart.title_font_size
-		});
+		var options = {
+				text: this.chart_title, 
+				left: 0, 
+				top: 0, 
+				width: this.canvas_width, 
+				height: this.title_height, 
+				text_align: 'center', 
+				font_size: openark_lchart.title_font_size
+			};
+		if (this.chart_title.search('STALE DATA') >= 0)
+		{
+			options['background'] = '#ffcccc';
+		}
+		this.draw_text(options);
 	}
 	this.set_color(openark_lchart.grid_color);
 	// y (horiz) grids:
@@ -629,6 +634,8 @@ openark_lchart.prototype.draw_text = function(options) {
 	label_div.style.verticalAlign ='top';
 	if (options.font_size)
 		label_div.style.fontSize = ''+options.font_size+'pt';
+	if (options.background)
+		label_div.style.background = ''+options.background;
 	label_div.innerHTML = options.text;
 	this.container.appendChild(label_div);
 };
