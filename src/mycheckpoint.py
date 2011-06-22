@@ -883,6 +883,9 @@ def is_signed_column(column_name):
         "innodb_page_size",
         "innodb_buffer_pool_pages_total",
         "innodb_buffer_pool_pages_free",
+        "innodb_buffer_pool_pages_data",
+        "innodb_buffer_pool_pages_dirty",
+        "innodb_buffer_pool_pages_misc",
         "key_blocks_unused",
         "key_cache_block_size",
         "master_status_position",
@@ -4085,10 +4088,10 @@ def create_status_variables_views_and_aggregations():
         ("innodb_buffer_pool_reads_psec, innodb_buffer_pool_pages_flushed_psec", "innodb_io", True, False, ["#4682b4", "#9acd32", ]),
         ("innodb_data_files_writes_psec, innodb_log_writes_psec, innodb_dblwr_writes_psec, innodb_data_reads_psec", "innodb_rw", True, False, ["#4682b4", "#9acd32", ]),
         ("innodb_buffer_pool_used_percent, innodb_buffer_pool_pages_dirty_percent", "innodb_buffer_pool_usage", True, True, ["#dda0dd", ]),
-        ("innodb_buffer_pool_pages_total, innodb_buffer_pool_pages_data, innodb_buffer_pool_pages_dirty, innodb_buffer_pool_pages_misc", "innodb_buffer_pool_pages", True, False, ["#dda0dd", ]),
+        ("innodb_buffer_pool_pages_total, innodb_buffer_pool_pages_data, innodb_buffer_pool_pages_dirty", "innodb_buffer_pool_pages", True, False, ["#dda0dd", ]),
         ("innodb_estimated_log_mb_written_per_hour", "innodb_estimated_log_mb_written_per_hour", True, False, ["9932cc", ]),
         ("innodb_row_lock_time_psec", "innodb_row_lock_time_psec", True, False, ["808080", ]),
-        ("innodb_buffer_pool_read_ahead_psec, innodb_buffer_pool_read_ahead_evicted_psec", "innodb_buffer_pool_read_ahead", True, True, ["#dda0dd", ]),
+        ("innodb_buffer_pool_read_ahead_psec, innodb_buffer_pool_read_ahead_evicted_psec", "innodb_buffer_pool_read_ahead", True, False, ["#dda0dd", ]),
 
         ("mega_bytes_sent_psec, mega_bytes_received_psec", "network_io", True, False, ["#7fffd4", "808080", ]),
 
