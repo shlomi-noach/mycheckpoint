@@ -381,6 +381,9 @@ def normalize_variable_value(variable_name, variable_value):
         variable_value = 0
     elif variable_value == "yes":
         variable_value = 1
+    if variable_name == "delay_key_write":
+        if variable_value == "all":
+            variable_value = 2
     return variable_value
 
 
