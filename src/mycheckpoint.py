@@ -18,6 +18,7 @@
 #
 
 import ConfigParser
+import fcntl
 import getpass
 import MySQLdb
 import os
@@ -668,6 +669,10 @@ def get_additional_status_variables():
         "innodb_row_lock_waits", 
         "innodb_row_lock_current_waits", 
         "innodb_row_lock_time", 
+        "innodb_rows_read", 
+        "innodb_rows_inserted", 
+        "innodb_rows_updated", 
+        "innodb_rows_deleted",
     ]
     additional_status_variables.extend(get_custom_status_variables())
     additional_status_variables.extend(get_custom_time_status_variables())
@@ -4848,6 +4853,18 @@ def deploy_schema():
     verbose("Table and views deployed")
 
 
+def verify_single_instance():
+    global fh
+    print os.path.realpath(__file__)
+    fh = open(os.path.realpath(__file__), 'r')
+    try:
+        fcntl.flock(fh,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    except:
+        exit_with_error("lock found, process already running, exit")
+    else:
+        pass    
+
+
 def exit_with_error(error_message):
     """
     Notify and exit.
@@ -4877,7 +4894,7 @@ try:
         parse_options()
 
         verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009-2010 by Shlomi Noach" % (revision_number, build_number), options.version)
-
+        
         warnings.simplefilter("ignore", MySQLdb.Warning) 
         database_name = options.database
         table_name = "status_variables"
@@ -4892,6 +4909,9 @@ try:
         status_variables_insert_timestamp = None
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
+
+        #-- if not args:
+        #--    verify_single_instance()
 
         # Sanity:
         if not database_name:
