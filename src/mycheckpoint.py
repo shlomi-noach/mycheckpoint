@@ -696,7 +696,7 @@ def fetch_status_variables():
     query = "SHOW GLOBAL STATUS"
     rows = get_rows(query);
     for row in rows:
-        variable_name = row["Variable_name"].lower()
+        variable_name = row["Variable_name"].lower().strip()
         variable_value = row["Value"].lower()
         if not is_neglectable_variable(variable_name):
             status_dict[variable_name] = normalize_variable_value(variable_name, variable_value)
@@ -709,7 +709,7 @@ def fetch_status_variables():
     query = "SHOW GLOBAL VARIABLES"
     rows = get_rows(query);
     for row in rows:
-        variable_name = row["Variable_name"].lower()
+        variable_name = row["Variable_name"].lower().strip()
         variable_value = row["Value"].lower()
         if variable_name in global_variables:
             status_dict[variable_name] = normalize_variable_value(variable_name, variable_value)
