@@ -2260,6 +2260,8 @@ def create_status_variables_hour_aggregation_table():
         act_query(query)
         table_created = True
     except MySQLdb.Error, _err:
+        if options.debug:
+            traceback.print_exc()
         pass
     
     if table_created:
