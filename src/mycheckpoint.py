@@ -2245,7 +2245,7 @@ def create_status_variables_hour_aggregation_table():
     query = """CREATE TABLE %s.%s (
             id INT AUTO_INCREMENT PRIMARY KEY,
             ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            end_ts TIMESTAMP,
+            end_ts TIMESTAMP NOT NULL,
             ts_diff_seconds INT UNSIGNED,         
             %s,
             %s,
