@@ -5,7 +5,7 @@
 #
 # Released under the BSD license
 #
-# Copyright (c) 2009-2010, Shlomi Noach
+# Copyright (c) 2009-2013, Shlomi Noach
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -91,6 +91,7 @@ Available commands:
     parser.add_option("", "--smtp-from", dest="smtp_from", help="Address to use as mail sender")
     parser.add_option("", "--smtp-to", dest="smtp_to", help="Comma delimited email addresses to send emails to")
     parser.add_option("", "--http-port", dest="http_port", type="int", help="Socket to listen on when running as web server (argument is http)")
+    parser.add_option("", "--single", dest="single", action="store_true", help="Only allow one running instance of mycheckpoint at a time on this machine")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Print user friendly messages")
     parser.add_option("", "--version", dest="version", action="store_true", help="Prompt version number")
@@ -132,6 +133,7 @@ Available commands:
         "smtp_from": None,
         "smtp_to": None,
         "http_port": 12306,
+        "single": False,
         "debug": False,
         "verbose": False,
         "version": False,
@@ -4897,10 +4899,10 @@ def deploy_schema():
 
 def verify_single_instance():
     global fh
-    print os.path.realpath(__file__)
     fh = open(os.path.realpath(__file__), 'r')
     try:
         fcntl.flock(fh,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        print "OK!!! " + __file__ + "          "+os.path.realpath(__file__)
     except:
         exit_with_error("lock found, process already running, exit")
     else:
@@ -4935,7 +4937,7 @@ try:
         args = None
         parse_options()
 
-        verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009-2010 by Shlomi Noach" % (revision_number, build_number), options.version)
+        verbose("mycheckpoint rev %d, build %d. Copyright (c) 2009-2013 by Shlomi Noach" % (revision_number, build_number), options.version)
         
         warnings.simplefilter("ignore", MySQLdb.Warning) 
         database_name = options.database
@@ -4952,8 +4954,8 @@ try:
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
 
-        #-- if not args:
-        #--    verify_single_instance()
+        if options.single:
+            verify_single_instance()
 
         # Sanity:
         if not database_name:
