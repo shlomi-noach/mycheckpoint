@@ -56,6 +56,7 @@ Available commands:
   http
   deploy
   email_brief_report
+  email_alert_pending_report
     """
     parser = OptionParser(usage=usage)
     parser.add_option("-u", "--user", dest="user", help="MySQL user")
@@ -657,12 +658,15 @@ def get_additional_status_variables():
         "queries",
         "open_table_definitions",
         "opened_table_definitions",
-        "innodb_buffer_pool_pages_free", 
-        "innodb_buffer_pool_pages_total", 
+        "innodb_buffer_pool_pages_total",
+        "innodb_buffer_pool_pages_free",
+        "innodb_buffer_pool_pages_data",
+        "innodb_buffer_pool_pages_dirty",
+        "innodb_buffer_pool_pages_flushed",
+        "innodb_buffer_pool_pages_misc",
         "innodb_buffer_pool_reads", 
         "innodb_buffer_pool_read_requests", 
         "innodb_buffer_pool_reads", 
-        "innodb_buffer_pool_pages_flushed", 
         "innodb_buffer_pool_read_ahead",
         "innodb_buffer_pool_read_ahead_evicted",
         "innodb_os_log_written", 
@@ -875,8 +879,7 @@ def get_variables_and_status_columns():
     status_columns = [column_name for column_name in get_status_variables_columns() if not column_name in variables_columns]
     return variables_columns, status_columns
 
-
-def is_signed_column(column_name):
+def get_known_signed_diff_status_variables():
     known_signed_diff_status_variables = [
         "threads_cached",
         "threads_connected",
@@ -893,6 +896,7 @@ def is_signed_column(column_name):
         "innodb_buffer_pool_pages_free",
         "innodb_buffer_pool_pages_data",
         "innodb_buffer_pool_pages_dirty",
+        "innodb_buffer_pool_pages_flushed",
         "innodb_buffer_pool_pages_misc",
         "key_blocks_unused",
         "key_cache_block_size",
@@ -903,7 +907,11 @@ def is_signed_column(column_name):
         "relay_log_space",
         "seconds_behind_master",
         ]
-    return column_name in known_signed_diff_status_variables
+    return known_signed_diff_status_variables
+
+
+def is_signed_column(column_name):
+    return column_name in get_known_signed_diff_status_variables()
 
 
 def get_column_sign_indicator(column_name):
@@ -1536,6 +1544,10 @@ def create_alert_pending_html_view():
                         td {
                             padding: 3px 6px 3px 6px;
                         }
+                        .el_ok {
+                            color: #000000;
+                            background-color: #00ff00;
+                        }
                         .el_awaiting {
                             color: #ffffff;
                             background-color: #c0c0c0;
@@ -1576,34 +1588,37 @@ def create_alert_pending_html_view():
                                         <br/><br/><br/>    
                                     </td>
                                 </tr>
-                                <tr class="row header">
-                                  <td>Error level</td> 
-                                  <td>Description</td> 
-                                  <td>Alert start time</td> 
-                                  <td>Elapsed minutes</td> 
-                                  <td>Notification time</td>
-                                  <td>Repeating notification</td>
-                                </tr> 
                                 ',
-                                IFNULL(
-                                  GROUP_CONCAT(
-                                    CONCAT(
-                                      '<tr class="row">',
-                                        '<td class="el_', IF(ts_notified IS NULL, 'awaiting', error_level), '">', IF(ts_notified IS NULL, 'awaiting: ', ''), error_level, '</td>', 
-                                        '<td>', description, '</td>', 
-                                        '<td>', ts_start, '</td>', 
-                                        '<td>', elapsed_minutes, '</td>', 
-                                        '<td', IF(ts_notified IS NULL, ' class="el_awaiting"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start + INTERVAL alert_delay_minutes MINUTE)), '</td>', 
-                                        '<td>', IF(repetitive_alert, 'Yes', '-'), '</td>', 
-                                      '</tr>')
-                                    SEPARATOR ''), 
-                                  '')
-                                ,'
+                                IF(GROUP_CONCAT(alert_pending_id) IS NULL, 
+                                  '<tr class="row"><td class="el_ok">OK</td><td colspan="5">No pending alerts</td></tr>',
+                                  CONCAT(
+                                    '<tr class="row header">
+                                      <td>Error level</td> 
+                                      <td>Description</td> 
+                                      <td>Alert start time</td> 
+                                      <td>Elapsed minutes</td> 
+                                      <td>Notification time</td>
+                                      <td>Repeating notification</td>
+                                    </tr>',
+                                      GROUP_CONCAT(
+                                          '<tr class="row">',
+                                            '<td class="el_', IF(ts_notified IS NULL, 'awaiting', error_level), '">', IF(ts_notified IS NULL, 'awaiting: ', ''), error_level, '</td>', 
+                                            '<td>', description, '</td>', 
+                                            '<td>', ts_start, '</td>', 
+                                            '<td>', elapsed_minutes, '</td>', 
+                                            '<td', IF(ts_notified IS NULL, ' class="el_awaiting"', ''), '>', IFNULL(ts_notified, CONCAT('ETA: ', ts_start + INTERVAL alert_delay_minutes MINUTE)), '</td>', 
+                                            '<td>', IF(repetitive_alert, 'Yes', '-'), '</td>', 
+                                          '</tr>'
+                                        SEPARATOR '')
+                                    )
+                                  ),
+                                '
                             </table>
                         </div>
+                        <div class="clear"></div>
                         ',
                         IF(GROUP_CONCAT(alert_pending_id) IS NULL, 
-                          '<div class="clear"></div>
+                          '
                           <br/>
                           <div>
                             There are no pending alerts
@@ -1639,12 +1654,12 @@ def create_alert_email_message_items_view():
               resolved,
               CONCAT(
                 'Resolved: ', description, '
-    Pending id: ', alert_pending_id, ', condition id: ', alert_condition_id
+    alert_condition id: ', alert_condition_id, ' [pending id: ', alert_pending_id, ']'
               ),
               CONCAT(
                 UPPER(error_level), ': ', description, '
     This ', error_level, ' alert is pending for ', elapsed_minutes, ' minutes, since ', ts_start, '
-    Pending id: ', alert_pending_id, ', condition id: ', alert_condition_id
+    alert_condition id: ', alert_condition_id, ' [pending id: ', alert_pending_id, ']'
               )
             ) AS message_item
           FROM
@@ -1960,10 +1975,13 @@ def upgrade_status_variables_table():
     query = """
             SHOW COLUMNS FROM %s.%s
         """ % (database_name, table_name)
-    existing_columns = [row["Field"] for row in get_rows(query, write_conn)]
+    rows = get_rows(query, write_conn)
+    existing_columns = [row["Field"] for row in rows]
+    existing_column_types = dict([(row["Field"], row["Type"]) for row in rows])
 
     new_columns = [column_name for column_name in get_status_variables_columns() if column_name not in existing_columns]
     redundant_custom_columns = [column_name for column_name in existing_columns  if (column_name not in get_status_variables_columns() and column_name_relates_to_custom_query(column_name))]
+    mismatch_signed_type_columns = [column_name for column_name in existing_column_types if (column_name in get_known_signed_diff_status_variables() and "unsigned" in existing_column_types[column_name])]
     alter_statements = []
     
     if new_columns:
@@ -1972,6 +1990,9 @@ def upgrade_status_variables_table():
     if redundant_custom_columns:
         verbose("Will remove the following columns from %s: %s" % (table_name, ", ".join(redundant_custom_columns)))
         alter_statements.extend(["DROP COLUMN %s" % column_name for column_name in redundant_custom_columns])
+    if mismatch_signed_type_columns:
+        verbose("Will modify the following columns in %s to SIGNED: %s" % (table_name, ", ".join(mismatch_signed_type_columns)))
+        alter_statements.extend(["MODIFY COLUMN %s BIGINT SIGNED" % column_name for column_name in mismatch_signed_type_columns])
     if alter_statements:
         query = """ALTER TABLE %s.%s
                 %s
@@ -2900,7 +2921,7 @@ def create_report_chart_labels_views():
             AND ${base_ts} + INTERVAL numbers.n ${interval_unit} <= ts_max
             AND numbers.n <= ${labels_limit}
           GROUP BY
-            sv_report_${view_name_extension}_recent_minmax.ts_min
+            sv_report_${view_name_extension}_recent_minmax.ts_min, sv_report_${view_name_extension}_recent_minmax.ts_max 
         """
     query = query.replace("${database_name}", database_name)
 
@@ -3133,7 +3154,7 @@ def create_custom_google_charts_flattened_views():
     We flatten the sv_custom_chart_* views into one row. This will be useful when generating HTML view.
     """
     custom_clauses = []
-    custom_query_ids_charts_enabled
+    
     if get_custom_query_ids_charts_enabled():
         for i in get_custom_query_ids_charts_enabled():
             custom_clause = """
@@ -4291,6 +4312,25 @@ def email_brief_report():
 
     send_email_message("HTML brief report", subject, message, attachment)        
             
+
+def get_html_alert_pending_report():    
+    query = "SELECT html FROM %s.alert_pending_html_view" % database_name
+    alert_pending_report = get_row(query)["html"]
+    return alert_pending_report
+
+
+def email_alert_pending_report():
+    subject = "mycheckpoint alert pending report: %s" % database_name
+
+    message = """Attached: mycheckpoint alert pending report for database: %s""" % database_name
+        
+    alert_pending_report = get_html_alert_pending_report()
+    
+    attachment = MIMEText(alert_pending_report, _subtype="html")
+    attachment.add_header("Content-Disposition", "attachment", filename="mycheckpoint_alert_pending_report_%s.html" % database_name)
+
+    send_email_message("HTML alert pending report", subject, message, attachment)        
+            
             
 def email_cannot_access_database_message():
     """
@@ -4925,6 +4965,7 @@ try:
         # Read arguments
         should_deploy = False
         should_email_brief_report = False
+        should_email_alert_pending_report = False
         should_serve_http = False
         for arg in args:
             if arg == "deploy":
@@ -4932,6 +4973,8 @@ try:
                 should_deploy = True
             elif arg == "email_brief_report":
                 should_email_brief_report = True
+            elif arg == "email_alert_pending_report":
+                should_email_alert_pending_report = True
             elif arg == "http":
                 should_serve_http = True
             else:
@@ -4967,6 +5010,9 @@ try:
             
         if should_email_brief_report:
             email_brief_report()
+            
+        if should_email_alert_pending_report:
+            email_alert_pending_report()
             
         if should_serve_http:
             serve_http()
