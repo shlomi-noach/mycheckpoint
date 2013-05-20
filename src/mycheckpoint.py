@@ -253,6 +253,18 @@ def act_query(query, connection=None):
     return num_affected_rows
 
 
+def act_query_ignore_error(query, connection=None):
+    """
+    Run the given query, ignore error silently
+    """
+    try:
+        return act_query(query, connection)
+    except MySQLdb.Error:
+        if options.debug:
+            traceback.print_exc()
+        return -1
+    
+
 def get_row(query, connection=None):
     if connection is None:
         connection = monitored_conn
@@ -1383,8 +1395,15 @@ def create_alert_condition_table():
         )
         """ % database_name
 
+    # Upgrade:
+    alter_query = """
+        ALTER TABLE %s.alert_condition 
+          ADD COLUMN pre_condition_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL
+        """ % database_name
+
     try:
         act_query(query)
+        act_query_ignore_error(alter_query)
         verbose("alert_condition table created")
     except MySQLdb.Error:
         if options.debug:
@@ -1425,6 +1444,7 @@ def create_alert_view():
             alert_condition.alert_condition_id,
             sv_report_sample.id AS sv_report_sample_id,
             TRIM(alert_condition.condition_eval) AS condition_eval,
+            TRIM(alert_condition.pre_condition_eval) AS pre_condition_eval,
             TRIM(alert_condition.description) AS description,
             alert_condition.error_level AS error_level,
             sv_report_sample.ts AS ts
@@ -1476,6 +1496,7 @@ def create_alert_pending_view():
             alert_pending.alert_pending_id AS alert_pending_id,
             alert_condition.alert_condition_id AS alert_condition_id,
             TRIM(alert_condition.condition_eval) AS condition_eval,
+            TRIM(alert_condition.pre_condition_eval) AS pre_condition_eval,
             TRIM(alert_condition.description) AS description,
             alert_condition.error_level AS error_level,
             alert_condition.alert_delay_minutes AS alert_delay_minutes,
@@ -1711,7 +1732,9 @@ def create_alert_condition_query_view():
 def generate_alert_condition_query():
     query = """
             SELECT 
-              alert_condition_id, condition_eval 
+              alert_condition_id, 
+              IF(TRIM(pre_condition_eval) = '', true, TRIM(pre_condition_eval)) AS pre_condition_eval, 
+              condition_eval
             FROM 
               ${database_name}.alert_condition
             WHERE
@@ -1724,7 +1747,7 @@ def generate_alert_condition_query():
     
     alert_condition_ids = [int(row["alert_condition_id"]) for row in rows]
 
-    query_conditions = ["%s AS condition_%d" % (row["condition_eval"], int(row["alert_condition_id"])) for row in rows]
+    query_conditions = ["if(%s,%s,false) AS condition_%d" % (row["pre_condition_eval"], row["condition_eval"], int(row["alert_condition_id"])) for row in rows]
     query = """
         SELECT
           id, 
