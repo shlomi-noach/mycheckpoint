@@ -4340,7 +4340,7 @@ def email_brief_report():
 
 def get_html_alert_pending_report():    
     query = "SELECT html FROM %s.alert_pending_html_view" % database_name
-    alert_pending_report = get_row(query)["html"]
+    alert_pending_report = get_row(query, write_conn)["html"]
     return alert_pending_report
 
 
