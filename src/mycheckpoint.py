@@ -1396,14 +1396,20 @@ def create_alert_condition_table():
         """ % database_name
 
     # Upgrade:
-    alter_query = """
+    alter_query_0 = """
         ALTER TABLE %s.alert_condition 
-          ADD COLUMN pre_condition_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL
+          DROP COLUMN pre_condition_eval;
+        """ % database_name
+    alter_query_1 = """
+        ALTER TABLE %s.alert_condition 
+          ADD COLUMN monitored_host_condition_eval VARCHAR(4095) CHARSET utf8 COLLATE utf8_bin NOT NULL
+          AFTER condition_eval
         """ % database_name
 
     try:
         act_query(query)
-        act_query_ignore_error(alter_query)
+        act_query_ignore_error(alter_query_0)
+        act_query_ignore_error(alter_query_1)
         verbose("alert_condition table created")
     except MySQLdb.Error:
         if options.debug:
@@ -1444,7 +1450,7 @@ def create_alert_view():
             alert_condition.alert_condition_id,
             sv_report_sample.id AS sv_report_sample_id,
             TRIM(alert_condition.condition_eval) AS condition_eval,
-            TRIM(alert_condition.pre_condition_eval) AS pre_condition_eval,
+            TRIM(alert_condition.monitored_host_condition_eval) AS monitored_host_condition_eval,
             TRIM(alert_condition.description) AS description,
             alert_condition.error_level AS error_level,
             sv_report_sample.ts AS ts
@@ -1496,7 +1502,7 @@ def create_alert_pending_view():
             alert_pending.alert_pending_id AS alert_pending_id,
             alert_condition.alert_condition_id AS alert_condition_id,
             TRIM(alert_condition.condition_eval) AS condition_eval,
-            TRIM(alert_condition.pre_condition_eval) AS pre_condition_eval,
+            TRIM(alert_condition.monitored_host_condition_eval) AS monitored_host_condition_eval,
             TRIM(alert_condition.description) AS description,
             alert_condition.error_level AS error_level,
             alert_condition.alert_delay_minutes AS alert_delay_minutes,
@@ -1733,8 +1739,8 @@ def generate_alert_condition_query():
     query = """
             SELECT 
               alert_condition_id, 
-              IF(TRIM(pre_condition_eval) = '', true, TRIM(pre_condition_eval)) AS pre_condition_eval, 
-              condition_eval
+              IF(monitored_host_condition_eval = '', true, monitored_host_condition_eval) AS monitored_host_condition_eval, 
+              IF(condition_eval = '', true, condition_eval) AS condition_eval 
             FROM 
               ${database_name}.alert_condition
             WHERE
@@ -1747,7 +1753,7 @@ def generate_alert_condition_query():
     
     alert_condition_ids = [int(row["alert_condition_id"]) for row in rows]
 
-    query_conditions = ["if(%s,%s,false) AS condition_%d" % (row["pre_condition_eval"], row["condition_eval"], int(row["alert_condition_id"])) for row in rows]
+    query_conditions = ["%s AS condition_%d" % (row["condition_eval"], int(row["alert_condition_id"])) for row in rows]
     query = """
         SELECT
           id, 
@@ -1757,9 +1763,16 @@ def generate_alert_condition_query():
         ORDER BY 
           id DESC
         LIMIT 1
-      """ % ",".join(query_conditions)
+      """ % (",".join(query_conditions))
     query = query.replace("${database_name}", database_name)
-    return alert_condition_ids, query
+
+    monitored_host_query_conditions = ["%s AS condition_%d" % (row["monitored_host_condition_eval"], int(row["alert_condition_id"])) for row in rows]
+    monitored_host_query = """
+        SELECT
+          %s 
+      """ % (",".join(monitored_host_query_conditions))
+    
+    return alert_condition_ids, query, monitored_host_query
 
 
 def write_alert(alert_condition_id, report_sample_id):
@@ -1834,22 +1847,27 @@ def check_alerts():
         verbose("Skipping alerts")
         return
 
-    alert_condition_ids, query = generate_alert_condition_query()
+    alert_condition_ids, query, monitored_host_query = generate_alert_condition_query()
     if not alert_condition_ids:
         verbose("No alert conditions defined")
         return
     
     row = get_row(query, write_conn)
+    monitored_host_row = get_row(monitored_host_query, monitored_conn)
     report_sample_id = int(row["id"])
     num_alerts = 0
     
     for alert_condition_id in alert_condition_ids:
         condition_result = row["condition_%d" % alert_condition_id]
-        if condition_result is not None:
-            if int(condition_result) != 0:
-                write_alert(alert_condition_id, report_sample_id)
-                write_alert_pending(alert_condition_id, report_sample_id)
-                num_alerts += 1
+        monitored_host_condition_result = monitored_host_row["condition_%d" % alert_condition_id]
+        if condition_result is None:
+            condition_result = 0
+        if monitored_host_condition_result is None:
+            monitored_host_condition_result = 0
+        if int(condition_result) != 0 and int(monitored_host_condition_result) != 0: 
+            write_alert(alert_condition_id, report_sample_id)
+            write_alert_pending(alert_condition_id, report_sample_id)
+            num_alerts += 1
     verbose("Found %s alerts" % num_alerts)
     mark_resolved_alerts(report_sample_id)
     
@@ -4424,6 +4442,8 @@ def collect_status_variables():
 
 
 def write_status_variables_hour_aggregation(aggregation_timestamp):
+    if aggregation_timestamp is None:
+        return
     if options.skip_aggregation:
         return
     
@@ -4472,6 +4492,8 @@ def write_status_variables_hour_aggregation(aggregation_timestamp):
 
 
 def write_status_variables_day_aggregation(aggregation_timestamp):
+    if aggregation_timestamp is None:
+        return
     if options.skip_aggregation:
         return
     
