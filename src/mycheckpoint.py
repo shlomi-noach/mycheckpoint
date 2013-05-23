@@ -234,9 +234,13 @@ def open_connections():
 
 
 def init_connections():
-    query = """SET @@group_concat_max_len = GREATEST(@@group_concat_max_len, @@max_allowed_packet)"""
-    act_query(query, monitored_conn)
-    act_query(query, write_conn)
+    queries = [
+               """SET @@group_concat_max_len = GREATEST(@@group_concat_max_len, @@max_allowed_packet)""",
+               """SET @@session.sql_mode := REPLACE(@@session.sql_mode, 'ONLY_FULL_GROUP_BY', '')"""
+            ]
+    for query in queries:
+        act_query(query, monitored_conn)
+        act_query(query, write_conn)
 
 
 def act_query(query, connection=None):
@@ -4405,7 +4409,7 @@ Please check:
         """ % (database_name, database_name,)
     email_subject = "%s: mycheckpoint cannot access database" % database_name
     send_email_message("cannot access", email_subject, email_message)
-                
+                                
 
 def disable_bin_log():
     if not options.disable_bin_log:
