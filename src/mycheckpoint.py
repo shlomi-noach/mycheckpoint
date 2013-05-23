@@ -397,6 +397,10 @@ def normalize_variable_value(variable_name, variable_value):
         variable_value = 0
     elif variable_value == "yes":
         variable_value = 1
+    elif variable_value == "not started":
+        variable_value = 0
+    elif variable_value == "started":
+        variable_value = 1
     if variable_name == "delay_key_write":
         if variable_value == "all":
             variable_value = 2
@@ -1736,6 +1740,7 @@ def create_alert_condition_query_view():
 
 
 def generate_alert_condition_query():
+
     query = """
             SELECT 
               alert_condition_id, 
@@ -1749,7 +1754,7 @@ def generate_alert_condition_query():
     query = query.replace("${database_name}", database_name)
     rows = get_rows(query, write_conn)
     if not rows:
-        return (None, None)
+        return (None, None, None)
     
     alert_condition_ids = [int(row["alert_condition_id"]) for row in rows]
 
