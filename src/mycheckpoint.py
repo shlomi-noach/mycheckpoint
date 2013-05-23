@@ -5032,7 +5032,7 @@ try:
         init_connections()
 
         if not should_deploy:
-            if not is_same_deploy():
+            if not should_serve_http and not is_same_deploy():
                 verbose("Non matching deployed revision. Will auto-deploy")
                 should_deploy = True
 
