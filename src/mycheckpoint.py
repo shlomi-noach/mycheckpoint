@@ -90,6 +90,8 @@ Available commands:
     parser.add_option("", "--smtp-host", dest="smtp_host", help="SMTP mail server host name or IP")
     parser.add_option("", "--smtp-from", dest="smtp_from", help="Address to use as mail sender")
     parser.add_option("", "--smtp-to", dest="smtp_to", help="Comma delimited email addresses to send emails to")
+    parser.add_option("", "--run-as-service", dest="run_as_service", action="store_true", help="Hint to this script that it is being executed as a linux service.")
+    parser.add_option("", "--allow-http-as-service", dest="allow_http_as_service", action="store_true", help="Must be provided in order for mycheckpoint to be able to open HTTP when executed with '--run-as-service'")
     parser.add_option("", "--http-port", dest="http_port", type="int", help="Socket to listen on when running as web server (argument is http)")
     parser.add_option("", "--single", dest="single", action="store_true", help="Only allow one running instance of mycheckpoint at a time on this machine")
     parser.add_option("", "--debug", dest="debug", action="store_true", help="Print stack trace on error")
@@ -132,6 +134,8 @@ Available commands:
         "smtp_host": None,
         "smtp_from": None,
         "smtp_to": None,
+        "run_as_service": False,
+        "allow_http_as_service": False,
         "http_port": 12306,
         "single": False,
         "debug": False,
@@ -4916,16 +4920,19 @@ class MCPHttpHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Page Not Found: %s" % self.path)
      
 
-
 def serve_http():
+    if options.run_as_service and not options.allow_http_as_service:
+        verbose("Running as a service, but --allow_http_as_service not provided. Skipping HTTP")
+        return
+    
     try:
         detect_mycheckpoint_databases()
-        server = HTTPServer(('', options.http_port), MCPHttpHandler)
+        http_server = HTTPServer(('', options.http_port), MCPHttpHandler)
         print "started httpserver on port %d..." % options.http_port
-        server.serve_forever()
+        http_server.serve_forever()
     except KeyboardInterrupt:
-        print "^C received, shutting down server"
-        server.socket.close()
+        print "SIGTERM/^C received, shutting down server"
+        http_server.socket.close()
     
 
 def deploy_schema():
@@ -4956,7 +4963,6 @@ def verify_single_instance():
     fh = open(os.path.realpath(__file__), 'r')
     try:
         fcntl.flock(fh,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        print "OK!!! " + __file__ + "          "+os.path.realpath(__file__)
     except:
         exit_with_error("lock found, process already running, exit")
     else:
@@ -5007,6 +5013,7 @@ try:
         status_variables_insert_timestamp = None
         options.chart_width = max(options.chart_width, 150)
         options.chart_height = max(options.chart_height, 100)
+        http_server = None
 
         if options.single:
             verify_single_instance()
@@ -5049,6 +5056,7 @@ try:
             deploy_schema()
             detect_status_variables_hour_aggregation_missing_values()
             detect_status_variables_day_aggregation_missing_values()
+            should_deploy = False
             
         # Only take record if no arguments provided (no "command")
         if not args:
