@@ -60,6 +60,9 @@ openark_lchart = function(container, options) {
 	this.skip_interactive = false;
 	if (options.skipInteractive)
 		this.skip_interactive = true;
+	this.square_lines = false;
+	if (options.squareLines)
+		this.square_lines = true;
 	
 	this.recalc();
 	
@@ -460,11 +463,25 @@ openark_lchart.prototype.draw = function() {
 			}
 			else
 			{
-				var x_pos = Math.round(this.chart_origin_x + i*this.chart_width/(series_dot_positions.length-1));
-				paths[paths.length-1].push({
-					x: x_pos,
-					y: series_dot_positions[i]
-				});
+				if (this.square_lines) {
+					var x_pos = Math.round(this.chart_origin_x + i*this.chart_width/series_dot_positions.length);
+					paths[paths.length-1].push({
+						x: x_pos,
+						y: series_dot_positions[i]
+					});
+					x_pos = Math.round(this.chart_origin_x + (i+1)*this.chart_width/series_dot_positions.length);
+					paths[paths.length-1].push({
+						x: x_pos,
+						y: series_dot_positions[i]
+					});				
+				}
+				else {
+					var x_pos = Math.round(this.chart_origin_x + i*this.chart_width/(series_dot_positions.length-1));
+					paths[paths.length-1].push({
+						x: x_pos,
+						y: series_dot_positions[i]
+					});
+				}
 			}
 		}
 		for (path = 0; path < paths.length; ++path)
