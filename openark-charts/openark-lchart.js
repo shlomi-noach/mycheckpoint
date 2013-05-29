@@ -40,6 +40,7 @@ openark_lchart = function(container, options) {
 	this.y_axis_round_digits = 0;
 	this.multi_series = [];
 	this.multi_series_dot_positions = [];
+	this.series_invisibility = [];
 	this.series_labels = [];
 	this.series_legend_values = [];
 	this.timestamp_legend_value = null;
@@ -48,11 +49,6 @@ openark_lchart = function(container, options) {
 	this.tsstep = null;
 	
 	this.container = container;
-	this.interactive_legend = null;
-	this.legend_values_containers = [];
-	this.timestamp_value_container = null;
-	this.canvas_shadow = null;
-	this.position_pointer = null;
 	
 	this.isIE = false;
 	this.current_color = null;
@@ -77,12 +73,87 @@ openark_lchart.axis_font_size = 8;
 openark_lchart.min_x_label_spacing = 32;
 openark_lchart.legend_font_size = 9;
 openark_lchart.legend_color = '#606060';
+openark_lchart.legend_invisible_color = '#b0b0b0';
 openark_lchart.series_line_width = 1.5;
 openark_lchart.grid_color = '#e4e4e4';
 openark_lchart.grid_thick_color = '#c8c8c8';
 openark_lchart.position_pointer_color = '#808080';
 openark_lchart.series_colors = ["#ff0000", "#ff8c00", "#4682b4", "#9acd32", "#dc143c", "#9932cc", "#ffd700", "#191970", "#7fffd4", "#808080", "#dda0dd"];
 openark_lchart.google_simple_format_scheme = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+
+openark_lchart.prototype.create_graphics = function() {
+	this.interactive_legend = null;
+	this.legend_values_containers = [];
+	this.timestamp_value_container = null;
+	this.canvas_shadow = null;
+	this.position_pointer = null;
+	this.container.innerHTML = '';
+	
+	this.isIE = (/MSIE/.test(navigator.userAgent) && !window.opera);
+
+	this.container.style.position = 'relative';
+	this.container.style.color = ''+openark_lchart.axis_color;
+	this.container.style.fontSize = ''+openark_lchart.axis_font_size+'pt';
+	this.container.style.fontFamily = 'Helvetica,Verdana,Arial,sans-serif';
+	
+	if (!this.skip_interactive)
+	{
+		var local_this = this;
+		this.container.onmousemove = function(e) {
+			local_this.on_mouse_move(e);
+		};
+		this.container.onmouseout = function(e) {
+			local_this.on_mouse_out(e);
+		};
+//		this.timestamp_value_container.onclick = function (e) {
+//			if (local_this.timestamp_value_container.innerHTML == '') {
+//				local_this.square_lines = !_this.square_lines;
+//				local_this.redraw();
+//			}
+//		}
+	}
+	if (this.isIE)
+	{
+		// Nothing to do here right now.
+	}
+	else
+	{
+		var canvas = document.createElement("canvas");
+		canvas.setAttribute("width", this.canvas_width);
+		canvas.setAttribute("height", this.canvas_height);
+		
+		this.canvas = canvas;
+
+		this.container.appendChild(this.canvas);
+	
+		this.ctx = this.canvas.getContext('2d');
+	}
+	this.canvas_shadow = document.createElement("div");
+	this.canvas_shadow.style.position = "absolute";
+	this.canvas_shadow.style.top = "0";
+	this.canvas_shadow.style.left = "0";
+	this.canvas_shadow.style.width = this.canvas_width;
+	this.canvas_shadow.style.height = this.canvas_height;
+	this.container.appendChild(this.canvas_shadow);
+};
+
+openark_lchart.prototype.parse_url = function(url) {
+	url = url.replace(/[+]/gi, " ");
+	var params = {};
+	
+	var pos = url.indexOf("?");
+	if (pos >= 0)
+		url = url.substring(pos + 1);
+	tokens = url.split("&");
+	for (i = 0 ; i < tokens.length ; ++i)
+	{
+		param_tokens = tokens[i].split("=");
+		if (param_tokens.length == 2)
+		params[param_tokens[0]] = param_tokens[1];
+	}
+	return params;
+};
 
 
 
@@ -125,69 +196,6 @@ openark_lchart.prototype.recalc = function() {
 		tick_value += step_size;
 	}
 	this.y_axis_round_digits = (pow >= 0 ? 0 : -pow);	
-};
-
-
-openark_lchart.prototype.create_graphics = function() {
-	this.container.innerHTML = '';
-	
-	this.isIE = (/MSIE/.test(navigator.userAgent) && !window.opera);
-
-	this.container.style.position = 'relative';
-	this.container.style.color = ''+openark_lchart.axis_color;
-	this.container.style.fontSize = ''+openark_lchart.axis_font_size+'pt';
-	this.container.style.fontFamily = 'Helvetica,Verdana,Arial,sans-serif';
-	
-	if (!this.skip_interactive)
-	{
-		var local_this = this;
-		this.container.onmousemove = function(e) {
-			local_this.on_mouse_move(e);
-		};
-		this.container.onmouseout = function(e) {
-			local_this.on_mouse_out(e);
-		};
-	}
-	if (this.isIE)
-	{
-		// Nothing to do here right now.
-	}
-	else
-	{
-		var canvas = document.createElement("canvas");
-		canvas.setAttribute("width", this.canvas_width);
-		canvas.setAttribute("height", this.canvas_height);
-		
-		this.canvas = canvas;
-
-		this.container.appendChild(this.canvas);
-	
-		this.ctx = this.canvas.getContext('2d');
-	}
-	this.canvas_shadow = document.createElement("div");
-	this.canvas_shadow.style.position = "absolute";
-	this.canvas_shadow.style.top = "0";
-	this.canvas_shadow.style.left = "0";
-	this.canvas_shadow.style.width = this.canvas_width;
-	this.canvas_shadow.style.height = this.canvas_height;
-	this.container.appendChild(this.canvas_shadow);
-};
-
-openark_lchart.prototype.parse_url = function(url) {
-	url = url.replace(/[+]/gi, " ");
-	var params = {};
-	
-	var pos = url.indexOf("?");
-	if (pos >= 0)
-		url = url.substring(pos + 1);
-	tokens = url.split("&");
-	for (i = 0 ; i < tokens.length ; ++i)
-	{
-		param_tokens = tokens[i].split("=");
-		if (param_tokens.length == 2)
-		params[param_tokens[0]] = param_tokens[1];
-	}
-	return params;
 };
 
 openark_lchart.prototype.read_google_url = function(url) {
@@ -450,6 +458,9 @@ openark_lchart.prototype.draw = function() {
 	// series:
 	for (series = 0 ; series < this.multi_series_dot_positions.length ; ++series)
 	{
+		if (this.series_invisibility[''+series])
+			continue;
+		
 		var paths = [];
 		paths.push([]);
 		this.set_color(this.series_colors[series]);
@@ -537,6 +548,17 @@ openark_lchart.prototype.draw = function() {
 			legend_li.style.fontSize = ''+openark_lchart.legend_font_size+'pt';
 			legend_li.innerHTML = '&nbsp;';
 			this.timestamp_value_container = this.create_value_container();
+			this.timestamp_value_container.style.cursor = 'pointer';
+			if (!this.skip_interactive)
+			{
+				var local_this = this;
+				this.timestamp_value_container.onclick = function (e) {
+					local_this.square_lines = !local_this.square_lines;
+					local_this.redraw();
+				}
+			}
+
+			this.timestamp_value_container.innerHTML = '[type]';
 			legend_li.appendChild(this.timestamp_value_container);
 			
 			legend_ul.appendChild(legend_li);
@@ -547,7 +569,21 @@ openark_lchart.prototype.draw = function() {
 			legend_li.style.listStyleType = 'square';
 			legend_li.style.color = this.series_colors[i];
 			legend_li.style.fontSize = ''+openark_lchart.legend_font_size+'pt';
-			legend_li.innerHTML = '<span style="color: '+openark_lchart.legend_color+'">'+this.series_labels[i]+'</span>';
+			var text_color = openark_lchart.legend_color;
+			if (this.series_invisibility[''+i])
+				text_color = openark_lchart.legend_invisible_color;
+
+			var legend_li_span = document.createElement("span");
+			legend_li_span.className= ''+i;
+			legend_li_span.style.cursor = 'pointer';
+			legend_li_span.style.color = text_color;
+			legend_li_span.innerHTML = this.series_labels[i];
+			var local_this = this;
+			legend_li_span.onclick = function (e) {
+				local_this.series_invisibility[this.className] = !local_this.series_invisibility[this.className];
+				local_this.redraw();
+			}			
+			legend_li.appendChild(legend_li_span);
 			var legend_value_container = this.create_value_container();
 			legend_value_container.style.width = '' + (this.chart_origin_x + 32) + 'px';
 			legend_li.appendChild(legend_value_container);
@@ -760,7 +796,7 @@ openark_lchart.prototype.update_legend = function() {
 	if (this.tsstart)
 	{
 		if (this.series_legend_values == null)
-			this.timestamp_value_container.innerHTML = '';
+			this.timestamp_value_container.innerHTML = '[type]';
 		else
 			this.timestamp_value_container.innerHTML = this.timestamp_legend_value.replace(/ /g, "&nbsp;");
 	}
